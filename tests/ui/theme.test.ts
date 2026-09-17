@@ -188,6 +188,101 @@ describe('applyTheme: 7 テーマすべてが共通トークン一式を過不�
   });
 });
 
+// 全パレットのトークンキー集合が完全一致すること (2.0.0-alpha.21、Rancha 報告 #6)。
+// 修正前は --ric-popup-bg/--ric-popup-blur/--ric-panel-shadow が cyber/aqua/glass/
+// glass-dark だけの独自キーで、light/dark/teal (と glass/glass-dark の一部) に欠けていた
+// — CORE_TOKEN_KEYS の固定リストはこの種の「新設テーマだけが持つキー」の漏れを検知
+// できない (リスト自体を都度手で更新する必要があるため)。ここでは「テーマ間の合併集合
+// との差分」を計算することで、今後 8 番目のテーマが追加されてもキーが 1 つでも欠けて
+// いれば自動的に落ちるようにする。
+describe('applyTheme: 全 7 パレットのトークンキー集合が完全一致する (2.0.0-alpha.21、Rancha #6)', () => {
+  it('el.style のプロパティ名集合 (union) がどのテーマからも過不足なく揃う', () => {
+    const keySetByTheme = new Map<(typeof THEMES)[number], Set<string>>();
+    for (const theme of THEMES) {
+      const el = document.createElement('div');
+      applyTheme(el, { theme });
+      const keys = new Set<string>();
+      for (let i = 0; i < el.style.length; i++) keys.add(el.style.item(i)!);
+      keySetByTheme.set(theme, keys);
+    }
+    const union = new Set<string>();
+    for (const keys of keySetByTheme.values()) for (const key of keys) union.add(key);
+
+    for (const theme of THEMES) {
+      const keys = keySetByTheme.get(theme)!;
+      const missing = [...union].filter((key) => !keys.has(key));
+      expect(missing, `${theme} に不足しているキー`).toEqual([]);
+    }
+  });
+
+  it('--ric-popup-bg/--ric-popup-blur/--ric-panel-shadow は 7 テーマ全てで空でない値を持つ', () => {
+    for (const theme of THEMES) {
+      const el = document.createElement('div');
+      applyTheme(el, { theme });
+      expect(el.style.getPropertyValue('--ric-popup-bg'), `${theme} の --ric-popup-bg`).not.toBe('');
+      expect(el.style.getPropertyValue('--ric-popup-blur'), `${theme} の --ric-popup-blur`).not.toBe('');
+      expect(el.style.getPropertyValue('--ric-panel-shadow'), `${theme} の --ric-panel-shadow`).not.toBe('');
+    }
+  });
+
+  // light/dark/teal は今回のアルファで新規に --ric-popup-bg/--ric-panel-shadow を得た
+  // 3 テーマ (2.0.0-alpha.21 以前は未定義だった) — その値は「見た目を一切変えない」
+  // というのが設計上の要件なので、--ric-color-bg/--ric-shadow とリテラル一致する。
+  // cyber/aqua は 2.0.0-alpha.18 以前から独自の (--ric-color-bg/--ric-shadow とは異なる)
+  // popup-bg/panel-shadow を意図的に持っており、ここでの対象外 (既存の意図した差)。
+  it('新規に値を得た 3 テーマ (light/dark/teal) は --ric-popup-bg が --ric-color-bg と、--ric-panel-shadow が --ric-shadow と一致する (見た目不変の回帰ガード)', () => {
+    for (const theme of ['light', 'dark', 'teal'] as const) {
+      const el = document.createElement('div');
+      applyTheme(el, { theme });
+      expect(el.style.getPropertyValue('--ric-popup-bg'), theme).toBe(el.style.getPropertyValue('--ric-color-bg'));
+      expect(el.style.getPropertyValue('--ric-panel-shadow'), theme).toBe(el.style.getPropertyValue('--ric-shadow'));
+    }
+  });
+
+  it('light/dark/teal (新設キーが元々無かった 3 テーマ) は --ric-popup-blur が none', () => {
+    for (const theme of ['light', 'dark', 'teal'] as const) {
+      const el = document.createElement('div');
+      applyTheme(el, { theme });
+      expect(el.style.getPropertyValue('--ric-popup-blur'), theme).toBe('none');
+    }
+  });
+});
+
+// applyTheme が inline `--ric-*` カスタムプロパティを所有し、テーマ切替のたびに前の
+// テーマだけが持っていたキーを掃除すること (2.0.0-alpha.21、Rancha 報告 #6、SPEC §8
+// FACT)。修正前は cyber → dark のように popup/panel トークンを持たないテーマへ切り替えても
+// cyber の値が inline style に残ったままで、dark テーマなのに popup/panel だけ cyber 色に
+// なるバグがあった。
+describe('applyTheme: 同一要素へのテーマ切替で前テーマの余分な --ric-* が消える (2.0.0-alpha.21、Rancha #6)', () => {
+  it('cyber → dark で --ric-popup-bg/--ric-popup-blur/--ric-panel-shadow が dark の値に正しく上書きされる (cyber の値が残らない)', () => {
+    const el = document.createElement('div');
+    applyTheme(el, { theme: 'cyber' });
+    expect(el.style.getPropertyValue('--ric-popup-bg')).toBe('rgba(10,18,40,0.4)'); // cyber の値
+    applyTheme(el, { theme: 'dark' });
+    expect(el.style.getPropertyValue('--ric-popup-bg')).toBe('#111318'); // dark の値 (= --ric-color-bg)
+    expect(el.style.getPropertyValue('--ric-popup-blur')).toBe('none');
+    expect(el.style.getPropertyValue('--ric-panel-shadow')).toBe('0 4px 24px rgba(0,0,0,0.50)'); // dark の --ric-shadow と同じ
+  });
+
+  it('自前 ThemeVars が持つ独自キーは、そのキーを持たない新テーマへの切替で inline style から消える', () => {
+    const el = document.createElement('div');
+    applyTheme(el, { theme: { '--ric-color-fg': '#000000', '--ric-my-extra': '1px' } });
+    expect(el.style.getPropertyValue('--ric-my-extra')).toBe('1px');
+    applyTheme(el, { theme: 'dark' });
+    expect(el.style.getPropertyValue('--ric-my-extra')).toBe('');
+  });
+
+  it('`--ric-` で始まらない inline プロパティ (consumer 独自の変数・通常の style) は影響を受けない', () => {
+    const el = document.createElement('div');
+    el.style.setProperty('--app-x', '1');
+    el.style.width = '10px';
+    applyTheme(el, { theme: 'cyber' });
+    applyTheme(el, { theme: 'dark' });
+    expect(el.style.getPropertyValue('--app-x')).toBe('1');
+    expect(el.style.width).toBe('10px');
+  });
+});
+
 // `--ric-panel-bg` (2.0.0-alpha.20、Trend Guard #16): .ric-panel/.ric-tweak が読む
 // 「コンテナ面」トークン。cssTemplates.ts の PANEL_CSS 直前のコメント参照 —
 // フローティング/コンテナ面は `--ric-color-bg` (ページ背景) を直接読んではいけない、という

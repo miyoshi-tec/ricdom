@@ -53,6 +53,16 @@ const COLOR_VARS_LIGHT: ThemeVars = {
   '--ric-tooltip-fg': '#f9fafb',
   '--ric-code-bg': '#f6f8fa',
   '--ric-code-fg': '#24292f',
+  // --ric-popup-bg/--ric-popup-blur/--ric-panel-shadow (2.0.0-alpha.21、Rancha 報告 #6):
+  // 以前は cyber/aqua/glass/glass-dark だけが明示していたため、cyber → dark のように
+  // これらのキーを持たないテーマへ同一要素上で切り替えると、cyber の値が inline style に
+  // 残ったまま (applyTheme は新テーマが持たないキーを削除していなかった) だった。
+  // ここではリテラル値を --ric-color-bg/--ric-shadow と完全に同じにして、CSS 側の
+  // フォールバック (`var(--ric-popup-bg, var(--ric-color-bg))` 等、cssTemplates.ts) が
+  // 今まで解決していた値と 1px も変えない (見た目不変の回帰ガード)。
+  '--ric-popup-bg': '#f9fafb',
+  '--ric-popup-blur': 'none',
+  '--ric-panel-shadow': '0 4px 16px rgba(0,0,0,0.10)',
   '--ric-shadow': '0 4px 16px rgba(0,0,0,0.10)',
   '--ric-radius': '8px',
   // フローティング面 (dialog/popup/toast/tooltip/panel 等) の backdrop-filter 用トークン
@@ -86,6 +96,10 @@ const COLOR_VARS_DARK: ThemeVars = {
   '--ric-tooltip-fg': '#f9fafb',
   '--ric-code-bg': '#374151',
   '--ric-code-fg': '#f9fafb',
+  // 2.0.0-alpha.21、Rancha 報告 #6 (COLOR_VARS_LIGHT の同名コメント参照)。
+  '--ric-popup-bg': '#111318',
+  '--ric-popup-blur': 'none',
+  '--ric-panel-shadow': '0 4px 24px rgba(0,0,0,0.50)',
   '--ric-shadow': '0 4px 24px rgba(0,0,0,0.50)',
   '--ric-radius': '8px',
   '--ric-surface-blur': 'none',
@@ -114,6 +128,11 @@ const COLOR_VARS_TEAL: ThemeVars = {
   '--ric-tooltip-fg': '#f0fdf9',
   '--ric-code-bg': '#e6f2ef',
   '--ric-code-fg': '#0d2b24',
+  // 2.0.0-alpha.21、Rancha 報告 #6 (COLOR_VARS_LIGHT の同名コメント参照)。teal は
+  // --ric-color-bg がグラデーションなので、そのリテラルをそのままコピーする。
+  '--ric-popup-bg': 'linear-gradient(135deg, #e6f9f0 0%, #f2f9f7 40%, #fef3c7 70%, #fce7f3 100%)',
+  '--ric-popup-blur': 'none',
+  '--ric-panel-shadow': '0 4px 16px rgba(0,60,50,0.12)',
   '--ric-shadow': '0 4px 16px rgba(0,60,50,0.12)',
   '--ric-radius': '8px',
   '--ric-surface-blur': 'none',
@@ -235,6 +254,11 @@ const COLOR_VARS_GLASS: ThemeVars = {
   '--ric-surface-blur': 'blur(24px) saturate(160%)',
   // ガラスの縁を表現するソフトな外側シャドウ + 内側ハイライト。
   '--ric-shadow': '0 8px 32px rgba(31,41,55,0.18), inset 0 1px 0 rgba(255,255,255,0.6)',
+  // --ric-panel-shadow (2.0.0-alpha.21、Rancha 報告 #6): cyber/aqua は既に独自の値を
+  // 明示していたが glass/glass-dark は欠けていた (トークン集合の穴)。--ric-shadow と
+  // 同じリテラルにして見た目は変えない (フォールバック var(--ric-panel-shadow,
+  // var(--ric-shadow)) が今まで解決していた値と同じ)。
+  '--ric-panel-shadow': '0 8px 32px rgba(31,41,55,0.18), inset 0 1px 0 rgba(255,255,255,0.6)',
   '--ric-radius': '12px',
   '--ric-md-heading': '#1f5fbf',
   '--ric-md-emphasis': '#b45309',
@@ -266,6 +290,8 @@ const COLOR_VARS_GLASS_DARK: ThemeVars = {
   '--ric-popup-blur': 'blur(24px) saturate(140%)',
   '--ric-surface-blur': 'blur(24px) saturate(140%)',
   '--ric-shadow': '0 8px 32px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.08)',
+  // 2.0.0-alpha.21、Rancha 報告 #6 (COLOR_VARS_GLASS の同名コメント参照)。
+  '--ric-panel-shadow': '0 8px 32px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.08)',
   '--ric-radius': '12px',
   '--ric-md-heading': '#93c5fd',
   '--ric-md-emphasis': '#fbbf24',
@@ -459,11 +485,28 @@ export const applyTheme = (el: Element, opts: ApplyThemeOptions = {}): void => {
     Object.assign(vars, GLASS_REDUCED_TRANSPARENCY[resolvedThemeName]);
   }
   const style = (el as HTMLElement).style;
+  // applyTheme は el の inline `--ric-*` カスタムプロパティを「所有」する (2.0.0-alpha.21、
+  // Rancha 報告 #6、SPEC §8 に FACT 明記)。同一要素に applyTheme を複数回呼んでテーマを
+  // 切り替えたとき、前のテーマだけが持っていたキー (例: cyber の --ric-popup-bg) が新しい
+  // テーマ (例: dark) の vars に含まれなければ、新規 setProperty では上書きされずに inline
+  // style に残ってしまう (すべてのパレットがキー集合を揃えた 2.0.0-alpha.21 の今も、
+  // consumer 自前の ThemeVars や `--ric-my-extra` のような独自キーでは依然起こり得る)。
+  // そのため新しい vars に無い既存の `--ric-*` インラインプロパティを先に洗い出しておき、
+  // 新しい値を設定したあとに削除する (先に消すと新テーマのキーまで誤って集めてしまう
+  // 心配は無いが、setProperty 後に消すことで「新旧どちらの値だったか」の判定が終わった
+  // 状態で安全に片付けられる)。`--ric-*` 以外のインラインプロパティ (consumer が独自に
+  // 設定した `--app-x` や `width` 等) には一切触れない。
+  const staleKeys: string[] = [];
+  for (let i = 0; i < style.length; i++) {
+    const key = style.item(i);
+    if (key && key.startsWith('--ric-') && !(key in vars)) staleKeys.push(key);
+  }
   // vars のキーは常に `--ric-*` か `color-scheme` のいずれか (COLOR_VARS_*/SIZE_VARS_*/
   // FONT_VARS_* の定義・createTheme の overrides とも同じ形)。setProperty はどちらの
   // 形にも使える (CSS カスタムプロパティ / 通常プロパティ)。`--ric-theme` もこの一括
   // ループで el.style に書かれる (CSS からは参照されないデータマーカーなので実害は無い)。
   for (const [key, val] of Object.entries(vars)) style.setProperty(key, val);
+  for (const key of staleKeys) style.removeProperty(key);
   el.setAttribute('data-ricdom-theme', resolvedThemeName);
 };
 

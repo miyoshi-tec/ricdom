@@ -360,6 +360,66 @@ Be honest about scope: this is a look, not a guarantee — your app still owns i
 background wherever the window itself is transparent (e.g. behind content `glass`'s
 surfaces don't cover).
 
+### Frameless + `backgroundMaterial` and a real maximize (reported by Rancha, pilot #6)
+
+On Electron 32 / Windows 11, a frameless (`frame: false`) window with `backgroundMaterial`
+set turns solid black the moment it's actually maximized — `win.maximize()`, Win+↑, a
+title-bar double-click, or dragging to the screen top all trigger it, and it never recovers
+even after un-maximizing. This is a Chromium custom-frame issue, not anything `applyTheme`
+or `--ric-*` tokens do — `frame: true` windows are unaffected, and none of re-applying
+`setBackgroundMaterial`, `setBackgroundColor`, nudging the bounds, hide/show, minimize/
+restore, or toggling fullscreen (12 attempts) brings the acrylic back. Working recipe:
+disable the real maximize and fake it instead.
+
+```js
+// main process
+const win = new BrowserWindow({ frame: false, backgroundMaterial: 'acrylic', maximizable: false, /* ... */ });
+win.setMaximizable(false); // belt and suspenders — some platforms still expose Win+↑
+
+let restoreBounds = null;
+function toggleMaximize() {
+  if (restoreBounds) {
+    win.setBounds(restoreBounds);
+    restoreBounds = null;
+  } else {
+    restoreBounds = win.getBounds();
+    win.setBounds(screen.getDisplayMatching(restoreBounds).workArea); // pseudo-maximize
+  }
+}
+```
+
+Wire your title bar's maximize button to `toggleMaximize()` instead of `win.maximize()`.
+Half-snap (Win+←/→), minimize, drag regions, rounded corners, and the window shadow all
+keep working normally — just skip persisting bounds while pseudo-maximized. Note
+`transparent: true` is not needed alongside `backgroundMaterial` and would break frameless
+drag/Aero Snap if added.
+
+### Derived tokens must live on the themed element, not `:root`
+
+`applyTheme` writes `--ric-*` as **inline style on the element you called it on**, and CSS
+custom properties only inherit downward — a `:root` rule referencing them (e.g.
+`color-mix(in srgb, var(--ric-color-fg) ...)`) sits *above* that element in the DOM and
+never sees the values, so it silently resolves to nothing. Scope your own derived tokens to
+the same element (or an attribute selector that matches it) instead:
+
+```css
+/* wrong: :root is never a descendant of the applyTheme'd element */
+:root { --app-hover: color-mix(in srgb, var(--ric-color-fg) 8%, transparent); }
+/* right */
+[data-ricdom-theme] { --app-hover: color-mix(in srgb, var(--ric-color-fg) 8%, transparent); }
+```
+
+### `glass-dark` over a bright wallpaper
+
+If the real desktop behind a transparent window is light-colored, `glass-dark`'s
+near-white text can lose contrast against it. Rather than reintroducing an opaque
+`--ric-color-bg`, keep the glass look and add back just enough contrast with a translucent
+scrim:
+
+```js
+applyTheme(el, { theme: createTheme('glass-dark', { '--ric-color-bg': 'rgba(15,23,42,0.35)' }) });
+```
+
 ---
 
 ## 7. Dialog and popup

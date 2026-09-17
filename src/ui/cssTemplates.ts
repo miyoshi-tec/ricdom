@@ -46,10 +46,16 @@ const cb = 'var(--ric-code-bg)'; // コードブロック背景 (v1 v0.4.1〜、
 const cf = 'var(--ric-code-fg)'; // コードブロック文字色
 const gm = 'var(--ric-gap-md)';
 const sbt = 'var(--ric-scrollbar-thumb)'; // スクロールバーつまみ色 (v1 v0.4.2〜)
-const sbth = 'var(--ric-scrollbar-thumb-hover)'; // スクロールバーつまみ hover 色
-// --ric-popup-blur / --ric-panel-shadow は cyber/aqua テーマだけが明示する値 (theme.ts)。
-// 他テーマでは未定義のままだと var() がフォールバック無しで空になり宣言ごと無効になるため、
-// フォールバック値を明示する (v1 は毎テーマに既定値があったため意識しなくてよかった差分)。
+// --ric-scrollbar-thumb-hover はここでは使わない (2.0.0-alpha.21 で ::-webkit-scrollbar-thumb:hover
+// ルールを削除したため — SCROLLBAR_CSS 直前のコメント参照)。トークン自体は theme.ts の
+// 7 パレット全部に残す (exportTheme/exportSettings の往復対象、consumer が自前の
+// ::-webkit-scrollbar-thumb:hover ルールで使う余地を残すため)。
+// --ric-popup-blur / --ric-panel-shadow は 7 テーマすべてが明示する値 (theme.ts、
+// 2.0.0-alpha.21 まではライト/ダーク/ティールに欠けており cyber/aqua/glass/glass-dark
+// だけが明示していた — Rancha 報告 #6、テーマ切替で古いテーマの値が inline style に
+// 残留するバグの一因)。フォールバックはそれでも残す — consumer 自前の ThemeVars
+// (`--ric-theme` を持たないフルカスタムパレット) がこれらのキーを省略した場合に、
+// var() がフォールバック無しで空になり宣言ごと無効になるのを防ぐため。
 // `--ric-popup-blur` (公開トークン) → 未指定なら `--ric-surface-blur` (2.0.0-alpha.18 新設、
 // glass/glass-dark 用) → それも未指定なら 'none' の 3 段フォールバック。既存 5 テーマは
 // どちらも変えていないので popup/panel の見た目は不変 (cyber/aqua は --ric-popup-blur を
@@ -418,9 +424,8 @@ const PORTAL_CSS = `
 // (0,0,1)) で上書きしようとしても、(0,1,0) > (0,0,1) のため実際には勝てず、consumer の
 // 意図に反してテーマの色が残ってしまう実機バグだった。ここは「既定」= consumer の
 // どんな規則にも問答無用で負けるべき塗りなので、セレクタを `:where(...)` で包み詳細度を
-// 0 にする (`:where()` の中身は詳細度計算に使われない、疑似要素 `::-webkit-scrollbar*`
-// 部分の (0,0,1) はそのまま残る)。これで consumer 側は要素セレクタ 1 つで確実に上書き
-// できる (SPEC §8 に FACT として明記)。
+// 0 にする (`:where()` の中身は詳細度計算に使われない)。これで consumer 側は要素セレクタ
+// 1 つで確実に上書きできる (SPEC §8 に FACT として明記)。
 //
 // font-size (パイロット第 3 号からの報告 #2、2.0.0-alpha.6): applyTheme は
 // `--ric-font-size` 変数をセットするだけで、要素自身の font-size は塗っていなかった
@@ -443,28 +448,32 @@ const THEME_PAINT_CSS = `
 // その子孫すべてに適用する (子孫の中でネストして再度 applyTheme された要素があっても、
 // セレクタが重複適用されるだけで害はない)。
 // THEME_PAINT_CSS と同じ理由 (#1、2.0.0-alpha.8) でこれも「既定」なので `:where(...)`
-// で詳細度 0 にする。疑似要素 (`::-webkit-scrollbar` 等) の (0,0,1) は `:where()` の
-// 対象外 (疑似要素自体には掛けられない) なのでそのまま残るが、consumer が同じ疑似要素
-// セレクタで上書きすれば互角以上に勝てるので実用上問題ない。
+// で詳細度 0 にする。
+//
+// **標準プロパティのみ (2.0.0-alpha.21、オーナー決定、Rancha 報告)**: 2.0.0-alpha.20 まで
+// `::-webkit-scrollbar`/`-track`/`-corner`/`-thumb`/`-thumb:hover` の疑似要素ルールを
+// 併記していたが、Chromium 121+ では `scrollbar-width`/`scrollbar-color` のどちらかが
+// `auto` 以外の値を持つ要素に対して `::-webkit-scrollbar*` 系ルールを一切無視する
+// (標準プロパティが指定されている時点で webkit 系は完全に無効化される、実装上の仕様)。
+// このファイルは同じ要素に両方を指定していたため、`::-webkit-scrollbar*` ブロックは
+// v0.4.2 (v1) 以来ずっと dead code だった — Rancha が実機のデバイスピクセル計測で発見
+// (つまみ幅が指定した 8px ではなく 13 device px・角丸なしで、標準の thin バーそのものの
+// 数値だった)。今回、死んでいたブロックを削除して標準プロパティだけを残す。
+// **見た目の変化はない** (Chromium 121+/Firefox は元々標準側しか見ていなかった、上記の
+// とおり) — Chromium 121 未満・Electron 28 未満・Safari 18.2 未満だけがネイティブの
+// (テーマ非追従の) スクロールバーにフォールバックする、という違いが新たに生じる
+// (それらの環境では `::-webkit-scrollbar*` が唯一効く経路だったため)。
+// `--ric-scrollbar-thumb-hover` トークンはこの CSS では使われなくなったが、7 パレット
+// 側からは削除しない (exportTheme/exportSettings の往復対象として残す — 標準の
+// `scrollbar-color` には hover 用の第 3 の色を指定する仕組みが無いため、ricdom-ui.css
+// 側で使う先が無くなっただけ)。consumer が独自に `::-webkit-scrollbar-thumb:hover` を
+// 書きたい場合は、同じ要素で `scrollbar-width: auto; scrollbar-color: auto;` を明示して
+// 標準側を解除しない限り上記の Chromium 121+ の無視ルールにより効かない、という制約は
+// ricdom 固有の仕様ではなくプラットフォームの仕様 (docs/SPEC.md §8 に FACT として明記)。
 const SCROLLBAR_CSS = `
 :where([data-ricdom-theme]), :where([data-ricdom-theme]) * {
   scrollbar-width: thin;
   scrollbar-color: ${sbt} transparent;
-}
-:where([data-ricdom-theme])::-webkit-scrollbar, :where([data-ricdom-theme]) *::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-:where([data-ricdom-theme])::-webkit-scrollbar-track, :where([data-ricdom-theme]) *::-webkit-scrollbar-track,
-:where([data-ricdom-theme])::-webkit-scrollbar-corner, :where([data-ricdom-theme]) *::-webkit-scrollbar-corner {
-  background: transparent;
-}
-:where([data-ricdom-theme])::-webkit-scrollbar-thumb, :where([data-ricdom-theme]) *::-webkit-scrollbar-thumb {
-  background: ${sbt};
-  border-radius: 4px;
-}
-:where([data-ricdom-theme])::-webkit-scrollbar-thumb:hover, :where([data-ricdom-theme]) *::-webkit-scrollbar-thumb:hover {
-  background: ${sbth};
 }`;
 
 const TEXTAREA_CSS = `
@@ -971,18 +980,15 @@ const CODE_PRE_CSS = `
 
 // scroll-pane はスクロールバー配色のみ提供する。挙動は inline style (overflow-y:auto)
 // + JS の scrollTop 制御で担う (createScrollPane 参照)。
+// `::-webkit-scrollbar*` ルールは 2.0.0-alpha.21 で削除 — SCROLLBAR_CSS と同じ理由 (同じ要素に
+// 標準の scrollbar-width / scrollbar-color を当てている時点で Chromium 121+ では webkit 疑似
+// 要素が無視される dead code だった。ここも [data-ricdom-theme] 配下では既定規則と二重だった)。
 const SCROLL_PANE_CSS = `
 .ric-scroll-pane {
   min-height: 0;
   scrollbar-color: ${sbt} transparent;
   scrollbar-width: thin;
-}
-.ric-scroll-pane::-webkit-scrollbar { width: 8px; height: 8px; }
-.ric-scroll-pane::-webkit-scrollbar-thumb {
-  background: ${sbt};
-  border-radius: 4px;
-}
-.ric-scroll-pane::-webkit-scrollbar-track { background: transparent; }`;
+}`;
 
 // collapse-box は inline style の overflow/transition/width/height で動作するため
 // (createCollapseBox 参照)、CSS 側はセマンティクスとしての class 名だけ用意する。

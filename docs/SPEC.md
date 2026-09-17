@@ -801,10 +801,14 @@ Color/theme (from the `theme` option — one of the seven bundled names, or your
 `--ric-tooltip-fg`, `--ric-code-bg`, `--ric-code-fg`, `--ric-shadow`, `--ric-radius`,
 `--ric-surface-blur` (new in `2.0.0-alpha.18`, see below), `--ric-theme` (new in
 `2.0.0-alpha.19`, see below), `--ric-panel-bg` (new in `2.0.0-alpha.20`, see below),
-`color-scheme` — plus, on `cyber`/`aqua`/`glass`/`glass-dark`
-only, `--ric-popup-bg`, `--ric-popup-blur`; `cyber`/`aqua` also set `--ric-panel-shadow`,
-`--ric-duration`, `--ric-easing` (other themes fall back to the CSS defaults baked into
-`ricdom-ui.css`, via `var(--x, fallback)`, rather than redeclaring them).
+`--ric-popup-bg`, `--ric-popup-blur`, `--ric-panel-shadow`, `color-scheme` — **all seven**
+bundled palettes set all of these (see the "same key set" FACT below; before
+`2.0.0-alpha.21` the last three were only set by `cyber`/`aqua`/`glass`/`glass-dark`,
+`light`/`dark`/`teal` fell back to the CSS defaults baked into `ricdom-ui.css`).
+`cyber`/`aqua` additionally set `--ric-duration`/`--ric-easing` as literal palette values
+(other themes still fall back to `computeThemeVars`'s own defaults for those two — see
+"Computed regardless of options" below — so this one pair is deliberately *not* part of the
+uniform key-set guarantee).
 
 Density (from the `density` option): `--ric-gap`, `--ric-pad-x`, `--ric-pad-y`,
 `--ric-control-h`.
@@ -952,6 +956,65 @@ floating/container CSS rule must follow this same principle: read a surface toke
 `--ric-tooltip-bg`), never `--ric-color-bg`/`${bg}` directly — see the comment above
 `PANEL_CSS` in `src/ui/cssTemplates.ts`.
 
+### FACT: every bundled palette defines the same key set (`2.0.0-alpha.21`)
+
+All seven bundled palettes (`light`/`dark`/`teal`/`cyber`/`aqua`/`glass`/`glass-dark`) set
+exactly the same 28 color/theme keys — no palette defines a key another one omits, and
+`tests/ui/theme.test.ts` asserts this by computing the union of every palette's `el.style`
+property names after `applyTheme` and diffing each palette against it, so a future
+imbalance fails immediately rather than surfacing as a rendering difference. The 28 keys:
+`--ric-color-fg`, `--ric-color-fg-muted`, `--ric-color-bg`, `--ric-panel-bg`,
+`--ric-color-control`, `--ric-color-border`, `--ric-color-accent`, `--ric-color-accent-fg`,
+`--ric-tooltip-bg`, `--ric-tooltip-fg`, `--ric-code-bg`, `--ric-code-fg`, `--ric-popup-bg`,
+`--ric-popup-blur`, `--ric-panel-shadow`, `--ric-shadow`, `--ric-radius`,
+`--ric-surface-blur`, `--ric-theme`, `color-scheme`, and the eight `--ric-md-*` tokens
+(`--ric-md-heading`, `--ric-md-emphasis`, `--ric-md-link`, `--ric-md-url`,
+`--ric-md-code-bg`, `--ric-md-quote`, `--ric-md-marker`, `--ric-md-meta` —
+`ricdom/md-editor`'s tokens). `--ric-duration`/`--ric-easing` are deliberately excluded from
+this guarantee: `cyber`/`aqua` set them as literal palette values, the other five don't and
+instead pick up `computeThemeVars`'s own defaults (`200ms`/`ease`, see "Computed regardless
+of options" above) — the *rendered* result is still consistent across all seven, just via a
+different mechanism for two of them.
+
+Before this release, `--ric-popup-bg`/`--ric-popup-blur`/`--ric-panel-shadow` were the
+exception: only `cyber`/`aqua`/`glass`/`glass-dark` set them, so `light`/`dark`/`teal` (and,
+for `--ric-panel-shadow` specifically, `glass`/`glass-dark` too) relied on the CSS
+fallback chain (`var(--ric-popup-bg, var(--ric-color-bg))` etc., `cssTemplates.ts`) to look
+right. Reachable in isolation this is harmless, but it interacted badly with the next FACT
+(switching themes on one element) — see below. The fix added the missing keys with literal
+values equal to what the CSS fallback already resolved to for each of those themes (e.g.
+`light`'s `--ric-popup-bg` is now `'#f9fafb'`, the same string as its `--ric-color-bg`), so
+rendering is pixel-identical to before; only `cyber`/`aqua`, which already had their own
+distinct (non-fallback) values for these three keys, are unaffected by this change (reported
+by Rancha, pilot #6).
+
+### FACT: `applyTheme` owns the element's inline `--ric-*` custom properties (`2.0.0-alpha.21`)
+
+Calling `applyTheme` on the same element more than once — to switch themes — clears any
+inline `--ric-*` custom property that the *new* call's resolved `vars` doesn't include,
+in addition to setting the ones it does. Concretely: `applyTheme(el, { theme: 'cyber' })`
+followed by `applyTheme(el, { theme: 'dark' })` leaves `el` with `dark`'s
+`--ric-popup-bg`/`--ric-popup-blur`/`--ric-panel-shadow` (not `cyber`'s stale values, and
+not `cyber`'s values mixed with `dark`'s — every key resolves to exactly what a *fresh*
+`applyTheme(el, { theme: 'dark' })` on a blank element would produce). Before this release
+`applyTheme` only ever called `style.setProperty()` for the new theme's own keys, so a key
+present in an old theme but absent from the new one (e.g. `cyber`'s `--ric-popup-bg` before
+`dark` had its own — see the previous FACT) stayed behind as a leftover, and the page
+rendered a mix of two themes' surfaces. Now, all seven bundled palettes define the same key
+set, so this specific case can no longer occur between bundled themes — but the ownership
+rule still matters for a custom `ThemeVars` object (or `createTheme(base, overrides)`) that
+carries a key none of the bundled palettes use: that key is cleared the next time
+`applyTheme` runs on the same element with a `theme` that doesn't include it.
+
+**Only inline properties whose name starts with `--ric-` are touched.** A non-`--ric-*`
+inline property you set yourself (`el.style.setProperty('--app-accent', ...)`,
+`el.style.width = '10px'`, etc.) is left alone. If you want a custom variable to survive a
+later `applyTheme` call on the same element, pass it through `createTheme(base, overrides)`
+(so it becomes part of `vars` every time) rather than setting it directly on `el` — a value
+set directly on `el` before or after `applyTheme` that happens to *not* start with `--ric-`
+survives; one that does start with `--ric-` does not, once a later `applyTheme` call omits
+it.
+
 ### `color-scheme` and native controls
 
 Because `applyTheme` sets the `color-scheme` CSS property (not just a `--ric-*` variable),
@@ -1083,17 +1146,58 @@ This mirrors v1's `create_ui_page`, which painted `.ric-page` the same way (incl
 
 ### `[data-ricdom-theme]` and page-wide scrollbar styling
 
-`ricdom-ui.css` styles `::-webkit-scrollbar`/`scrollbar-color` scoped to
-`:where([data-ricdom-theme])` and its descendants, using the `--ric-scrollbar-thumb(-hover)`
-tokens above. **This changes the visual appearance of scrollbars for any element inside
-whatever you call `applyTheme` on** — including elements that are not `ricdom/ui`
-components — since the selector is attribute-scoped, not class-scoped. Override
-`--ric-scrollbar-thumb`/`--ric-scrollbar-thumb-hover` yourself, or restyle
-`::-webkit-scrollbar`/`scrollbar-color` (any selector at all, since specificity here is
-also zero as of 2.0.0-alpha.8 — see above), to opt out for a subtree. The
-`::-webkit-scrollbar*` pseudo-elements themselves still carry their own (0,0,1)
-specificity (`:where()` cannot wrap a pseudo-element away), so a same-pseudo-element rule
-of yours ties or wins on source order — in practice this has not required `!important`.
+`ricdom-ui.css` styles the *standard* scrollbar properties, scoped to
+`:where([data-ricdom-theme])` and its descendants:
+
+```css
+:where([data-ricdom-theme]), :where([data-ricdom-theme]) * {
+  scrollbar-width: thin;
+  scrollbar-color: var(--ric-scrollbar-thumb) transparent;
+}
+```
+
+**This changes the visual appearance of scrollbars for any element inside whatever you
+call `applyTheme` on** — including elements that are not `ricdom/ui` components — since the
+selector is attribute-scoped, not class-scoped. Override `--ric-scrollbar-thumb` yourself,
+or restyle `scrollbar-width`/`scrollbar-color` (any selector at all, since specificity here
+is zero as of 2.0.0-alpha.8 — see above), to opt out for a subtree.
+
+#### FACT: standard properties only, `::-webkit-scrollbar*` removed (`2.0.0-alpha.21`)
+
+Before this release, the rule above also carried
+`::-webkit-scrollbar`/`-track`/`-corner`/`-thumb`/`-thumb:hover` pseudo-element rules on the
+same selector (an 8px rounded thumb, using `--ric-scrollbar-thumb`/
+`--ric-scrollbar-thumb-hover`). **In Chromium 121+ (Electron 28+) and current Firefox, that
+block was dead code**: when an element has `scrollbar-width` or `scrollbar-color` set to
+anything other than `auto`, Chromium ignores `::-webkit-scrollbar*` rules on that same
+element entirely — a platform behavior, not anything specific to `ricdom-ui.css`. Since
+`ricdom-ui.css` always sets both `scrollbar-width: thin` and `scrollbar-color` on the same
+selector, the `::-webkit-scrollbar*` block never rendered on those browsers; what consumers
+actually saw was always the standard thin scrollbar (reported by Rancha, pilot #6, with
+device-pixel measurements: a measured thumb width of 13 device px and no visible corner
+rounding — the standard `thin` scrollbar's numbers, not the 8px/`border-radius: 4px` the
+removed rule specified). This has been true since the styling was ported from v1
+(`v0.4.2`) — no consumer-visible change on Chromium ≥121 or Firefox results from removing
+it.
+
+**What does change**: Chromium <121, Electron <28, and Safari <18.2 don't yet ignore
+`::-webkit-scrollbar*` the same way, so on those specific old engines the themed
+`::-webkit-scrollbar*` styling was the one actually rendering — removing it means those
+older engines now fall back to their native (theme-untracked) scrollbar instead. There is
+no standard-CSS equivalent for a scrollbar-thumb hover color, so
+`--ric-scrollbar-thumb-hover` has no effect on anything `ricdom-ui.css` itself renders as of
+this release — the token is kept in all seven bundled palettes (and in `exportTheme`/
+`exportSettings` round-trips) for parity, and remains available to a consumer who wants to
+style their own `::-webkit-scrollbar-thumb:hover` rule. Doing so only takes effect on an
+element where the *standard* properties are not set to a non-`auto` value (per the platform
+rule above) — e.g. reset them first: `scrollbar-width: auto; scrollbar-color: auto;` before
+adding your own `::-webkit-scrollbar-thumb:hover { background: var(--ric-scrollbar-thumb-hover); }`
+(a fact about the platform's precedence rule, not a `ricdom` recipe).
+
+`createScrollPane`'s `.ric-scroll-pane` follows the same rule: it sets `scrollbar-width: thin`
+and `scrollbar-color` on itself, and its former `::-webkit-scrollbar*` rules (dead for the
+same reason) were removed in the same release. No `::-webkit-scrollbar*` rule remains
+anywhere in `ricdom-ui.css`.
 
 ---
 

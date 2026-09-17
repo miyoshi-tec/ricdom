@@ -5,6 +5,100 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.0.0-alpha.21] — not yet published
+
+Reported by Rancha (pilot #6, `2026-09-17`, against `alpha.20`): `applyTheme(el, { theme:
+'cyber' })` followed by `applyTheme(el, { theme: 'dark' })` on the same element left
+`cyber`'s `--ric-popup-bg`/`--ric-popup-blur`/`--ric-panel-shadow` behind as inline style,
+because `light`/`dark`/`teal` never defined those keys and `applyTheme` only ever
+`setProperty`d the new theme's own keys — never removed a key the new theme didn't have.
+Result: a `dark`-themed app with `cyber`-colored dialog/popup/toast surfaces. Two
+independent gaps, fixed together.
+
+### Fixed
+
+- **All seven bundled palettes now define the same 28-key token set**
+  (`src/ui/theme.ts`) — `light`/`dark`/`teal` gained `--ric-popup-bg`/`--ric-popup-blur`/
+  `--ric-panel-shadow`, `glass`/`glass-dark` gained `--ric-panel-shadow` (they already had
+  the other two). Every added value is a literal copy of what the CSS fallback chain
+  (`var(--ric-popup-bg, var(--ric-color-bg))`, `var(--ric-panel-shadow, var(--ric-shadow))`
+  — `cssTemplates.ts`) already resolved to for that theme, so rendering is pixel-identical
+  to `alpha.20` for all five of those themes — this is a token-completeness fix, not a
+  visual change. `cyber`/`aqua`, which already had their own distinct values for these
+  three keys, are untouched.
+- **`applyTheme` now owns the element's inline `--ric-*` custom properties**
+  (`src/ui/theme.ts`) — before setting the new theme's variables it also removes any
+  existing inline `--ric-*` property that the new `vars` doesn't include, so a repeated
+  `applyTheme` call on the same element never leaves a previous theme's (or a custom
+  `ThemeVars` object's) leftover key behind. Only `--ric-*`-prefixed properties are
+  touched; a consumer's own non-`--ric-*` inline styles (`--app-x`, `width`, etc.) are left
+  alone. Combined with the key-set completion above, `cyber` → `dark` on one element now
+  resolves every token to exactly what a fresh `applyTheme(el, { theme: 'dark' })` on a
+  blank element would produce.
+- Tests: `tests/ui/theme.test.ts` — a union/diff check across all seven themes' `el.style`
+  property names (fails if any future palette omits a key another one has), the `cyber` →
+  `dark` repro (asserting `dark`'s values, not `cyber`'s or an empty string), a custom
+  `ThemeVars` key (`--ric-my-extra`) disappearing after a switch to a theme that doesn't
+  carry it, and a non-`--ric-*` inline property (`--app-x`, `width`) surviving two
+  `applyTheme` calls untouched.
+
+### Changed
+
+- **Removed the dead `::-webkit-scrollbar*` block from `SCROLLBAR_CSS`**
+  (`src/ui/cssTemplates.ts`) — owner decision, `2026-09-17`, following a report from Rancha
+  (pilot #6) with device-pixel measurements. `ricdom-ui.css` set both the standard
+  `scrollbar-width`/`scrollbar-color` *and* `::-webkit-scrollbar`/`-track`/`-corner`/
+  `-thumb`/`-thumb:hover` on the same `[data-ricdom-theme]`-scoped selector since v1
+  (`v0.4.2`); in Chromium 121+ (Electron 28+) and current Firefox, setting the standard
+  properties to a non-`auto` value makes the browser ignore `::-webkit-scrollbar*` on that
+  element entirely, so the webkit block never rendered on those engines — Rancha measured a
+  13 device-px thumb with no corner rounding, the standard `thin` bar's numbers, not the 8px/
+  `border-radius: 4px` the removed rule specified. **No visual change on Chromium ≥121 or
+  Firefox** — consumers on those engines have been seeing the standard rendering all along.
+  Chromium <121, Electron <28, and Safari <18.2 do render the webkit block today, so on
+  those specific older engines this is a real (if minor) regression: the themed rounded
+  scrollbar becomes the browser's native, theme-untracked one. `--ric-scrollbar-thumb-hover`
+  has no standard-CSS equivalent and is no longer read by `ricdom-ui.css`, but the token
+  stays defined on all seven bundled palettes (`exportTheme`/`exportSettings` parity) for
+  consumers who want their own `::-webkit-scrollbar-thumb:hover` rule (see the SPEC FACT
+  below for the precedence caveat). `createScrollPane`'s `.ric-scroll-pane` component is
+  unrelated and untouched.
+- Tests: `tests/browser/uiScrollbarTheme.test.ts` now also asserts computed
+  `scrollbarWidth === 'thin'` (both on the themed element and its descendants, and `'auto'`
+  on an un-themed element); `tests/ui/cssTemplates.test.ts` asserts that no `::-webkit-scrollbar*`
+  rule remains anywhere in the stylesheet — `createScrollPane`'s `.ric-scroll-pane` had the
+  same dead webkit rules next to its own `scrollbar-width: thin` / `scrollbar-color`, and
+  they were removed in the same release.
+
+### Docs
+
+- `docs/TUTORIAL.md` §6: three additions reported by Rancha (pilot #6) — a frameless +
+  `backgroundMaterial` window turning solid black on a real maximize (Electron/Windows 11
+  Chromium issue, not `ricdom`) with a `maximizable: false` + pseudo-maximize workaround; a
+  reminder that `applyTheme`'s `--ric-*` variables are inline style on the themed element,
+  not `:root`, so a derived token in a `:root` rule can't resolve (scope it to
+  `[data-ricdom-theme]` or the element itself instead); a translucent `--ric-color-bg`
+  scrim recipe for `glass-dark` over a bright wallpaper.
+- `docs/SPEC.md` §8: two new FACTs — "every bundled palette defines the same key set"
+  (lists all 28 keys, explains why `--ric-duration`/`--ric-easing` are deliberately
+  excluded) and "`applyTheme` owns the element's inline `--ric-*` custom properties"
+  (describes the stale-key removal and its `--ric-*`-only scope). Updated the "CSS
+  variables set by `applyTheme`" list to reflect all seven themes setting
+  `--ric-popup-bg`/`--ric-popup-blur`/`--ric-panel-shadow`. Rewrote the "page-wide
+  scrollbar styling" section with a new FACT ("standard properties only,
+  `::-webkit-scrollbar*` removed") explaining the Chromium 121+ precedence rule, which
+  browsers/versions fall back to native, and the `--ric-scrollbar-thumb-hover` opt-back-in
+  caveat (cites Rancha's recipe as a platform fact, not a `ricdom` recipe).
+
+### Sizes
+
+- Measured with `gzip -9 -c FILE | wc -c`, after both changes above:
+  `dist/ricdom-ui.iife.min.js` 26,272 → 26,370 → **26,237** bytes (+98B for the theme
+  key-set/stale-clearing fix, −133B net from removing the dead `::-webkit-scrollbar*`
+  rules in both the theme scope and `.ric-scroll-pane`); `dist/ricdom-ui.css` 6,973 →
+  **6,848** bytes (−125B, the removed pseudo-element rules); `dist/ricdom.iife.min.js`
+  unchanged at 4,877B throughout (both changes are `ricdom/ui`-only).
+
 ## [2.0.0-alpha.20] — not yet published
 
 Reported by Trend Guard (pilot #2, report #16, `2026-09-17`, against `alpha.19`): the

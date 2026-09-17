@@ -5,13 +5,12 @@
 //
 // **各 it は必ず新しい setupApp() の要素に対して 1 つのテーマだけを適用する**
 // (glass → light のように同一要素へ applyTheme を 2 回呼んで切り替えるテスト構成には
-// しない)。理由: computeThemeVars は「解決したテーマが明示的に持つキーだけ」を
-// style.setProperty するため、cyber/aqua/glass のように他テーマに無いキー
-// (--ric-popup-blur 等) を持つテーマから、そのキーを持たない別テーマへ同一要素上で
-// 切り替えると、古いキーが inline style に残ったままになる (applyTheme は「持っていない
-// キーを明示的に削除する」until 実装ではない — この挙動自体は今回のスコープ外の
-// 既存仕様で、cyber/aqua でも同じ穴が理論上ある。ここでは踏まず、テーマごとに独立した
-// 要素で検証することで既存テーマの回帰確認という本来の目的を達成する)。
+// しない)。同一要素上でのテーマ切替時の古いキー残留は 2.0.0-alpha.21 (Rancha 報告 #6) で
+// applyTheme 自体が新しい vars に無い inline `--ric-*` プロパティを removeProperty する
+// ように直り、tests/ui/theme.test.ts で単体テスト済み (cyber → dark の再現も含む) —
+// この構成はそれとは独立に「テーマごとに新しい要素で backdrop-filter を検証する」という
+// 本ファイル本来の単純さのために保っている (同一要素の切替アニメーション待ちなどを
+// 絡めず、各テーマの静的な computed style だけを見る)。
 //
 // 検証方針:
 //   - フローティング面 (dialog/popup/toast/tooltip/dropdown/panel) は glass テーマの
