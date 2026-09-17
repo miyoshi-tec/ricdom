@@ -151,4 +151,23 @@ describe('実ブラウザ: 透明ウィンドウ対応 (createTheme override、2
     applyTheme(app, { theme: createTheme('glass', { '--ric-color-bg': 'transparent' }) });
     expect(getComputedStyle(app).backgroundColor).toBe('rgba(0, 0, 0, 0)');
   });
+
+  // 2.0.0-alpha.19: `--ric-theme` マーカーの回帰ガード。TUTORIAL.md §6 の Electron recipe
+  // (createTheme 経由で glass を渡す) でも data-ricdom-theme が正しく "glass" に解決され、
+  // かつフローティング面 (dialog) の backdrop-filter (blur) が実ブラウザで効いていること —
+  // 修正前は data-ricdom-theme が常に空文字になっていた (theme.ts 参照)。
+  it('createTheme("glass", { "--ric-color-bg": "transparent" }) でも data-ricdom-theme="glass" になり、dialog に backdrop-filter の blur がかかる', async () => {
+    const app = setupApp();
+    const glassTransparent = createTheme('glass', { '--ric-color-bg': 'transparent' });
+    applyTheme(app, { theme: glassTransparent });
+    expect(app.getAttribute('data-ricdom-theme')).toBe('glass');
+
+    let dlg: ReturnType<typeof createDialog>;
+    const handle = createApp('#app', {}, () => (dlg ? dlg({ triggerChildren: ['開く'], title: 't', children: ['本文'] }) : null));
+    dlg = handle.use(createDialog());
+    await flush();
+    await userEvent.click(app.querySelector('button')!);
+    await new Promise((r) => setTimeout(r, 300)); // entrance アニメーション終了待ち
+    expect(getComputedStyle(document.querySelector('.ric-dialog')!).backdropFilter).toContain('blur(');
+  });
 });

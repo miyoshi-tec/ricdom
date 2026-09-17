@@ -64,6 +64,8 @@ const COLOR_VARS_LIGHT: ThemeVars = {
   '--ric-md-marker': '#6b7280',
   '--ric-md-meta': '#6b7280',
   'color-scheme': 'light',
+  // データマーカー、CSS では一切参照しない (2.0.0-alpha.19、詳細は下の解説コメント参照)。
+  '--ric-theme': 'light',
 };
 
 const COLOR_VARS_DARK: ThemeVars = {
@@ -90,6 +92,7 @@ const COLOR_VARS_DARK: ThemeVars = {
   '--ric-md-marker': '#9ca3af',
   '--ric-md-meta': '#9ca3af',
   'color-scheme': 'dark',
+  '--ric-theme': 'dark',
 };
 
 const COLOR_VARS_TEAL: ThemeVars = {
@@ -116,6 +119,7 @@ const COLOR_VARS_TEAL: ThemeVars = {
   '--ric-md-marker': '#46605a',
   '--ric-md-meta': '#46605a',
   'color-scheme': 'light',
+  '--ric-theme': 'teal',
 };
 
 const COLOR_VARS_CYBER: ThemeVars = {
@@ -148,6 +152,7 @@ const COLOR_VARS_CYBER: ThemeVars = {
   '--ric-md-marker': '#7aa8c8',
   '--ric-md-meta': '#7aa8c8',
   'color-scheme': 'dark',
+  '--ric-theme': 'cyber',
 };
 
 const COLOR_VARS_AQUA: ThemeVars = {
@@ -181,6 +186,7 @@ const COLOR_VARS_AQUA: ThemeVars = {
   '--ric-md-marker': '#5c7a8a',
   '--ric-md-meta': '#5c7a8a',
   'color-scheme': 'light',
+  '--ric-theme': 'aqua',
 };
 
 // glass / glass-dark (2.0.0-alpha.18、フロストガラス／Windows 11 Acrylic／iOS 半透明風テーマ、
@@ -222,6 +228,7 @@ const COLOR_VARS_GLASS: ThemeVars = {
   '--ric-md-marker': '#4b5563',
   '--ric-md-meta': '#4b5563',
   'color-scheme': 'light',
+  '--ric-theme': 'glass',
 };
 
 const COLOR_VARS_GLASS_DARK: ThemeVars = {
@@ -250,6 +257,7 @@ const COLOR_VARS_GLASS_DARK: ThemeVars = {
   '--ric-md-marker': '#94a3b8',
   '--ric-md-meta': '#94a3b8',
   'color-scheme': 'dark',
+  '--ric-theme': 'glass-dark',
 };
 
 // prefers-reduced-transparency で glass/glass-dark に上書きするオパーク (不透明) セット
@@ -257,6 +265,13 @@ const COLOR_VARS_GLASS_DARK: ThemeVars = {
 // `@media (prefers-reduced-transparency: reduce)` では上書きできない — 呼び出し時点で
 // 判定し、該当すればこのセットをベースのテーマ変数にマージしてから適用する
 // (下の `prefersReducedTransparency`/`applyTheme` 参照)。
+// **マージ順は「ベース → consumer の overrides → このセット」** (Object.assign を vars に
+// 対して後段で適用する、applyTheme 参照)。アクセシビリティ設定が最終的に勝つ必要がある
+// ため。ただし **このセットに `--ric-color-bg` は含めない** — Electron の透明ウィンドウ
+// recipe (`createTheme('glass', { '--ric-color-bg': 'transparent' })`、TUTORIAL.md §6) が
+// consumer の意図した透明背景を保ったまま reduced-transparency に対応できるようにするため
+// (不透明化したいのはフローティング面の blur とコントロールの背景であって、consumer が
+// 明示的に選んだページ背景ではない)。
 const GLASS_REDUCED_TRANSPARENCY: Record<'glass' | 'glass-dark', ThemeVars> = {
   glass: {
     '--ric-surface-blur': 'none',
@@ -386,6 +401,16 @@ const computeThemeVars = ({ theme, density, fontSize }: ApplyThemeOptions): Them
  * `background`/`color` を塗る規則が ricdom-ui.css 側にある (#11、2.0.0-alpha.3。
  * v1 の create_ui_page が `.ric-page` に塗っていたパリティ — この関数自体は CSS 変数を
  * 当てるだけで、実際に塗るのは CSS 側の `[data-ricdom-theme]` 規則)。
+ *
+ * **属性値は解決したテーマ名** (2.0.0-alpha.19 まではキー ("") 固定だった)。`--ric-theme`
+ * マーカー変数 (各 COLOR_VARS_* が持つ、CSS からは一切参照されないデータ専用トークン、
+ * 下記参照) の値をそのまま使う。`theme` を bundled 名の文字列で渡した場合はもちろん、
+ * `createTheme(base, overrides)` の戻り値 (base の COLOR_VARS_* を spread しているので
+ * `--ric-theme` を自動的に引き継ぐ) を渡した場合も同じく解決される — consumer が完全な
+ * 自前パレット (ThemeVars を直書き、`--ric-theme` を持たない) を渡した場合のみ、従来どおり
+ * 空文字列になる。CSS 側 (`[data-ricdom-theme]`) は属性の「有無」で一致するセレクタなので、
+ * 値を持たせても THEME_PAINT_CSS/SCROLLBAR_CSS の挙動は変わらない — consumer は
+ * `[data-ricdom-theme="dark"]` のように値でも分岐できるようになる (SPEC §8 参照)。
  */
 export const applyTheme = (el: Element, opts: ApplyThemeOptions = {}): void => {
   if (!el || typeof (el as HTMLElement).style === 'undefined') {
@@ -393,19 +418,29 @@ export const applyTheme = (el: Element, opts: ApplyThemeOptions = {}): void => {
     return;
   }
   const vars = computeThemeVars(opts);
-  // glass/glass-dark を **文字列名で** 指定した場合のみ、OS の prefers-reduced-transparency
-  // 設定を見て不透明な上書きセットをマージする (2.0.0-alpha.18)。ThemeVars オブジェクト
-  // (自前のカスタムテーマ) は対象外 — どの上書きセットを使うべきか判別できないため。
-  const { theme } = opts;
-  if ((theme === 'glass' || theme === 'glass-dark') && prefersReducedTransparency()) {
-    Object.assign(vars, GLASS_REDUCED_TRANSPARENCY[theme]);
+  // 解決したテーマ名 (`--ric-theme` マーカー、2.0.0-alpha.19)。bundled 名の文字列で
+  // 指定した場合も `createTheme(base, overrides)` の戻り値を渡した場合も、ベースの
+  // COLOR_VARS_* から継承されてここに現れる。--ric-theme を持たない ThemeVars (自前の
+  // フルカスタムパレット) では undefined → '' にフォールバックする (従来どおりの挙動)。
+  const resolvedThemeName = typeof vars['--ric-theme'] === 'string' ? vars['--ric-theme'] : '';
+  // glass/glass-dark の prefers-reduced-transparency 上書きは「解決結果が glass/glass-dark
+  // かどうか」で判定する (2.0.0-alpha.19 で `--ric-theme` マーカーをキーに変更)。
+  // 変更前は opts.theme が文字列リテラル 'glass'/'glass-dark' のときしか発動せず、
+  // `createTheme('glass', { '--ric-color-bg': 'transparent' })` の戻り値 (= TUTORIAL.md §6
+  // が案内する Electron 向け公式 recipe そのもの) を渡すと reduced-transparency 対応が
+  // 抜け落ちる実害があった (統括がアナウンス文書執筆中に発見)。`--ric-theme` はこの
+  // ThemeVars にも `createTheme` の spread で自動的に乗っているため、判定を「文字列か
+  // どうか」ではなく「解決したテーマ名が何か」に変えるだけで両方のケースを一律に拾える。
+  if ((resolvedThemeName === 'glass' || resolvedThemeName === 'glass-dark') && prefersReducedTransparency()) {
+    Object.assign(vars, GLASS_REDUCED_TRANSPARENCY[resolvedThemeName]);
   }
   const style = (el as HTMLElement).style;
   // vars のキーは常に `--ric-*` か `color-scheme` のいずれか (COLOR_VARS_*/SIZE_VARS_*/
   // FONT_VARS_* の定義・createTheme の overrides とも同じ形)。setProperty はどちらの
-  // 形にも使える (CSS カスタムプロパティ / 通常プロパティ)。
+  // 形にも使える (CSS カスタムプロパティ / 通常プロパティ)。`--ric-theme` もこの一括
+  // ループで el.style に書かれる (CSS からは参照されないデータマーカーなので実害は無い)。
   for (const [key, val] of Object.entries(vars)) style.setProperty(key, val);
-  el.setAttribute('data-ricdom-theme', '');
+  el.setAttribute('data-ricdom-theme', resolvedThemeName);
 };
 
 /**

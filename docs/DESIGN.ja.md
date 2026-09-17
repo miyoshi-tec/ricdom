@@ -176,6 +176,13 @@ v1 は 5 か月・46 リリース・社内 11 アプリの実戦で API が磨�
 - **追報 4 (alpha.4 取り込み) で第 2 号は完了**: 再現スクリプト 5→5→5→5→5、E2E 10/10、回避策ゼロ。初報 10 + 追報 5 = 15 件が同日中に公式 API で閉じた
 - ~~観察 (対応なし)~~ → **§23 で実バグ (#14) と判明**。DPI 150% の実機で右端密着トリガーの dropdown body の `right` が `innerWidth` を 0.33px 超えた件、統括は「`clampLeft` が右端も収めるので最終位置では起き得ない、実測フェーズの rect を拾ったのでは」と判断したが誤り。consumer が再計測後 (200ms / 600ms) の inline `left` / `offsetWidth` / 本来幅を取り直し、**測った幅そのものが位置依存で過小**になっていることを示した (§23)。教訓: 「式は正しい」で止めず、式に入る実測値の取り方まで疑う
 
+## 37. 全 consumer へのテーマ 7 種対応依頼と、依頼文の執筆で見つかった穴 → `--ric-theme` マーカー (2026-09-17、2.0.0-alpha.19)
+
+- **ユーザー指示**: v2 に移行済みの全アプリに「テーマセレクタを入れて 7 種類に対応、Electron はウィンドウも透過」を依頼する。依頼文 `_announce_v2_glass_theme_request.md` (v1 リポジトリ、gitignored): 取り込み手順 / そのまま貼れる `uiSelect` 版セレクタ (`localStorage` 保存、`applyTheme` は `onchange` の中で明示的に呼ぶ = render とは別軸の副作用) / Electron の main・renderer 手順 / **アプリ側 CSS を透けさせる指針** (コンテナの不透明背景を外すか `var(--ric-color-control)`、`backdrop-filter` は浮遊面だけ) / 報告フォーマット (スクリーンショットは業務データなし、README・告知に使う)
+- **依頼文のサンプルを実 Chromium で検証して見つけた穴 2 件** (alpha.18 の状態): ①`data-ricdom-theme` 属性は常に空文字 (CSS が存在だけを見る設計) で、consumer が `[data-ricdom-theme="glass"]` で分岐できない。②Electron 手順の `createTheme('glass', {'--ric-color-bg':'transparent'})` は ThemeVars オブジェクトになるため、`prefers-reduced-transparency` の不透明フォールバックの対象外だった (文字列 `'glass'` のときだけ判定)。依頼文に「`[data-ricdom-theme="glass"]` で切替」「透明ウィンドウでも透明効果オフが効く」と書くには両方が要る
+- **修正 (alpha.19)**: 全 7 パレットに **`--ric-theme` マーカー変数** (値 = テーマ名、CSS からは一切参照しないデータ専用。`createTheme` は base を spread するので自動的に引き継ぐ)。`applyTheme` は解決した vars の `--ric-theme` から属性値と reduced-transparency 判定を引く (merge 順: base → consumer overrides → reduced overrides、reduced セットは `--ric-color-bg` を含まないので `transparent` が生き残る)。自前パレットで `--ric-theme` が無ければ従来どおり空文字。`exportTheme` で往復。**教訓: docs の手順 (createTheme で上書き) と実装の判定 (文字列比較) が別々に書かれると、手順どおりの consumer だけが機能を失う。「手順に書いた形」でテストを書く**
+- red-first 12 件 (マーカー ×7、属性値 ×4、createTheme 経由の reduced、往復)。unit 707 / browser 17 (glass + theme)。ui IIFE 26,164 → 26,204B (+40B)、コア不変
+
 ## 36. glass テーマ (曇りガラス / Windows 11 Acrylic / iOS 半透明) (2026-09-17、2.0.0-alpha.18、ユーザー指示)
 
 - **発端**: ユーザーの問い「iOS や Windows 11 の曇りガラスのように背景が透けるテーマは作れないか」→ 統括の見立て: **`aqua` が既にそれの半分** (コントロール `rgba(255,255,255,0.5)`、popup `--ric-popup-blur: blur(10px)`、panel も同じ blur トークン)。ただし blur が効くのは popup と panel だけで、dialog / toast / tooltip / dropdown / tweak は「半透明だがボケない」。**「何が透けるか」は 2 段階**: ①ricdom のページ背景 (CSS だけで完結) ②OS のデスクトップ・後ろのウィンドウ (Electron の `BrowserWindow` 側 `backgroundMaterial: 'mica' | 'acrylic'` / macOS `vibrancy` + body と `--ric-color-bg` を `transparent`。ブラウザ配布では原理的に不可)。**ユーザー決定: 作る。「実用になるかは置いておいて、Electron で背景が透けるアプリは映えるし話題になる」** = 採用の第一因 (発見性・話題性、adoption 監査) に効く投資として

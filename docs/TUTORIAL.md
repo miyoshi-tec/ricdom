@@ -321,6 +321,11 @@ applyTheme(document.getElementById('app'), {
 });
 ```
 
+This `createTheme('glass', ...)` form keeps the same `prefers-reduced-transparency`
+fallback and `data-ricdom-theme="glass"` attribute as passing the plain string `'glass'`
+would (`2.0.0-alpha.19`, via the `--ric-theme` marker every bundled palette carries — see
+SPEC.md §8) — you don't lose either by overriding `--ric-color-bg`.
+
 The OS-level window material (`backgroundMaterial`/`vibrancy`/`transparent`) supplies the
 blur of the *desktop* behind your whole window; `--ric-surface-blur` adds a second,
 per-surface blur on top of that for dialogs/popups/etc., the same way it would over any

@@ -187,6 +187,47 @@ describe('applyTheme: 7 テーマすべてが共通トークン一式を過不�
   });
 });
 
+// `--ric-theme` マーカー変数 (2.0.0-alpha.19)。CSS からは一切参照されないデータ専用
+// トークンで、data-ricdom-theme 属性値と prefers-reduced-transparency の判定キーの両方が
+// これに乗る (theme.ts の applyTheme コメント参照)。
+describe('applyTheme: --ric-theme マーカー変数 (2.0.0-alpha.19)', () => {
+  it.each(THEMES)('%s テーマは --ric-theme がテーマ名と一致する', (theme) => {
+    const el = document.createElement('div');
+    applyTheme(el, { theme });
+    expect(el.style.getPropertyValue('--ric-theme')).toBe(theme);
+  });
+
+  it('data-ricdom-theme 属性の値も --ric-theme と同じテーマ名になる (以前は常に空文字だった)', () => {
+    const el = document.createElement('div');
+    applyTheme(el, { theme: 'dark' });
+    expect(el.getAttribute('data-ricdom-theme')).toBe('dark');
+  });
+
+  // Electron 向け公式 recipe (TUTORIAL.md §6): createTheme('glass', overrides) の戻り値は
+  // COLOR_VARS_GLASS を spread しているので --ric-theme を自動的に引き継ぐ。以前はこの
+  // 経路だと data-ricdom-theme が '' になり、reduced-transparency の判定も opts.theme の
+  // 文字列リテラル一致だけを見ていたため抜け落ちていた (下の describe で後者を検証)。
+  it('createTheme("glass", overrides) を渡しても data-ricdom-theme が "glass" になる (Electron recipe)', () => {
+    const el = document.createElement('div');
+    applyTheme(el, { theme: createTheme('glass', { '--ric-color-bg': 'transparent' }) });
+    expect(el.getAttribute('data-ricdom-theme')).toBe('glass');
+    expect(el.style.getPropertyValue('--ric-color-bg')).toBe('transparent');
+  });
+
+  it('createTheme("dark") を渡すと data-ricdom-theme は "dark" になる', () => {
+    const el = document.createElement('div');
+    applyTheme(el, { theme: createTheme('dark') });
+    expect(el.getAttribute('data-ricdom-theme')).toBe('dark');
+  });
+
+  it('--ric-theme を持たない自前の ThemeVars では属性値が空文字のまま (従来どおりの挙動)', () => {
+    const el = document.createElement('div');
+    applyTheme(el, { theme: { '--ric-color-fg': '#000000' } });
+    expect(el.getAttribute('data-ricdom-theme')).toBe('');
+    expect(el.style.getPropertyValue('--ric-theme')).toBe('');
+  });
+});
+
 describe('applyTheme: prefers-reduced-transparency (2.0.0-alpha.18)', () => {
   const mockMatchMedia = (matches: boolean): void => {
     vi.stubGlobal('matchMedia', (query: string) => ({
@@ -216,6 +257,21 @@ describe('applyTheme: prefers-reduced-transparency (2.0.0-alpha.18)', () => {
     applyTheme(el, { theme: 'glass-dark' });
     expect(el.style.getPropertyValue('--ric-surface-blur')).toBe('none');
     expect(el.style.getPropertyValue('--ric-color-control')).not.toContain('rgba');
+  });
+
+  // 2.0.0-alpha.19 の回帰ガード: 修正前は opts.theme が文字列リテラルのときしかこの分岐が
+  // 発動しなかったため、TUTORIAL.md §6 の Electron recipe (createTheme 経由) では
+  // reduced-transparency が一切効かなかった。`--ric-color-bg: transparent` という
+  // consumer の意図した上書きは GLASS_REDUCED_TRANSPARENCY に含まれないので生き残ることも
+  // 合わせて確認する (上のコメント参照)。
+  it('reduce: true のとき createTheme("glass", { "--ric-color-bg": "transparent" }) でも不透明化され、かつ transparent 背景は維持される', () => {
+    mockMatchMedia(true);
+    const el = document.createElement('div');
+    applyTheme(el, { theme: createTheme('glass', { '--ric-color-bg': 'transparent' }) });
+    expect(el.style.getPropertyValue('--ric-surface-blur')).toBe('none');
+    expect(el.style.getPropertyValue('--ric-color-control')).not.toContain('rgba');
+    expect(el.style.getPropertyValue('--ric-color-bg')).toBe('transparent');
+    expect(el.getAttribute('data-ricdom-theme')).toBe('glass');
   });
 
   it('reduce: false のとき glass は半透明のまま (既定どおり blur が入る)', () => {
@@ -370,6 +426,22 @@ describe('exportTheme: round-trip', () => {
     const el2 = document.createElement('div');
     applyTheme(el2, { theme: exported });
     expect(el2.style.getPropertyValue('--ric-surface-blur')).toBe('blur(24px) saturate(160%)');
+  });
+
+  // --ric-theme (2.0.0-alpha.19) は `--ric-` プレフィックスを持つ通常のトークンなので、
+  // 他の色トークンと同じ isThemeKey 判定で自然に往復する。exportTheme → applyTheme の
+  // 往復で data-ricdom-theme 属性名も引き継がれることが要点 (--ric-theme マーカーから
+  // 再度 attribute が解決されるため)。
+  it('--ric-theme が exportTheme で往復し、再適用すると data-ricdom-theme も同じ名前になる', () => {
+    const el1 = document.createElement('div');
+    applyTheme(el1, { theme: 'glass-dark' });
+    const exported = exportTheme(el1);
+    expect(exported['--ric-theme']).toBe('glass-dark');
+
+    const el2 = document.createElement('div');
+    applyTheme(el2, { theme: exported });
+    expect(el2.style.getPropertyValue('--ric-theme')).toBe('glass-dark');
+    expect(el2.getAttribute('data-ricdom-theme')).toBe('glass-dark');
   });
 
   it('exportTheme の結果を別要素に applyTheme できる (往復)', () => {

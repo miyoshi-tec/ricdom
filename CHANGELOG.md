@@ -5,6 +5,62 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.0.0-alpha.19] — not yet published
+
+Found by the maintainer while drafting the consumer letter for `glass`/`glass-dark`
+(2026-09-17): the documented Electron recipe (`applyTheme(el, { theme: createTheme('glass',
+{ '--ric-color-bg': 'transparent' }) })`, `docs/TUTORIAL.md` §6) silently lost the
+`prefers-reduced-transparency` fallback and the `data-ricdom-theme="glass"` attribute,
+because both only keyed off the literal string `opts.theme`, not a `createTheme`-derived
+`ThemeVars` object.
+
+### Added
+
+- **`--ric-theme` CSS variable** (`src/ui/theme.ts`) — every bundled palette
+  (`light`/`dark`/`teal`/`cyber`/`aqua`/`glass`/`glass-dark`) now sets `--ric-theme` to its
+  own name. It's a data marker only: nothing in `ricdom-ui.css`/`cssTemplates.ts`
+  references it. Because `createTheme(base, overrides)` spreads its base palette,
+  `--ric-theme` carries through automatically into any `createTheme(...)`-derived
+  `ThemeVars` object, unless your own `overrides` replace it. A fully custom `ThemeVars`
+  object may set `--ric-theme` to any string, or omit it.
+
+### Fixed
+
+- **`data-ricdom-theme`'s attribute value** now reflects the resolved `--ric-theme` marker
+  instead of always being the empty string — `applyTheme(el, { theme: 'dark' })` and
+  `applyTheme(el, { theme: createTheme('dark') })` both now produce
+  `data-ricdom-theme="dark"`. `[data-ricdom-theme]` (the paint/scrollbar CSS scope) matches
+  on the attribute's *presence*, not a particular value, so this is additive — it doesn't
+  change which elements those existing rules match, but consumer CSS or code can now key on
+  the value (e.g. `[data-ricdom-theme="dark"] { ... }`, or
+  `getComputedStyle(el).getPropertyValue('--ric-theme')`). A fully custom `ThemeVars` theme
+  that never sets `--ric-theme` still resolves to `''`, unchanged.
+- **`prefers-reduced-transparency` now keys on the resolved `--ric-theme` marker** instead
+  of the literal `opts.theme` string — `applyTheme(el, { theme: createTheme('glass', {
+  '--ric-color-bg': 'transparent' }) })` (the Electron transparent-window recipe
+  `docs/TUTORIAL.md` §6 documents) now gets the same opaque reduced-transparency override
+  as passing the plain string `'glass'` would, where before it silently didn't. The
+  override set deliberately excludes `--ric-color-bg`, so a consumer's `transparent`
+  background survives reduced-transparency unchanged (verified by a new test:
+  `tests/ui/theme.test.ts`).
+- `tests/ui/theme.test.ts`: extended the token-completeness coverage with a `--ric-theme`
+  equality check per theme, `data-ricdom-theme` attribute assertions for the
+  string/`createTheme`/custom-object cases, an `exportTheme`/`applyTheme` round-trip
+  assertion for `--ric-theme`, and the reduced-transparency + `createTheme`-derived-glass
+  regression case above. `tests/browser/uiGlassTheme.test.ts`: added a real-browser case
+  confirming `createTheme('glass', { '--ric-color-bg': 'transparent' })` produces
+  `data-ricdom-theme="glass"` and an actual `backdrop-filter: blur(...)` on `.ric-dialog`.
+
+### Docs
+
+- `docs/SPEC.md` §8: documented `--ric-theme` (new FACT), and corrected the
+  `prefers-reduced-transparency` FACT, which previously said the check only fired for the
+  literal `'glass'`/`'glass-dark'` string — it now explains the `--ric-theme`-keyed
+  behavior and the fix above. Also updated the `data-ricdom-theme` paint FACT (§8) to note
+  the attribute's value is no longer always `''`.
+- `docs/TUTORIAL.md` §6: noted that the `createTheme('glass', ...)` Electron recipe keeps
+  the reduced-transparency fallback and the `data-ricdom-theme="glass"` attribute.
+
 ## [2.0.0-alpha.18] — not yet published
 
 User decision (2026-09-17): added a frosted-glass theme (Windows 11 Acrylic / iOS

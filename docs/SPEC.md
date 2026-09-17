@@ -799,11 +799,11 @@ Color/theme (from the `theme` option — one of the seven bundled names, or your
 `--ric-color-fg`, `--ric-color-fg-muted`, `--ric-color-bg`, `--ric-color-control`,
 `--ric-color-border`, `--ric-color-accent`, `--ric-color-accent-fg`, `--ric-tooltip-bg`,
 `--ric-tooltip-fg`, `--ric-code-bg`, `--ric-code-fg`, `--ric-shadow`, `--ric-radius`,
-`--ric-surface-blur` (new in `2.0.0-alpha.18`, see below), `color-scheme` — plus, on
-`cyber`/`aqua`/`glass`/`glass-dark` only, `--ric-popup-bg`, `--ric-popup-blur`; `cyber`/
-`aqua` also set `--ric-panel-shadow`, `--ric-duration`, `--ric-easing` (other themes fall
-back to the CSS defaults baked into `ricdom-ui.css`, via `var(--x, fallback)`, rather than
-redeclaring them).
+`--ric-surface-blur` (new in `2.0.0-alpha.18`, see below), `--ric-theme` (new in
+`2.0.0-alpha.19`, see below), `color-scheme` — plus, on `cyber`/`aqua`/`glass`/`glass-dark`
+only, `--ric-popup-bg`, `--ric-popup-blur`; `cyber`/`aqua` also set `--ric-panel-shadow`,
+`--ric-duration`, `--ric-easing` (other themes fall back to the CSS defaults baked into
+`ricdom-ui.css`, via `var(--x, fallback)`, rather than redeclaring them).
 
 Density (from the `density` option): `--ric-gap`, `--ric-pad-x`, `--ric-pad-y`,
 `--ric-control-h`.
@@ -848,18 +848,58 @@ Because the five pre-`glass` themes all resolve `--ric-surface-blur` to `'none'`
 explicitly; the rest still fall through to `none`), their rendering is unaffected —
 verified with the existing browser theme tests and the examples smoke test.
 
+### FACT: `--ric-theme` is a data marker, not a rendered value (`2.0.0-alpha.19`)
+
+Every bundled palette (`light`/`dark`/`teal`/`cyber`/`aqua`/`glass`/`glass-dark`) sets
+`--ric-theme` to its own name as a plain string. `ricdom-ui.css` never reads it — no rule
+references `var(--ric-theme, ...)` anywhere — it exists purely so `applyTheme` (and, if you
+want, your own code) can tell which bundled theme a resolved set of vars came from, even
+after it has passed through `createTheme(base, overrides)`. Because `createTheme` spreads
+its base palette before applying `overrides`, a theme built with `createTheme('glass', {
+'--ric-color-bg': 'transparent' })` carries `--ric-theme: 'glass'` automatically, unless
+your own `overrides` explicitly replace it.
+
+Two things key off `--ric-theme`, both previously keyed off the literal string you passed
+as `opts.theme` (which meant they silently didn't apply to a `createTheme(...)`-derived
+`ThemeVars` object — see the next two FACTs, fixed in `2.0.0-alpha.19`):
+
+- **`data-ricdom-theme`'s attribute value.** `applyTheme` now sets
+  `el.setAttribute('data-ricdom-theme', resolvedThemeName)` where `resolvedThemeName` is
+  `vars['--ric-theme']` if it's a string, else `''`. A bundled name (string or
+  `createTheme`-derived) resolves to that name (e.g. `data-ricdom-theme="glass"`); a fully
+  custom `ThemeVars` object that never sets `--ric-theme` still resolves to `''`, unchanged
+  from before. Since `[data-ricdom-theme]` (used by the paint/scrollbar rules, see below)
+  matches on the attribute's *presence*, not a particular value, this is purely additive —
+  it doesn't change which elements those rules match. It does let your own CSS or code key
+  on the value, e.g. `[data-ricdom-theme="dark"] { ... }`, or read it back with
+  `getComputedStyle(el).getPropertyValue('--ric-theme')`.
+- **The `prefers-reduced-transparency` override** — see the next FACT.
+
+A custom palette that never sets `--ric-theme` (or sets it to your own string) is not an
+error — `applyTheme` doesn't validate it, the same as any other `--ric-*` value.
+
 ### FACT: `prefers-reduced-transparency` is applied once, at `applyTheme` call time
 
 Theme variables are written as **inline style** by `applyTheme` (see above), so a
 stylesheet `@media (prefers-reduced-transparency: reduce)` rule cannot override them.
 Instead, `applyTheme` checks `window.matchMedia('(prefers-reduced-transparency: reduce)')`
-itself: if `theme` is given as the literal string `'glass'` or `'glass-dark'` (not a custom
-`ThemeVars` object — there is no way to infer the right opaque override for an arbitrary
-custom theme) and the media query matches, an opaque override set is merged in before the
-variables are applied — `--ric-surface-blur`/`--ric-popup-blur` become `'none'` and
-`--ric-color-control`/`--ric-popup-bg`/`--ric-color-border` become opaque colors. An
-environment without `matchMedia` (e.g. `jsdom`) or one where calling it throws is treated
-as "not reduced" — the theme renders translucent as normal, rather than failing.
+itself: if the *resolved* `--ric-theme` marker (see above) is `'glass'` or `'glass-dark'`
+and the media query matches, an opaque override set is merged in before the variables are
+applied — `--ric-surface-blur`/`--ric-popup-blur` become `'none'` and
+`--ric-color-control`/`--ric-popup-bg`/`--ric-color-border` become opaque colors.
+**`--ric-color-bg` is deliberately excluded** from this override set, so the Electron
+transparent-window recipe below (`--ric-color-bg: 'transparent'`) survives
+reduced-transparency unchanged. Since the check keys on `--ric-theme` rather than on
+whatever you literally passed as `opts.theme`, it applies equally whether `theme` is the
+bundled string `'glass'`/`'glass-dark'` or a `createTheme('glass', overrides)`-derived
+`ThemeVars` object — **before `2.0.0-alpha.19` it only fired for the literal string**, so a
+`ThemeVars` object built with `createTheme` silently lost this accessibility fallback (a
+real gap, since `createTheme('glass', { '--ric-color-bg': 'transparent' })` is exactly the
+form this file's own Electron recipe below recommends). A fully custom `ThemeVars` object
+that never sets `--ric-theme` still never triggers this override — there's no way to infer
+the right opaque set for an arbitrary custom theme. An environment without `matchMedia`
+(e.g. `jsdom`) or one where calling it throws is treated as "not reduced" — the theme
+renders translucent as normal, rather than failing.
 
 **This check happens once, at the moment `applyTheme` runs** — it is not a live
 subscription. An app that wants to react to the user changing this OS setting while the
@@ -906,7 +946,10 @@ styling of those controls.
   names `applyTheme` happens to use.
 - `exportTheme(el)` reads the current `--ric-*`/`color-scheme` inline-style values off
   `el` (density/font-size variables are excluded) — round-trips with `applyTheme`, e.g.
-  for persisting a user's theme choice to `localStorage`.
+  for persisting a user's theme choice to `localStorage`. `--ric-theme` round-trips the
+  same way as any other `--ric-*` variable (no special-casing in `exportTheme`), so
+  `applyTheme(el2, { theme: exportTheme(el1) })` reproduces `el1`'s `data-ricdom-theme`
+  attribute value on `el2` too, not just its CSS variables.
 - `exportSettings(el)`, added in `2.0.0-alpha.14` (a port of v1's `export_settings` from
   `ric_ui/context.js`, flagged as missing by the v1→v2 parity audit, #2), reads the same
   inline styles as `exportTheme` but returns all three groups separately: `{ theme,
@@ -990,10 +1033,13 @@ This mirrors v1's `create_ui_page`, which painted `.ric-page` the same way (incl
   `!important` or extra specificity — a real bug (Brownies Desktop, one of pilots 5-7, all
   Electron apps migrating at the same time). Any rule of yours, including a bare element
   selector, now wins — no `!important` or extra specificity needed.
-- The attribute value itself is always the empty string (`applyTheme` always calls
-  `el.setAttribute('data-ricdom-theme', '')`, regardless of whether `theme` was a bundled
-  name or your own `ThemeVars` object) — `[data-ricdom-theme]` matches on the attribute's
-  *presence*, not a particular value, so this holds for both cases.
+- **Changed in `2.0.0-alpha.19`**: the attribute's value is the resolved `--ric-theme`
+  marker (a bundled theme name, e.g. `data-ricdom-theme="glass"`) rather than always the
+  empty string — see the `--ric-theme` FACT above. A fully custom `ThemeVars` object that
+  never sets `--ric-theme` still gets `''`, matching every release before this one.
+  `[data-ricdom-theme]` matches on the attribute's *presence*, not a particular value, so
+  this rule (and the scrollbar rule below) behave identically regardless of the value —
+  this change is additive for anyone who wants to key their own CSS or code off the value.
 - **Changed in 2.0.0-alpha.6**: before this release, `font-size` was not painted — only
   `background`/`color` were. If you relied on the themed element (or its direct text)
   staying at the browser's default font size (16px) regardless of the `fontSize` option
