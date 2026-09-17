@@ -5,6 +5,71 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.0.0-alpha.17] — not yet published
+
+Raccoon Memo (pilot #5) adopted alpha.16 the same day it was documented and sent back four
+small requests (追報 4, 2026-09-17) together with its alpha.16 acceptance record: e2e
+102/102, IME confirmed working on Windows 11 with Microsoft IME, and a 177,160-character
+document editing at a median 12.5ms per keystroke.
+
+### Added
+
+- **`wrapperClass`/`wrapperStyle` props on `createMdEditor()`** (`MdEditorProps`). Merged
+  into the wrapper `div.ric-md-editor`'s `class`/`style`
+  (`mergeClass('ric-md-editor', wrapperClass)`) — **not** the inner `<textarea>`'s, which
+  keeps receiving its own `class`/`style` exactly as before. Requested by Raccoon Memo so a
+  consumer can size the wrapper itself as a flex item (`wrapperStyle: { height: '100%' }` or
+  similar) instead of reaching into the internal `.ric-md-editor` class name from outside.
+  Both are stripped from `rest` before it reaches `uiTextarea(...)`, so in the
+  `highlight: 'none'` path and the `maxHighlightLength` fallback (where no wrapper is ever
+  created) they are silently dropped, by design — documented as part of the existing "byte-
+  for-byte identical to `uiTextarea`" FACT in `docs/SPEC.md` §13. Covered by four new tests
+  in `tests/mdEditor/mdEditor.test.ts` (wrapper vs. textarea class isolation, wrapper inline
+  style, and a deep check that neither prop leaves any trace of itself — nor changes the
+  `uiTextarea(rest)`-identity result — in the `'none'` fallback). Measured:
+  `dist/ricdom-md-editor.iife.min.js` gzip 4,535 → 4,566 bytes (+31B) — `createMdEditor`'s
+  own JS is what changed here, not the shared `ricdom/ui` CSS/bundle (see `Changed` below).
+
+### Changed
+
+- **`.ric-md-editor`'s default `display` changed from `block` to `flex; flex-direction:
+  column`.** With `block` (alpha.16, the component's only prior released state), the
+  `<textarea>` — an ordinary inline-level-ish flow child — sat below its own inline
+  baseline gap inside the wrapper's content box; a consumer who gave the wrapper an explicit
+  height (via the new `wrapperStyle` above) and the textarea `style: { height: '100%' }`
+  measured the textarea about 18px taller than the wrapper instead of matching it exactly
+  (reproduced and confirmed in `tests/browser/uiMdEditor.test.ts` by temporarily reverting
+  this CSS change back to `display: block`, which turned that new test red as expected). The
+  `<textarea>` itself is **not** forced to `flex: 1` — `rows`/`autoResize` still determine
+  its own height inside the flex column unchanged (verified: the existing wrap-parity and
+  auto-resize-adjacent browser tests still pass) — `flex-direction: column`'s default
+  `align-items: stretch` alone is what removes the baseline gap. This only changes behavior
+  for `ricdom/md-editor` consumers (alpha.16 was the only previously released version of
+  this component, so there is no earlier baseline to break for anyone else). Measured:
+  `dist/ricdom-ui.css` grew by one CSS declaration's worth of text (`block` → `flex;
+  flex-direction: column`), 36,271 → 36,296 bytes uncompressed (+25B); `dist/ricdom-ui.iife.min.js`
+  gzip stayed at 25,637 bytes (a change this small didn't move the compressed output at
+  all). The core (`dist/ricdom.iife.min.js`, gzip unchanged at 4,877B) is unaffected, as
+  always, by anything in `ricdom/ui`.
+
+### Docs
+
+- **`docs/SPEC.md` §13**: new props table for `MdEditorProps` (`highlight`, `wrapperClass`,
+  `wrapperStyle`); a FACT that the wrapper's stable selector is
+  `[data-ricdom-role="md-editor"]` (§11) since class names — including `wrapperClass`'s own
+  value — are not a contract; an addition to the existing `highlight: 'none'` FACT stating
+  that CSS written against the wrapper (`wrapperClass` or the role selector) is lost
+  entirely in `'none'` mode by design, so layout CSS meant to survive both modes belongs on
+  the textarea's own `class`/`style` instead; and one new sentence cross-referencing that
+  `uiMdPre`/`uiCodePre` `console.warn` once when `window.hljs` is missing but
+  `createMdEditor` deliberately never does, so an app using both together can show colored
+  fences in the preview but plain ones in the editor if the `hljs` `<script>` loads after
+  the editor's first render (load it before both to avoid the mismatch).
+- **`examples/md-editor.html`** switched from styling the internal `.ric-md-editor` class
+  directly to passing `wrapperClass: 'example-md-editor'` and styling that instead — the
+  example now demonstrates the documented way to size the wrapper rather than depending on
+  a class name `createMdEditor` doesn't guarantee.
+
 ## [2.0.0-alpha.16] — not yet published
 
 ### Added

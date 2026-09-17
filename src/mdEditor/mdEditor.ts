@@ -28,7 +28,7 @@
 // (フォント計測・幅/高さ) を再同期 — ResizeObserver で textarea 自身のサイズ変化
 // (splitter ドラッグ・`resize:vertical` ハンドル) も追う。
 
-import type { RicElementNode, RicNode } from '../types.js';
+import type { ClassValue, RicElementNode, RicNode, StyleValue } from '../types.js';
 import { type AttachGuard, type Component, createAttachGuard } from '../ui/internal/component.js';
 // `HljsLike`/`declare global { interface Window { hljs?: HljsLike } }` は uiMdPre/uiCodePre と
 // 共有する定義 (src/ui/internal/hljs.ts)。ここでは warnHljsMissing は使わない (hljs が無い
@@ -41,6 +41,21 @@ import { tokenizeMarkdown } from './tokenizer.js';
 export interface MdEditorProps extends UiTextareaProps {
   /** 'none' で装飾なしの素の uiTextarea にフォールバックする (既定 'markdown') */
   highlight?: 'markdown' | 'none';
+  /**
+   * ラッパー `div.ric-md-editor`（`[data-ricdom-role="md-editor"]`）に合成する追加 class。
+   * textarea 側の `class` (`.ric-md-editor__input` に合成される) とは別系統 — consumer が
+   * ラッパーを flex item としてサイズ指定したいという要望 (Raccoon Memo 追報 4、
+   * 2026-09-17) に対応する。**`highlight:'none'` / 閾値超えのフォールバック時はラッパー
+   * 自体が存在しないため、この prop は単に無視される** (SPEC.md §13 FACT 参照 — その
+   * パスに入る前に rest から取り除いているので uiTextarea には一切渡らない)。
+   */
+  wrapperClass?: ClassValue;
+  /**
+   * ラッパー `div.ric-md-editor` に適用する inline style。wrapperClass と同じ理由・同じ
+   * フォールバック挙動 (highlight:'none' 等ではラッパーが無いので無視される)。textarea 側の
+   * レイアウトを変えたい場合は uiTextarea の `style` prop (rest 経由でそのまま透過) を使う。
+   */
+  wrapperStyle?: StyleValue;
 }
 
 export interface MdEditorInstance extends Component<MdEditorProps> {}
@@ -258,7 +273,10 @@ export const createMdEditor = (options: { maxHighlightLength?: number } = {}): M
     const host = guard.ensure();
     if (!host) return null;
 
-    const { highlight = 'markdown', ...rest } = props;
+    // wrapperClass/wrapperStyle はここで最初に取り除く — 'none'/閾値超えのフォールバック
+    // (下記) は rest をそのまま uiTextarea に渡すだけなので、この時点で除いておけば
+    // 「ラッパーが無いフォールバックでは静かに無視される」契約が自動的に成り立つ。
+    const { highlight = 'markdown', wrapperClass, wrapperStyle, ...rest } = props;
     const value = typeof rest.value === 'string' ? rest.value : '';
 
     // エスケープハッチ: 'none' または閾値超えは「装飾なしの uiTextarea そのもの」を返す
@@ -312,7 +330,8 @@ export const createMdEditor = (options: { maxHighlightLength?: number } = {}): M
 
     return {
       tag: 'div',
-      class: 'ric-md-editor',
+      class: mergeClass('ric-md-editor', wrapperClass),
+      ...(wrapperStyle ? { style: wrapperStyle } : {}),
       'data-ricdom-role': UI_ROLE.mdEditor,
       'data-ricdom-md-editor-id': String(id),
       children: [mirrorNode, textareaNode],

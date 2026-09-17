@@ -256,6 +256,46 @@ describe('実ブラウザ: createMdEditor', () => {
     expect((mirror.textContent ?? '').replace(new RegExp(zeroWidth2, 'g'), '')).toBe('確定テキスト');
   });
 
+  // alpha.17 (Raccoon Memo 追報 4): ラッパーの既定 display を block → flex;
+  // flex-direction: column に変更した回帰ガード。wrapperStyle でラッパーの高さを固定し、
+  // textarea 側に (uiTextarea の rest 経由で透過される) style: { height: '100%' } を渡す
+  // consumer パターンが、インライン-block のベースライン隙間で溢れずに効くことを確認する。
+  it('wrapperStyle で高さ固定 + textarea style:{height:"100%"} で textarea がラッパーいっぱいに広がる (display:flex column、alpha.17)', async () => {
+    const app = setupApp();
+    app.style.width = '320px';
+    applyTheme(app, { theme: 'light' });
+    let md: ReturnType<typeof createMdEditor>;
+    const handle = createApp('#app', {}, () =>
+      md ? md({ value: MIXED_DOC, wrapperStyle: { height: '240px' }, style: { height: '100%' } }) : null,
+    );
+    md = handle.use(createMdEditor());
+    await flush();
+    await new Promise((r) => setTimeout(r, 250)); // rAF + 200ms バックストップの同期を待つ
+
+    const wrapper = app.querySelector('.ric-md-editor') as HTMLElement;
+    const textarea = app.querySelector('textarea') as HTMLTextAreaElement;
+    const mirror = app.querySelector('pre.ric-md-editor__mirror') as HTMLElement;
+
+    const wrapperRect = wrapper.getBoundingClientRect();
+    const textareaRect = textarea.getBoundingClientRect();
+
+    // textarea の実測高さがラッパーの高さと一致する (±1px)
+    expect(Math.abs(textareaRect.height - wrapperRect.height)).toBeLessThanOrEqual(1);
+    // ラッパー自身は何もはみ出していない (インライン-block のベースライン隙間で
+    // scrollHeight が clientHeight を超えていないこと)
+    expect(wrapper.scrollHeight).toBeLessThanOrEqual(wrapper.clientHeight + 1);
+
+    // 既存の parity ヘルパーと同じ式でミラーの矩形が textarea と一致し続けることも確認する
+    // (幅はスクロールバーの gutter 分を除く)
+    const bw = parseFloat(getComputedStyle(textarea).borderLeftWidth || '0') + parseFloat(getComputedStyle(textarea).borderRightWidth || '0');
+    expect(Math.abs(mirror.getBoundingClientRect().width - (textarea.clientWidth + bw))).toBeLessThan(0.5);
+    const mRect = mirror.getBoundingClientRect();
+    expect(Math.abs(textareaRect.left - mRect.left)).toBeLessThanOrEqual(0.5);
+    expect(Math.abs(textareaRect.top - mRect.top)).toBeLessThanOrEqual(0.5);
+    expect(Math.abs(textareaRect.width - mRect.width)).toBeLessThanOrEqual(0.5);
+    expect(Math.abs(textareaRect.height - mRect.height)).toBeLessThanOrEqual(0.5);
+  });
+
   it('consumer が textarea に当てた font-family がミラーにもコピーされる', async () => {
     const app = setupApp();
     let md: ReturnType<typeof createMdEditor>;

@@ -8,8 +8,13 @@
   body { font-family: system-ui, sans-serif; margin: 2rem; max-width: 720px; }
   h1 { font-size: 1.1rem; }
   .row { display: flex; gap: 0.5rem; align-items: center; margin: 0.75rem 0; }
-  .ric-md-editor { width: 100%; }
-  .ric-md-editor textarea { min-height: 320px; }
+  /* wrapperClass (2.0.0-alpha.17) lands this class on the wrapper div.ric-md-editor
+     itself, not on the textarea — sizing the wrapper directly via `.ric-md-editor` from
+     outside works too (class names, not attached to createMdEditor's own prop, are not
+     a contract), but wrapperClass is the documented way to do it without depending on
+     that internal class name. */
+  .example-md-editor { width: 100%; }
+  .example-md-editor textarea { min-height: 320px; }
 </style>
 </head>
 <body>
@@ -99,6 +104,7 @@
             ? md({
                 value: s.body,
                 placeholder: 'Write Markdown…',
+                wrapperClass: 'example-md-editor',
                 oninput: (ev) => {
                   s.body = ev.target.value;
                 },

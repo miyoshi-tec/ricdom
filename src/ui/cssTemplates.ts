@@ -1306,12 +1306,23 @@ const TWEAK_CSS = `
 // 同じ値をインラインで強制するが、script 実行前の一瞬の保険として CSS 側にも静的に書く —
 // textarea 自身の box-sizing (既定 content-box) に関わらず、ミラーは常に border-box 前提で
 // width/height を計算する (統括の独立検証で発見した実装の穴、2026-09-17)。
+// `.ric-md-editor` の `display: flex; flex-direction: column`（alpha.17、alpha.16 では
+// `display: block` だった）: textarea は通常の flow では「行内要素のベースライン直下の
+// 隙間」分だけラッパーの content box をはみ出す — consumer が `wrapperStyle: { height }`
+// + textarea 側 `style: { height: '100%' }` でラッパーを flex item として伸縮させようと
+// すると、textarea の実測高さがラッパーより約 18px 高くなる回帰が実際にあった
+// (Raccoon Memo 追報 4、2026-09-17。tests/browser/uiMdEditor.test.ts のこの回帰ガードを
+// 一時的に `display: block` へ戻して確認 → 実際に RED [18px 差] になった)。textarea 自体に
+// `flex: 1` は強制しない (rows/autoResize が決める高さを尊重するため) — ラッパーを flex
+// コンテナにするだけで、`flex-direction: column` の既定 `align-items: stretch` により
+// textarea はブロック要素と同じ幅いっぱいのまま、上記の隙間だけが消える。
 // ※ テンプレートリテラルの中に CSS コメントを書くと配布 CSS と ui バンドルにそのまま
 //    乗る (gzip +約 280B を実測) ので、説明はこの JS コメントに置く。
 const MD_EDITOR_CSS = `
 .ric-md-editor {
   position: relative;
-  display: block;
+  display: flex;
+  flex-direction: column;
 }
 .ric-md-editor__mirror {
   position: absolute;

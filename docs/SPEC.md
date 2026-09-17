@@ -1527,13 +1527,41 @@ only its caret and native selection highlight are visible — the colored text y
 entirely the mirror underneath. The mirror is `island: true`, so `ricdom`'s own diff/patch
 never touches its children; `createMdEditor` owns and rebuilds that DOM directly.
 
+### Props table (in addition to every `uiTextarea` prop)
+
+| Key | Type | Meaning |
+| --- | --- | --- |
+| `highlight` | `'markdown' \| 'none'` | Default `'markdown'`. `'none'` falls back to plain `uiTextarea` — see the FACT below |
+| `wrapperClass` | `ClassValue` | *(2.0.0-alpha.17)* Merged into the wrapper `div.ric-md-editor`'s `class` (`mergeClass('ric-md-editor', wrapperClass)`) — **not** the `<textarea>`'s. Requested by Raccoon Memo (追報 4) so a consumer can size the wrapper as a flex item without reaching into `.ric-md-editor` from outside. Dropped silently when there is no wrapper (`highlight: 'none'` or the size-cap fallback, next section) |
+| `wrapperStyle` | `StyleValue` | *(2.0.0-alpha.17)* Same target and same fallback behavior as `wrapperClass`, applied as the wrapper's inline `style` instead of its `class` |
+
+The wrapper's `display` is `flex; flex-direction: column` (changed from `block` in
+2.0.0-alpha.17 — see the `Changed` entry in `CHANGELOG.md`'s alpha.17 section for why), and
+the `<textarea>` itself is not forced to `flex: 1` — `rows`/`autoResize` still determine its
+own height inside the column exactly as before. A consumer who wants the textarea to fill
+the wrapper sets `wrapperStyle: { height: '240px' }` (or any sizing that gives the wrapper a
+definite height) plus the textarea's own `style: { height: '100%' }` (an ordinary
+`uiTextarea` prop, passed straight through in `rest`).
+
+The wrapper's **stable selector is `[data-ricdom-role="md-editor"]`** (§11) — like every
+other `data-ricdom-role`, it exists precisely so CSS/E2E code doesn't have to depend on
+class names, which are not a contract (`wrapperClass`'s own value least of all, since it's
+consumer-supplied). Prefer the role selector, or your own `wrapperClass`, over assuming
+`.ric-md-editor` will always be present or named that.
+
 ### FACT: `highlight: 'none'` is byte-for-byte identical to `uiTextarea`
 
 `createMdEditor()({ ...props, highlight: 'none' })` returns exactly `uiTextarea(rest)`
 (`rest` = every prop except `highlight`) — no wrapper `<div>`, no mirror, nothing added.
 This is the deliberate escape hatch: a consumer that wants to conditionally disable
 highlighting (e.g. a "plain text mode" toggle) gets the identical DOM shape either way, so
-nothing else in the surrounding layout needs to change.
+nothing else in the surrounding layout needs to change. A consequence: `wrapperClass` and
+`wrapperStyle` (previous section) are dropped along with the rest of the wrapper — a
+consumer who wrote CSS against the wrapper (`wrapperClass`'s value, or
+`[data-ricdom-role="md-editor"]`) loses that wrapper entirely when switching to `'none'`,
+by design. Layout CSS that must keep working in both modes belongs on the `<textarea>`'s
+own `class`/`style` (the ordinary `uiTextarea` props, `rest`-forwarded either way), not on
+the wrapper.
 
 ### FACT: oversized documents fall back to the same plain path automatically
 
@@ -1647,6 +1675,18 @@ language })` if `window.hljs` exists (the same optional integration as `uiCodePr
 `uiMdPre`/`uiCodePre`, **`createMdEditor` never warns when `hljs` is missing** — plain,
 un-highlighted color is the expected default here (a Markdown-colored textarea is still
 useful without a syntax-highlighting library loaded), not a degraded state worth flagging.
+*(2.0.0-alpha.17)* Because of this asymmetry, an app using both `uiMdPre`/`uiCodePre` and
+`createMdEditor` together (e.g. a live Markdown preview next to the editor) can end up with
+colored fences in the preview but plain ones in the editor if the `hljs` `<script>` loads
+*after* `createMdEditor`'s first render: `uiMdPre`/`uiCodePre` are plain functions
+re-evaluated on every render, so they pick up `window.hljs` the next time anything triggers
+a re-render regardless of whether the Markdown text itself changed, but the mirror only
+re-tokenizes on a discrete trigger (`input`/`compositionend`/an actual value change caught
+by the layout re-sync) — if the text hasn't changed since `hljs` became available, the fence
+stays in its original plain-color tokenization until the user types again. Load the `hljs`
+script before both components render to avoid the mismatch entirely.
+
+
 
 ### Theme tokens
 

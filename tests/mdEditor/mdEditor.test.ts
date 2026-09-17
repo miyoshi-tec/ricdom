@@ -183,6 +183,60 @@ describe('createMdEditor: maxHighlightLength 超えのフォールバック', ()
   });
 });
 
+describe('createMdEditor: wrapperClass / wrapperStyle (alpha.17、Raccoon Memo 追報 4)', () => {
+  it('wrapperClass はラッパー div に付き、textarea の class には含まれない', async () => {
+    const app = setupApp();
+    let md: ReturnType<typeof createMdEditor>;
+    const handle = createApp('#app', {}, () => (md ? md({ value: 'x', wrapperClass: 'my-wrapper', class: 'my-textarea' }) : null));
+    md = handle.use(createMdEditor());
+    await flush();
+
+    const wrapper = app.querySelector('.ric-md-editor') as HTMLElement;
+    expect(wrapper.className).toBe('ric-md-editor my-wrapper');
+    const textarea = app.querySelector('textarea') as HTMLTextAreaElement;
+    expect(textarea.className).toBe('ric-textarea ric-md-editor__input my-textarea');
+    expect(textarea.classList.contains('my-wrapper')).toBe(false);
+  });
+
+  it('wrapperStyle はラッパー div の inline style に反映される', async () => {
+    const app = setupApp();
+    let md: ReturnType<typeof createMdEditor>;
+    const handle = createApp('#app', {}, () => (md ? md({ value: 'x', wrapperStyle: { height: '240px' } }) : null));
+    md = handle.use(createMdEditor());
+    await flush();
+
+    const wrapper = app.querySelector('.ric-md-editor') as HTMLElement;
+    expect(wrapper.style.height).toBe('240px');
+  });
+
+  it("highlight:'none' では wrapperClass/wrapperStyle はどこにも現れず、node は uiTextarea(rest) と deep-equal (ラッパーが無いフォールバックでは無視される契約)", async () => {
+    const app = setupApp();
+    let md: ReturnType<typeof createMdEditor>;
+    const props = {
+      value: 'hello',
+      class: 'extra',
+      wrapperClass: 'my-wrapper',
+      wrapperStyle: { height: '240px' },
+      highlight: 'none' as const,
+    };
+    const handle = createApp('#app', {}, () => (md ? md(props) : null));
+    md = handle.use(createMdEditor());
+    await flush();
+
+    const { highlight: _highlight, wrapperClass: _wrapperClass, wrapperStyle: _wrapperStyle, ...rest } = props;
+    const node = md({ ...props });
+    expect(node).toEqual(uiTextarea(rest));
+    // deep check: wrapperClass/wrapperStyle の痕跡がノードのどこにも無いことも直接確認する
+    expect(JSON.stringify(node)).not.toContain('my-wrapper');
+    expect(JSON.stringify(node)).not.toContain('240px');
+
+    expect(app.querySelector('.ric-md-editor')).toBeNull();
+    const textarea = app.querySelector('textarea') as HTMLTextAreaElement;
+    expect(textarea.classList.contains('my-wrapper')).toBe(false);
+    expect(textarea.style.height).not.toBe('240px');
+  });
+});
+
 describe('createMdEditor: dispose', () => {
   it('dispose() は例外を投げず、unmount 後は再度呼んでも描画されない', async () => {
     setupApp();
