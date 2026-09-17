@@ -175,6 +175,64 @@ export default defineConfig([
     footer: { js: 'globalThis.ricdomUI=ricdomUI;' },
   },
   {
+    // ricdom/md-editor サブパスの ESM/CJS + 型宣言 (opt-in、Raccoon Memo パイロット第 5 号
+    // からの要望、2.0.0-alpha.16)。`ricdom/ui` の一部として ui.js には含めない —
+    // createMdEditor/tokenizeMarkdown を必要としない既存 consumer の `ricdom/ui` バンドル
+    // サイズに一切影響を与えないための独立サブパス (src/mdEditor/index.ts のヘッダコメント
+    // 参照)。src/ui/internal/* の値・型を import するが、実行時はそのままバンドルに
+    // インライン化されるだけで `ricdom/ui` への実行時依存にはならない (コアとの関係と同じ
+    // 「型のみ/インライン化のみ」の扱い)。
+    entry: { 'md-editor': 'src/mdEditor/index.ts' },
+    format: ['esm', 'cjs'],
+    dts: true,
+    sourcemap: true,
+    minify: false,
+    clean: false,
+    target: 'es2020',
+    define: versionDefine,
+  },
+  {
+    // ricdomMdEditor IIFE (production)。`<script src>` 1 本 (ricdom-md-editor) だけでも
+    // createMdEditor が動く自己完結ビルド — ただし見た目 (CSS) は `ricdom-ui.css` 側にしか
+    // 無いので、実際に使うには結局それも読み込む (src/mdEditor/index.ts 参照)。
+    entry: { 'ricdom-md-editor': 'src/mdEditor/index.ts' },
+    format: ['iife'],
+    globalName: 'ricdomMdEditor',
+    dts: false,
+    sourcemap: true,
+    minify: true,
+    clean: false,
+    target: 'es2020',
+    outExtension: () => ({ js: '.iife.min.js' }),
+    define: {
+      'process.env.NODE_ENV': JSON.stringify('production'),
+      __RICDOM_DEV__: 'false',
+      ...versionDefine,
+    },
+    // コア/ui の IIFE と同じ理由・同じ対策 (2.0.0-alpha.10、パイロット第 9 号 = Potopeta):
+    // 関数スコープ eval (v1 由来の自己展開ツール等) でも globalThis に確実に張る。
+    footer: { js: 'globalThis.ricdomMdEditor=ricdomMdEditor;' },
+  },
+  {
+    // dev 版 ricdomMdEditor IIFE。コア/ui の dev IIFE と同じ理由 (2.0.0-alpha.10 の
+    // 統括決定を踏襲) — `process` の無いブラウザでも `__RICDOM_DEV__: 'true'` で
+    // dev-only 分岐 (src/ui/internal/pureHelpers.ts 経由の isDevMode) を無条件で有効にする。
+    entry: { 'ricdom-md-editor': 'src/mdEditor/index.ts' },
+    format: ['iife'],
+    globalName: 'ricdomMdEditor',
+    dts: false,
+    sourcemap: true,
+    minify: false,
+    clean: false,
+    target: 'es2020',
+    outExtension: () => ({ js: '.iife.js' }),
+    define: {
+      __RICDOM_DEV__: 'true',
+      ...versionDefine,
+    },
+    footer: { js: 'globalThis.ricdomMdEditor=ricdomMdEditor;' },
+  },
+  {
     // ricdom/icons サブパスの ESM/CJS + 型宣言 (設計書付録 B A17、Phase 3c)。
     // データ + 変換器のみのパッケージで、コア/ui のどちらにも実行時依存が無い
     // (uiIcon の descriptor 引数と構造的に同じ形なだけ)。**IIFE は作らない**

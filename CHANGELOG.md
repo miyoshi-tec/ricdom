@@ -5,6 +5,93 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.0.0-alpha.16] — not yet published
+
+### Added
+
+- **`ricdom/md-editor` (new, opt-in subpath)**: `createMdEditor()`, a "`uiTextarea` with
+  Markdown syntax colors," requested by Raccoon Memo (pilot #5, 2026-09-17). The DOM
+  element the consumer touches is a real `<textarea>` with the exact same contract as
+  `uiTextarea` (value/oninput/selectionStart/setSelectionRange/onpaste/ondrop/onscroll/
+  scrollTop/scrollHeight/onkeydown/ref/class/placeholder/spellcheck/autoResize all keep
+  working) — a transparent copy of the textarea sits in front of an `aria-hidden`, `island`
+  `<pre>` mirror that renders the same text with colored `<span>`s behind it, so the caret,
+  IME composition, undo, spellcheck, and screen-reader behavior are all the browser's own,
+  untouched. `highlight: 'none'` (or a value over `maxHighlightLength`, default 200,000
+  characters) returns byte-for-byte the same node `uiTextarea()` would. The mirror copies
+  the textarea's computed font metrics (font/line-height/padding/border) — but **not** its
+  `box-sizing`, which the mirror always pins to `border-box` regardless of the textarea's
+  own (`.ric-textarea`'s CSS does not set `box-sizing`, so a plain textarea is `content-box`,
+  the browser default) — so its line-wrapping stays pixel-identical to the textarea's, and
+  re-syncs on `input`/`scroll`/`compositionend` (the last via
+  `textarea.addEventListener('compositionend', …)`, not an `on*` prop — see the new core
+  FACT below), after every render (rAF + 200ms backstop, like `createScrollPane`), and via a
+  `ResizeObserver` on the textarea itself. Also exports
+  `tokenizeMarkdown(src)`, the pure line-based tokenizer behind it (front matter, ATX
+  headings, fenced code with a language hint passed through `window.hljs` when present,
+  blockquotes, lists with task boxes, tables, horizontal rules, inline code/strong/em/
+  strike/links/images/autolinks/raw HTML tags) — guaranteed to reconstruct its input
+  exactly (`tokens.map(t => t.text).join('') === src`) for any text, including unterminated
+  fences/emphasis, CRLF, and astral characters. Token color classes use only
+  `color`/`background-color`/`text-decoration`/`text-shadow`/`opacity`/`border-radius` —
+  never a property that changes glyph width — since the mirror's wrapping must stay in
+  lockstep with the textarea's; `**strong**` is therefore a same-width "fake bold"
+  (`text-shadow`) rather than a real `font-weight` change. Ships as its own IIFE
+  (`dist/ricdom-md-editor.iife.min.js`, `globalName: ricdomMdEditor`) — importing
+  `ricdom/ui` alone does not pull in `createMdEditor`/`tokenizeMarkdown` (verified: 0
+  occurrences in `dist/ricdom-ui.iife.min.js`). Eight new `--ric-md-*` theme tokens
+  (`--ric-md-heading`/`-emphasis`/`-link`/`-url`/`-code-bg`/`-quote`/`-marker`/`-meta`)
+  defined for all five bundled themes, picked up automatically by `exportTheme`/
+  `exportSettings`. New roles `md-editor`/`md-editor-mirror` in the `data-ricdom-role`
+  registry (§11) — the inner `<textarea>` keeps the plain `textarea` role.
+
+### Fixed
+
+Two defects found in an independent real-Chromium review before this feature merged
+(neither was caught by the unit/browser suite as first written — both are now covered by
+strengthened `tests/browser/uiMdEditor.test.ts` assertions):
+
+- **Mirror geometry was wrong whenever the textarea was `box-sizing: content-box`** (the
+  default — `.ric-textarea`'s CSS never sets `box-sizing`). `applyLayout` copied the
+  textarea's own `box-sizing` onto the mirror; with `content-box`, the mirror's declared
+  `width` (`clientWidth` + border) was then used directly as its *content* width, instead
+  of needing padding subtracted — over-wide by exactly the horizontal padding (measured: a
+  233px-content-wide textarea produced a 262px-content-wide mirror, `mirror.scrollHeight`
+  814 vs `textarea.scrollHeight` 793, rect width off by 19px+). The original wrapping-parity
+  browser test passed anyway because it neither forced a scrollbar nor asserted content
+  width directly, and it also never called `applyTheme` (leaving `--ric-pad-x`/
+  `--ric-color-border` undefined, which zeroed out the very padding/border the bug depends
+  on) — both gaps are now closed. Fixed by no longer copying `boxSizing` and instead pinning
+  the mirror to `box-sizing: border-box` unconditionally (`applyLayout`, plus a static
+  `box-sizing: border-box` in `MD_EDITOR_CSS` as a defense-in-depth default) — see the new
+  SPEC.md FACT.
+- **The `compositionend` safety net never fired.** It was wired as an `oncompositionend`
+  prop on the textarea node, but browsers expose no IDL event-handler attribute for
+  `compositionstart`/`compositionupdate`/`compositionend` (verified:
+  `'oncompositionend' in document.createElement('textarea')` is `false` in Chromium), so
+  `ricdom`'s `on*` → `el.onxxx = fn` property-assignment mechanism (`src/dom.ts`) created an
+  inert expando that was never invoked. The existing IME test passed regardless, because
+  Chromium's `input` event (which does work) already covers composing text — it just never
+  exercised the `compositionend` path in isolation. Fixed by wiring
+  `textarea.addEventListener('compositionend', …)` directly (attached/detached alongside the
+  `ResizeObserver`, whenever the observed `<textarea>` element changes) instead of passing
+  an `on*` prop; a consumer's own `oncompositionend` prop is no longer special-cased at all
+  (it lands on the textarea exactly like any other prop, same as before — it was never
+  `createMdEditor`'s to intercept). Documented as a new general core FACT in `docs/SPEC.md`
+  §2 (`on*` only fires for events with a native IDL handler attribute), since this
+  limitation applies to every `ricdom`/`ricdom/ui` component, not just this one.
+
+### Changed
+
+- **`dist/ricdom-ui.css` and `dist/ricdom-ui.iife.min.js` both grew slightly**, because the
+  new component's CSS (`MD_EDITOR_CSS` in `src/ui/cssTemplates.ts`) and its two new
+  `UI_ROLE` entries live in the shared `ricdom/ui` module per the existing "CSS ships as one
+  file" policy (§9) — even though `createMdEditor`'s own JS is excluded from that bundle
+  (see above). Measured: `dist/ricdom-ui.css` 34,778 → 36,271 bytes (uncompressed);
+  `dist/ricdom-ui.iife.min.js` gzip 24,994 → 25,637 bytes (+643B, +2.6%). The core
+  (`dist/ricdom.iife.min.js`, gzip 4,877B) is unaffected. `dist/ricdom-md-editor.iife.min.js`
+  gzip: 4,535B.
+
 ## [2.0.0-alpha.15] — not yet published
 
 Two core fixes reported by Raccoon Memo (pilot #5, alpha.14 report).

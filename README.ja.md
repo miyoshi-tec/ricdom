@@ -71,6 +71,9 @@ import { createApp } from 'https://esm.sh/ricdom@2';
 - **`ricdom/icons`** + `ricdom-icon` CLI — 少数の同梱アイコンセットを tree-shakable な
   named export として提供し、CLI で任意の [Lucide](https://lucide.dev/) アイコンを
   その場で取得・変換できる。アイコンの path データを手書きすることは想定していない。
+- **`ricdom/md-editor`** — opt-in の別サブパス (独自 IIFE、`ricdom/ui` のバンドルには
+  含まれない)。`createMdEditor()` は入力しながら Markdown 構文を色分け表示する
+  `uiTextarea`。
 - 意図的に同梱しないもの: LZ 自己展開版。gzip の無い環境で単一ファイル配布したい場合は
   MIT の別ツール [ricdom-lz](https://github.com/miyoshi-tec/ricdom-lz) を使う (CSP に
   `'unsafe-eval'` が必要。IIFE は `globalThis.ricdom` / `ricdomUI` を明示代入するので

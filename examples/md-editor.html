@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>RicDOM 2 — ricdom/md-editor (Markdown-colored textarea, no build step)</title>
+<link rel="stylesheet" href="../dist/ricdom-ui.css">
+<style>
+  body { font-family: system-ui, sans-serif; margin: 2rem; max-width: 720px; }
+  h1 { font-size: 1.1rem; }
+  .row { display: flex; gap: 0.5rem; align-items: center; margin: 0.75rem 0; }
+  .ric-md-editor { width: 100%; }
+  .ric-md-editor textarea { min-height: 320px; }
+</style>
+</head>
+<body>
+<!--
+  ricdom/md-editor is an opt-in subpath (not part of ricdom/ui) — it ships its own IIFE,
+  dist/ricdom-md-editor.iife.min.js, globalName `ricdomMdEditor`. The real DOM element the
+  page interacts with is still a plain <textarea> (value/oninput/ref/etc. all work exactly
+  like uiTextarea) — createMdEditor just overlays a colored, aria-hidden <pre> mirror behind
+  it so the Markdown source reads like a syntax-highlighted file, without giving up any of
+  the textarea's native editing behavior (IME, undo, spellcheck, screen reader).
+
+  No build step for consumers (setup G1): three <script> tags (core -> ui -> md-editor) plus
+  the ui.css <link> — this page opens directly in a browser.
+-->
+<h1>RicDOM 2 — ricdom/md-editor</h1>
+<p>The textarea below is a real <code>&lt;textarea&gt;</code>. The Markdown syntax
+  (headings, <strong>bold</strong>, <em>emphasis</em>, links, fenced code, tables, …) is
+  colored by an invisible mirror layered behind it.</p>
+
+<div id="app"></div>
+
+<script src="../dist/ricdom.iife.min.js"></script>
+<script src="../dist/ricdom-ui.iife.min.js"></script>
+<script src="../dist/ricdom-md-editor.iife.min.js"></script>
+<script>
+  const U = ricdomUI;
+  const MD = ricdomMdEditor;
+
+  const SAMPLE = [
+    '---',
+    'title: ricdom/md-editor sample',
+    '---',
+    '',
+    '# ricdom/md-editor',
+    '',
+    'A **Markdown**-colored `textarea` with *no* extra dependency. Supports:',
+    '',
+    '- bullet lists',
+    '- [ ] unchecked tasks',
+    '- [x] checked tasks',
+    '',
+    '1. ordered lists',
+    '2. with a `start` attribute too',
+    '',
+    '> Blockquotes look like this.',
+    '',
+    '```js',
+    'const highlight = window.hljs ? "syntax-highlighted" : "plain colored";',
+    'console.log(highlight);',
+    '```',
+    '',
+    '| Feature | Status |',
+    '|---|---|',
+    '| Caret / IME | native textarea |',
+    '| Undo / spellcheck | native textarea |',
+    '',
+    'A [link](https://github.com/miyoshi-tec/ricdom) and an autolink <https://ricdom.dev>.',
+    '',
+    '---',
+    '',
+    'Try typing below — the colors update as you type.',
+  ].join('\n');
+
+  const state = { theme: 'light', body: SAMPLE };
+
+  let md;
+
+  const themeRow = (s) =>
+    U.uiRow({
+      children: [
+        U.uiText({ variant: 'label', children: ['Theme:'] }),
+        ...['light', 'dark', 'teal', 'cyber', 'aqua'].map((t) =>
+          U.uiButton({ variant: t === s.theme ? 'primary' : 'default', children: [t], onclick: () => { s.theme = t; } }),
+        ),
+      ],
+    });
+
+  const app = ricdom.createApp(
+    '#app',
+    state,
+    (s) =>
+      U.uiPanel({
+        children: [
+          themeRow(s),
+          U.uiSeparator(),
+          md
+            ? md({
+                value: s.body,
+                placeholder: 'Write Markdown…',
+                oninput: (ev) => {
+                  s.body = ev.target.value;
+                },
+              })
+            : { tag: 'div' },
+        ],
+      }),
+  );
+
+  md = app.use(MD.createMdEditor());
+
+  U.applyTheme(document.getElementById('app'), { theme: state.theme });
+  const originalRender = app.render;
+  app.render = (s) => {
+    U.applyTheme(document.getElementById('app'), { theme: s.theme });
+    return originalRender(s);
+  };
+</script>
+</body>
+</html>

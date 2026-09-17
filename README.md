@@ -70,6 +70,8 @@ re-rendering, and zero required build step for the consumer, at the same time.
 - **`ricdom/icons`** + `ricdom-icon` CLI — a small bundled icon set as tree-shakable
   named exports, plus a CLI that fetches and converts any [Lucide](https://lucide.dev/)
   icon on demand. Icon path data is never meant to be hand-written.
+- **`ricdom/md-editor`** — opt-in, own IIFE, adds nothing to `ricdom/ui`'s bundle.
+  `createMdEditor()` is a `uiTextarea` that colors Markdown syntax as you type.
 - Not in the box, by design: an LZ self-extracting build. For single-file distribution
   without gzip, use the separate MIT tool
   [ricdom-lz](https://github.com/miyoshi-tec/ricdom-lz) (needs `'unsafe-eval'` in CSP;

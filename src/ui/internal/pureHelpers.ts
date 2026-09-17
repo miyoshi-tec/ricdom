@@ -90,6 +90,10 @@ export const UI_ROLE = {
   panel: 'panel',
   mdPre: 'md-pre',
   codePre: 'code-pre',
+  /** ricdom/md-editor (opt-in サブパス) のラッパー div。textarea 自身は role 'textarea' の
+   *  まま (uiTextarea をそのまま使う) — ラッパーと「後ろのミラー <pre>」だけが新規 role を持つ。 */
+  mdEditor: 'md-editor',
+  mdEditorMirror: 'md-editor-mirror',
   // ── 状態を持つ部品 ──
   dialog: 'dialog',
   /** dialog の背景オーバーレイ (2.0.0-alpha.2 追補、§14 の全部品方針をサブパーツへ拡張) */

@@ -483,11 +483,53 @@ to be found by inspection, not by running the app):
 
 ---
 
-## 10. Next steps
+## 10. Markdown-colored textarea
+
+`ricdom/md-editor` is a separate, opt-in subpath — importing `ricdom/ui` alone never pulls
+it in. It gives you `createMdEditor()`, which behaves exactly like `uiTextarea` (§4) but
+colors the Markdown syntax as you type, VS Code-style:
+
+```js
+import { createApp } from 'ricdom';
+import { createTweakPanel } from 'ricdom/ui'; // unrelated, just showing ricdom/ui still works
+import { createMdEditor } from 'ricdom/md-editor';
+
+let md;
+const app = createApp(
+  '#app',
+  { body: '# Notes\n\nWrite **Markdown** here.' },
+  (s) => md({ value: s.body, oninput: (ev) => { s.body = ev.target.value; } }),
+  { setup: (a) => { md = a.use(createMdEditor()); } },
+);
+```
+
+The element you actually get in the DOM is a real `<textarea>` — `ref`, `onkeydown`,
+`autoResize`, everything from §4 still works unchanged, because a transparent copy of the
+textarea sits on top of a colored, invisible `<pre>` mirror behind it (see
+[SPEC.md §13](SPEC.md#13-ricdommd-editor-opt-in-subpath) for the mechanism and every FACT).
+Pass `highlight: 'none'` to fall back to a plain, undecorated `uiTextarea` — useful for a
+"plain text mode" toggle.
+
+With the IIFE build (no bundler), load it as a third `<script>` tag alongside the core and
+`ricdom/ui`:
+
+```html
+<script src="https://cdn.jsdelivr.net/npm/ricdom@2/dist/ricdom.iife.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/ricdom@2/dist/ricdom-ui.iife.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/ricdom@2/dist/ricdom-md-editor.iife.min.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ricdom@2/dist/ricdom-ui.css">
+```
+
+`ricdomMdEditor.createMdEditor` is then available as its own global — see
+`examples/md-editor.html` for a full working page.
+
+---
+
+## 11. Next steps
 
 - [SPEC.md](SPEC.md) — the full contract: diffing rules, reactivity, the scheduler,
   `use()`, portals, themes, every component's props and ARIA behavior.
-- `examples/` — five build-free demo pages you can open directly in a browser
+- `examples/` — six build-free demo pages you can open directly in a browser
   (`examples/index.html` is the index).
 - [CHANGELOG.md](../CHANGELOG.md) — what changed release to release, and the breaking
   changes from v1 if you're migrating an existing RicDOM v1 app.

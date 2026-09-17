@@ -108,4 +108,17 @@ describe('実ブラウザ smoke: ricdom + ricdom/ui の IIFE 2 本 + CSS <link>'
     expect(ricdomUI).toBeTruthy();
     expect(typeof ricdomUI!.createDialog).toBe('function');
   });
+
+  // ricdom/md-editor (opt-in サブパス、2.0.0-alpha.16) の IIFE smoke。ricdom/ui とは別の
+  // 独立した IIFE (dist/ricdom-md-editor.iife.min.js, globalName `ricdomMdEditor`) として
+  // 配布されるため、`ricdom-ui.iife.min.js` を読んでいなくても単体で読み込める
+  // (見た目は結局 ricdom-ui.css が要る — src/mdEditor/index.ts 参照)。
+  it('dist/ricdom-md-editor.iife.min.js を読み込むと globalThis.ricdomMdEditor.createMdEditor が使える', async () => {
+    const mdEditorCode = await commands.readFile('dist/ricdom-md-editor.iife.min.js');
+    await loadScript(mdEditorCode);
+
+    const ricdomMdEditor = (window as unknown as { ricdomMdEditor?: { createMdEditor: () => unknown } }).ricdomMdEditor;
+    expect(ricdomMdEditor).toBeTruthy();
+    expect(typeof ricdomMdEditor!.createMdEditor).toBe('function');
+  });
 });

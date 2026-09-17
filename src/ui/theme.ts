@@ -50,6 +50,15 @@ const COLOR_VARS_LIGHT: ThemeVars = {
   '--ric-code-fg': '#24292f',
   '--ric-shadow': '0 4px 16px rgba(0,0,0,0.10)',
   '--ric-radius': '8px',
+  // ricdom/md-editor (opt-in サブパス) のトークン。VS Code の light テーマに寄せた配色。
+  '--ric-md-heading': '#1f5fbf',
+  '--ric-md-emphasis': '#b45309',
+  '--ric-md-link': '#2563eb',
+  '--ric-md-url': '#6b7280',
+  '--ric-md-code-bg': 'rgba(0,0,0,0.06)',
+  '--ric-md-quote': '#6b7280',
+  '--ric-md-marker': '#6b7280',
+  '--ric-md-meta': '#6b7280',
   'color-scheme': 'light',
 };
 
@@ -67,6 +76,14 @@ const COLOR_VARS_DARK: ThemeVars = {
   '--ric-code-fg': '#f9fafb',
   '--ric-shadow': '0 4px 24px rgba(0,0,0,0.50)',
   '--ric-radius': '8px',
+  '--ric-md-heading': '#8ab4f8',
+  '--ric-md-emphasis': '#f59e0b',
+  '--ric-md-link': '#60a5fa',
+  '--ric-md-url': '#9ca3af',
+  '--ric-md-code-bg': 'rgba(255,255,255,0.08)',
+  '--ric-md-quote': '#9ca3af',
+  '--ric-md-marker': '#9ca3af',
+  '--ric-md-meta': '#9ca3af',
   'color-scheme': 'dark',
 };
 
@@ -84,6 +101,14 @@ const COLOR_VARS_TEAL: ThemeVars = {
   '--ric-code-fg': '#0d2b24',
   '--ric-shadow': '0 4px 16px rgba(0,60,50,0.12)',
   '--ric-radius': '8px',
+  '--ric-md-heading': '#1d6fa5',
+  '--ric-md-emphasis': '#c2410c',
+  '--ric-md-link': '#007f6d',
+  '--ric-md-url': '#46605a',
+  '--ric-md-code-bg': 'rgba(0,0,0,0.06)',
+  '--ric-md-quote': '#46605a',
+  '--ric-md-marker': '#46605a',
+  '--ric-md-meta': '#46605a',
   'color-scheme': 'light',
 };
 
@@ -107,6 +132,14 @@ const COLOR_VARS_CYBER: ThemeVars = {
   '--ric-shadow': '0 0 20px rgba(0,200,255,0.25), inset 0 1px 0 rgba(80,200,255,0.15)',
   '--ric-duration': '80ms',
   '--ric-easing': 'linear',
+  '--ric-md-heading': '#7dd3fc',
+  '--ric-md-emphasis': '#fb923c',
+  '--ric-md-link': '#38bdf8',
+  '--ric-md-url': '#7aa8c8',
+  '--ric-md-code-bg': 'rgba(255,255,255,0.08)',
+  '--ric-md-quote': '#7aa8c8',
+  '--ric-md-marker': '#7aa8c8',
+  '--ric-md-meta': '#7aa8c8',
   'color-scheme': 'dark',
 };
 
@@ -131,6 +164,14 @@ const COLOR_VARS_AQUA: ThemeVars = {
   '--ric-duration': '600ms',
   '--ric-easing':
     'linear(0, 0.009, 0.035 2.1%, 0.141 4.4%, 0.723 12.9%, 0.938 16.7%, 1.017, 1.069, 1.099 24.3%, 1.105 26%, 1.096 27.9%, 1.053 32.8%, 1.019 38.1%, 0.999 44.2%, 0.995 51.9%, 1.0 62.6%, 1.001 99.9%)',
+  '--ric-md-heading': '#0b4f7a',
+  '--ric-md-emphasis': '#c2410c',
+  '--ric-md-link': '#0284c7',
+  '--ric-md-url': '#5c7a8a',
+  '--ric-md-code-bg': 'rgba(0,0,0,0.06)',
+  '--ric-md-quote': '#5c7a8a',
+  '--ric-md-marker': '#5c7a8a',
+  '--ric-md-meta': '#5c7a8a',
   'color-scheme': 'light',
 };
 

@@ -1,6 +1,6 @@
 {
   "name": "ricdom",
-  "version": "2.0.0-alpha.15",
+  "version": "2.0.0-alpha.16",
   "description": "Write UI as plain objects. Assign to state. The real DOM updates. No build step, typed, accessible.",
   "type": "module",
   "license": "MIT",
@@ -47,6 +47,16 @@
       }
     },
     "./ui.css": "./dist/ricdom-ui.css",
+    "./md-editor": {
+      "import": {
+        "types": "./dist/md-editor.d.ts",
+        "default": "./dist/md-editor.js"
+      },
+      "require": {
+        "types": "./dist/md-editor.d.cts",
+        "default": "./dist/md-editor.cjs"
+      }
+    },
     "./icons": {
       "import": {
         "types": "./dist/icons.d.ts",

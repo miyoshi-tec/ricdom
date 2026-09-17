@@ -354,3 +354,24 @@ tsup の `define` (`__RICDOM_VERSION__`、`tsup.config.ts`) で package.json の
 独立に読む)。コア min gzip: **4,803B → 4,831B** (+28B、天井 5,200B 内)。
 `docs/V1_PARITY_AUDIT.ja.md` 表 #1〜#4・`docs/V1_VS_V2.ja.md`・`docs/SPEC.md`・
 `CHANGELOG.md` に反映。
+
+### 2.0.0-alpha.16: `ricdom/md-editor` (新規 opt-in サブパス) の命名規約確認
+
+Raccoon Memo (パイロット第 5 号) からの要望「uiTextarea と同じ props/DOM 挙動を持つ
+Markdown 色分け textarea」に対応する新規サブパス。既存 3 サブパス (`ricdom`/`ricdom/ui`/
+`ricdom/icons`) と同じ規約チェックを実施。
+
+| 種別 | 名前 | 規約 | 判定 |
+|---|---|---|---|
+| 関数 (追加) | `createMdEditor(options?)` | `create` + 名詞、状態を持つ部品 (既存の `createScrollPane` 等と同一の `Component<P>` 契約) | OK |
+| 関数 (追加、純粋) | `tokenizeMarkdown(src)` | 動詞 `tokenize` は既存の命名規約表 (create/ui/bind/apply/inject/build/export/infer) に無いが、「文字列 → トークン列」という実体そのものを表す標準的な語であり、`build`(ノードを組まない)/`create`(部品ではない) のどちらとも実体が合わない。**改名は見送り** (`inferTweakType` の `infer` と同種の判断、再検討条件も同じ: 同種の「テキスト→構造」変換ヘルパーが 2 個目出た時点で `tokenize*` を正式に規約へ追加するか検討) | OK (見送り) |
+| 型 (追加) | `MdEditorProps` / `MdEditorInstance` / `MdToken` | PascalCase、`Props`/`Instance` 命名は既存の状態を持つ部品 (`ScrollPaneProps`/`ScrollPaneInstance` 等) と同一の対 | OK |
+
+命名規約からの逸脱は `tokenizeMarkdown` の 1 件のみで、`inferTweakType` (§1.2) と同じ理由
+により見送り。`ricdom/ui` バンドルへの実行時混入なし (`grep -c "tokenizeMarkdown\\|createMdEditor"
+dist/ricdom-ui.iife.min.js` → 0 を確認済み、最終報告に記載)。CSS
+(`MD_EDITOR_CSS`、`src/ui/cssTemplates.ts`) と `UI_ROLE.mdEditor`/`mdEditorMirror`
+(`src/ui/internal/pureHelpers.ts`) だけは既存の「CSS は 1 枚」方針 (§9) に従い
+`ricdom/ui` 側に置くため、`ricdom-ui.iife.min.js` の gzip サイズはわずかに増える
+(24,994B → 25,637B、+643B) — コア (`ricdom.iife.min.js`、gzip 4,877B) には影響なし。
+`docs/SPEC.md` §13・`docs/TUTORIAL.md` §10・`CHANGELOG.md` に反映。

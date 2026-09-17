@@ -97,6 +97,28 @@ the plain-object tree itself.
 - `style` keys are camelCased automatically (`background-color` and `backgroundColor` are
   equivalent); `--custom-property` keys are left untouched.
 
+### FACT: `on*` only fires for events with a native IDL handler attribute
+
+`on*` keys are assigned as an element **property** (`el.onclick = fn`, §2.1) — this is a
+DOM property assignment, not `addEventListener`. It only does anything observable for
+event types the browser itself exposes as an IDL event-handler attribute (`onclick`,
+`oninput`, `onscroll`, …). For an event type with no such attribute — most notably
+`compositionstart`/`compositionupdate`/`compositionend`, and any custom event
+(`el.dispatchEvent(new CustomEvent('my-event'))`) — assigning `el.oncompositionend = fn`
+merely creates an inert expando property; it is never invoked, and `ricdom` has no way to
+detect this at render time (the assignment itself never throws). Passing
+`oncompositionend` as a prop to any component is therefore silent dead code, in both v1
+and v2 — this was not a regression introduced by any specific release, just an inherent
+limitation of the "reassign a property every patch" mechanism.
+
+Wire these events with `addEventListener` yourself instead, after the element exists —
+via `app.refs.get(name)` (§5) in a `setup`/effect-style callback, or from inside a
+stateful `use()` part that already holds a reference to its own DOM node. `ricdom/md-
+editor`'s `createMdEditor` (§13) is the in-tree example: it needs a `compositionend`
+safety net for its mirror sync and does so via `textarea.addEventListener('compositionend',
+handler)`, attached/detached whenever the observed `<textarea>` element changes (the same
+place its `ResizeObserver` is attached) — not via an `oncompositionend` prop.
+
 ### FACT: a function value on a non-`on*` key is never set as an attribute (2.0.0-alpha.15)
 
 A key that is not one of `DOM_PROPERTY_KEYS` and does not match the event-handler pattern
@@ -1376,7 +1398,8 @@ extends to sub-parts of the portal-mounted components, not just their root:
 `splitter-toggle` `collapse-box` `accordion` `accordion-item` `accordion-header`
 `accordion-body` `accordion-title` `tabs` `tabs-bar` `tabs-tab` `tabs-panel` `inline-menu`
 — `tweak-panel` `tweak-title` `tweak-folder` `tweak-folder-header` `tweak-folder-body`
-`tweak-row` (§10.6).
+`tweak-row` (§10.6) — `md-editor` `md-editor-mirror` (§13, `ricdom/md-editor`; the
+`<textarea>` inside it keeps the plain `textarea` role, unchanged).
 
 `popup-overlay` is shared by `createPopup` and `createDropdown` — both use the same
 `.ric-popup__overlay` element and role. Dialog's sub-part roles map onto its existing CSS
@@ -1454,3 +1477,180 @@ paste the resulting literal directly into their own code, rather than adding ano
 Of the 36 bundled icons, all but `contrast` are original to this project (simple
 geometric shapes in a Lucide-compatible style); `contrast` is derived from Lucide (ISC
 license) — see `THIRD_PARTY_NOTICES.md` for full attribution.
+
+---
+
+## 13. `ricdom/md-editor` (opt-in subpath)
+
+`createMdEditor()` is a "`uiTextarea` with Markdown syntax colors" — the DOM element the
+consumer touches is a real `<textarea>` with the exact same contract as `uiTextarea`
+(§10.1): every prop `uiTextarea` accepts, plus `ref`, `class`, `style`,
+`onkeydown`/`onpaste`/`ondrop`/`ondragover`, `spellcheck`, and `autoResize`, lands on that
+same `<textarea>` — `app.refs.get(ref)` resolves to it, `createFocusWhen` works unchanged,
+and the caret, IME composition, undo history, spellcheck, and screen-reader behavior are
+all the browser's native textarea behavior, untouched.
+
+Added as a **separate subpath** (`import { createMdEditor } from 'ricdom/md-editor'`), not
+as part of `ricdom/ui` — a consumer who never imports it pays nothing: `ricdom/ui`'s own
+bundle (`dist/ricdom-ui.iife.min.js`) does not contain `createMdEditor`/`tokenizeMarkdown`
+(verified by grepping the built bundle). It ships its own IIFE
+(`dist/ricdom-md-editor.iife.min.js`, `globalName: ricdomMdEditor`) that is self-contained
+at the JS level (it bundles its own copy of `uiTextarea` and the shared `ricdom/ui`
+internal helpers it needs) — but its component's CSS (`.ric-md-editor*`, `.ric-md-*` token
+classes) lives in the single `ricdom-ui.css` stylesheet (§9), per the "CSS ships as one
+file" policy, so a consumer still needs `ricdom-ui.css` loaded for it to look like
+anything.
+
+It is a stateful part like `createScrollPane` — register it with `app.use()` (§6):
+
+```ts
+const md = app.use(createMdEditor());
+// inside render:
+md({ value: s.body, oninput: (ev) => { s.body = ev.target.value; } })
+```
+
+### Mechanism: a transparent textarea over a colored mirror
+
+The rendered tree (when `highlight` is not `'none'` and the value is under the size cap,
+see below) is:
+
+```
+div.ric-md-editor[data-ricdom-role=md-editor][data-ricdom-md-editor-id]
+├── pre.ric-md-editor__mirror[data-ricdom-role=md-editor-mirror][aria-hidden=true][island]
+└── textarea.ric-textarea.ric-md-editor__input[data-ricdom-role=textarea]  (+ your class)
+```
+
+The `<pre>` mirror sits behind the `<textarea>` (absolute-positioned, `z-index: 0`) and
+renders the same text with `<span class="ric-md-*">` wrapping each colored region; the
+`<textarea>` itself is styled `color: transparent; caret-color: <fg>` (`z-index: 1`) so
+only its caret and native selection highlight are visible — the colored text you see is
+entirely the mirror underneath. The mirror is `island: true`, so `ricdom`'s own diff/patch
+never touches its children; `createMdEditor` owns and rebuilds that DOM directly.
+
+### FACT: `highlight: 'none'` is byte-for-byte identical to `uiTextarea`
+
+`createMdEditor()({ ...props, highlight: 'none' })` returns exactly `uiTextarea(rest)`
+(`rest` = every prop except `highlight`) — no wrapper `<div>`, no mirror, nothing added.
+This is the deliberate escape hatch: a consumer that wants to conditionally disable
+highlighting (e.g. a "plain text mode" toggle) gets the identical DOM shape either way, so
+nothing else in the surrounding layout needs to change.
+
+### FACT: oversized documents fall back to the same plain path automatically
+
+If `value.length` exceeds `maxHighlightLength` (the `createMdEditor({ maxHighlightLength })`
+option, default `200_000`), the same `uiTextarea(rest)` plain path is used for that render,
+regardless of the `highlight` prop — tokenizing and rebuilding a mirror DOM for an
+extremely large document is O(document size) work done synchronously on every keystroke, so
+this cap exists to keep large-document editing responsive rather than to limit what
+`uiTextarea` itself can hold (a plain `uiTextarea` has no such cap).
+
+### Sync triggers
+
+The mirror is kept in sync with the textarea's value, scroll position, and layout at these
+points:
+
+- **`input`**: rebuilds the mirror synchronously from `event.target.value`, before calling
+  your own `oninput` (if given).
+- **`compositionend`**: rebuilds the mirror again as a safety net. Not strictly required for
+  Chromium (which already fires `input` events during IME composition, so the mirror
+  already tracks composing text) — see the IME FACT below. Wired via
+  `textarea.addEventListener('compositionend', …)`, **not** an `oncompositionend` prop —
+  browsers have no IDL handler attribute for this event, so a prop-based `on*` assignment
+  would silently never fire (§2's core FACT on this).
+- **`scroll`**: copies `scrollTop`/`scrollLeft` onto the mirror, before calling your own
+  `onscroll` (if given).
+- **After every render this instance was called in**: schedules a layout re-sync via the
+  same rAF + 200ms `setTimeout` backstop double-up used by `createScrollPane` (§10.3.3) —
+  whichever fires first wins, so this still works in a hidden/throttled window where rAF
+  doesn't fire.
+- **`ResizeObserver`** on the textarea itself (attached on first sync, disconnected in
+  `dispose()`): re-runs the layout sync whenever the textarea's own box size changes (a
+  splitter drag, dragging its native `resize: vertical` handle, or any other layout change
+  that isn't a `render` call).
+
+### FACT: the mirror copies the textarea's computed font metrics — your CSS is honored
+
+Each layout sync copies `font-family`/`font-size`/`font-weight`/`font-style`/`line-height`/
+`letter-spacing`/`word-spacing`/`tab-size`/`text-indent`/padding (4 sides)/border-width (4
+sides, applied as a transparent border so the box math matches)/`text-align`/`direction`/
+`overflow-wrap` from the textarea's `getComputedStyle()` onto the mirror, and sets the
+mirror's `width`/`height` from the textarea's `clientWidth`/`clientHeight` (plus
+horizontal/vertical border widths) — the textarea's own scrollbar gutter is excluded from
+the mirror's wrap width this way. Any CSS you apply to the textarea (a `style` prop, a
+class targeting `.ric-md-editor__input`, a page-level font override) therefore reaches the
+mirror automatically; there is nothing to configure separately for the mirror's own
+appearance.
+
+### FACT: the mirror is always `box-sizing: border-box`, regardless of the textarea's own box-sizing
+
+The textarea's own `box-sizing` is **not** copied to the mirror — the mirror is always
+forced to `box-sizing: border-box` (both in `MD_EDITOR_CSS`, as a static default, and by
+`applyLayout` on every sync, which wins). `uiTextarea`'s own default CSS (`.ric-textarea`)
+does not set `box-sizing`, so a plain `createMdEditor()` textarea is `content-box` (the
+browser default) unless you set it yourself. With the mirror pinned to `border-box`, its
+declared `width` (`textarea.clientWidth` + horizontal border) minus its padding and border
+always equals `textarea.clientWidth` minus its padding — which is the textarea's actual
+content width, in either box-sizing mode (`clientWidth` itself is defined as "content +
+padding," independent of `box-sizing`). Copying the textarea's own `box-sizing` onto the
+mirror instead (an earlier bug, since fixed) breaks this identity specifically in the
+common `content-box` case: the mirror's declared width would then equal its own content
+width directly, over-counting by exactly the horizontal padding — a real-page measurement
+of it showed the mirror's content area 29px wider than the textarea's for a 14px `--ric-
+pad-x`, enough to make `mirror.scrollHeight` diverge from `textarea.scrollHeight` on
+wrapped multi-line content.
+
+### FACT: highlighting never changes glyph widths — this is why `**strong**` isn't bold
+
+Every `.ric-md-*` token class (`cssTemplates.ts`'s `MD_EDITOR_CSS`) uses only `color`,
+`background-color`, `text-decoration`, `text-shadow`, `opacity`, and `border-radius` —
+never `font-weight`/`font-style`/`font-family`/`font-size`/`letter-spacing`/`padding`. If a
+token's color class changed how wide its characters render, the mirror's line-wrapping
+would diverge from the textarea's (they share the same width and font metrics, per the FACT
+above, specifically so wrapping stays in lockstep) — a 1px divergence there is enough to
+misalign the highlighted text under the caret. `**strong**` is therefore rendered with
+`text-shadow: 0 0 0.6px currentColor` (a same-width "fake bold" effect) rather than a real
+`font-weight` change.
+
+### FACT: IME composition — no special freezing, `input` fires during composition
+
+Chromium fires `input` events while an IME composition is still in progress (not only on
+`compositionend`), so the mirror already tracks composing text through the ordinary
+`input`-triggered sync — `createMdEditor` does not add any composition-specific freezing or
+buffering logic. The `compositionend` handler exists only as a cheap extra safety net (one
+more synchronous rebuild once composition finishes), matching `uiTextarea`'s own existing
+IME caveat (§10.1) about controlled `value`/`oninput` and IME confirmation timing. As
+documented in §2's core FACT on `on*` handling, this handler is wired with
+`textarea.addEventListener('compositionend', …)` — not an `oncompositionend` prop —
+because browsers expose no IDL handler attribute for this event; a consumer-supplied
+`oncompositionend` prop would still land on the textarea like any other prop, but (per that
+same FACT) would never actually fire.
+
+### `tokenizeMarkdown(src)` (exported, pure, no DOM)
+
+```ts
+interface MdToken { text: string; cls: string | null; lang?: string | null; fenceBody?: boolean }
+const tokenizeMarkdown: (src: string) => MdToken[]
+```
+
+A practical, line-based Markdown subset (front matter, ATX headings, fenced code with a
+language hint, blockquotes, bulleted/ordered/task lists, tables, horizontal rules, inline
+`code`/`**strong**`/`*em*`/`~~strike~~`/links/images/autolinks/raw HTML tags) — not full
+CommonMark. **Invariant**: `tokens.map(t => t.text).join('') === src` for every input,
+including unterminated fences/emphasis, CRLF, tabs, and astral characters — a token with
+`cls: null` is untouched plain text, never a dropped or rewritten character. This is what
+lets the mirror be built purely from `createTextNode`/`createElement` (no `innerHTML`,
+except the one exception below) while staying byte-identical to the textarea's value.
+
+Fenced code bodies with a language hint are run through `window.hljs.highlight(code, {
+language })` if `window.hljs` exists (the same optional integration as `uiCodePre`/`uiMdPre`,
+§10.4) — this is the one place `innerHTML` is used, on that single `<span>`. Unlike
+`uiMdPre`/`uiCodePre`, **`createMdEditor` never warns when `hljs` is missing** — plain,
+un-highlighted color is the expected default here (a Markdown-colored textarea is still
+useful without a syntax-highlighting library loaded), not a degraded state worth flagging.
+
+### Theme tokens
+
+Five new `--ric-md-*` CSS variables, defined for all five bundled themes (`applyTheme`,
+§8) and picked up automatically by `exportTheme`/`exportSettings` (they filter on the
+`--ric-` prefix, §8): `--ric-md-heading`, `--ric-md-emphasis`, `--ric-md-link`,
+`--ric-md-url`, `--ric-md-code-bg`, `--ric-md-quote`, `--ric-md-marker`, `--ric-md-meta`.

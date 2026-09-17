@@ -53,6 +53,18 @@ const sbth = 'var(--ric-scrollbar-thumb-hover)'; // スクロールバーつま�
 const bl = 'var(--ric-popup-blur, none)';
 const ps = 'var(--ric-panel-shadow, var(--ric-shadow))';
 const fs = 'var(--ric-font-size, 14px)';
+// ricdom/md-editor (opt-in サブパス) のトークン。このファイル (ricdom/ui) には
+// createMdEditor の実装コードは一切無い — CSS だけをここに置く理由は「CSS は 1 枚」の
+// canon (consumer が既に読み込んでいる ricdom-ui.css の外に 2 枚目のスタイルシートを
+// 増やさない) を優先するため。
+const mdh = 'var(--ric-md-heading)';
+const mde = 'var(--ric-md-emphasis)';
+const mdl = 'var(--ric-md-link)';
+const mdu = 'var(--ric-md-url)';
+const mdcb = 'var(--ric-md-code-bg)';
+const mdq = 'var(--ric-md-quote)';
+const mdm = 'var(--ric-md-marker)';
+const mdmeta = 'var(--ric-md-meta)';
 
 const b1 = `1px solid ${bd}`;
 const da = `${dur} ${eas}`;
@@ -1275,6 +1287,75 @@ const TWEAK_CSS = `
   flex-direction: column;
 }`;
 
+// ── ricdom/md-editor (opt-in サブパス) ──
+// 本体の実装 (createMdEditor/tokenizeMarkdown) は `ricdom/md-editor` サブパス
+// (src/mdEditor/) にあり、`ricdom/ui` の IIFE (dist/ricdom-ui.iife.min.js) には一切
+// 含まれない。ここに CSS だけを置くのは「CSS は 1 枚」の canon のため — consumer は
+// 既に読み込んでいる ricdom-ui.css をそのまま使い続けられる。
+//
+// **文字幅不変の原則 (SPEC 参照)**: 本物の `<textarea>` (透明文字) の後ろに
+// `<pre aria-hidden>` のミラーを重ね、Markdown の色分けをミラー側の span に適用する
+// 構成 (createMdEditor 参照)。ミラーの折返し位置が textarea と 1px でもずれるとキャレット
+// 位置と表示が食い違うため、トークンの色分けクラス (.ric-md-*) は
+// color/background-color/text-decoration/text-shadow/opacity/border-radius **だけ**を
+// 使うこと — font-weight/font-style/font-family/font-size/letter-spacing/padding は
+// 実際のグリフ幅を変えてしまうため禁止 (`**strong**` が text-shadow の縁取りで
+// 「それっぽい太字」を表現しているのはこのため)。
+//
+// `.ric-md-editor__mirror` の `box-sizing: border-box` は mdEditor.ts の applyLayout() が
+// 同じ値をインラインで強制するが、script 実行前の一瞬の保険として CSS 側にも静的に書く —
+// textarea 自身の box-sizing (既定 content-box) に関わらず、ミラーは常に border-box 前提で
+// width/height を計算する (統括の独立検証で発見した実装の穴、2026-09-17)。
+// ※ テンプレートリテラルの中に CSS コメントを書くと配布 CSS と ui バンドルにそのまま
+//    乗る (gzip +約 280B を実測) ので、説明はこの JS コメントに置く。
+const MD_EDITOR_CSS = `
+.ric-md-editor {
+  position: relative;
+  display: block;
+}
+.ric-md-editor__mirror {
+  position: absolute;
+  top: 0; left: 0;
+  margin: 0;
+  overflow: hidden;
+  pointer-events: none;
+  color: ${fg};
+  background: ${ct};
+  border-color: transparent;
+  border-style: solid;
+  border-radius: ${r};
+  box-sizing: border-box;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  z-index: 0;
+}
+.ric-md-editor .ric-md-editor__input {
+  position: relative;
+  z-index: 1;
+  background: transparent;
+  color: transparent;
+  caret-color: ${fg};
+}
+.ric-md-editor .ric-md-editor__input:hover:not(:disabled),
+.ric-md-editor .ric-md-editor__input:focus {
+  background: transparent;
+}
+.ric-md-editor .ric-md-editor__input::placeholder {
+  color: ${fm};
+}
+.ric-md-heading { color: ${mdh}; }
+.ric-md-marker { color: ${mdm}; }
+.ric-md-strong { color: ${mde}; text-shadow: 0 0 0.6px currentColor; }
+.ric-md-em { color: ${mde}; }
+.ric-md-strike { text-decoration: line-through; color: ${mdm}; }
+.ric-md-link { color: ${mdl}; }
+.ric-md-url { color: ${mdu}; }
+.ric-md-code, .ric-md-fence { background: ${mdcb}; border-radius: 2px; }
+.ric-md-fence-marker { color: ${mdm}; }
+.ric-md-quote { color: ${mdq}; }
+.ric-md-hr { color: ${mdm}; }
+.ric-md-meta { color: ${mdmeta}; }`;
+
 // CSS 読込検知 (`warnIfStylesMissing`、パイロット第 9 号 = Potopeta からの報告、
 // 2.0.0-alpha.10) 用の識別コメント。`buildStylesheet()` の出力先頭に固定で入る。
 // 検知の本体は `document.styleSheets` を走査して `.ric-button` 規則の実在を見る方式
@@ -1324,4 +1405,5 @@ export const buildStylesheet = (): string =>
     DROPDOWN_CSS,
     INLINE_MENU_CSS,
     TWEAK_CSS,
+    MD_EDITOR_CSS,
   ].join('\n');
