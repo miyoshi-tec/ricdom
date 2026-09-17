@@ -55,7 +55,7 @@ of `dist/ricdom.iife.min.js`; ship `.iife.min.js`.
 | **ricdom** | **hand-written plain objects** | **Proxy (shallow + dev warnings)** | **≤ 5.1KB (core)** | yes | first-class | npm/jsDelivr |
 
 Nothing else in this space combines a hand-written plain-object tree, Proxy-driven
-re-rendering, and zero required build step for the consumer, at the same time.
+re-rendering, and zero required build step for the consumer.
 
 ## What's in the box
 
@@ -66,13 +66,13 @@ re-rendering, and zero required build step for the consumer, at the same time.
   popup, toast, tooltip, dropdown, splitter, tabs, accordion, a dat.GUI-style tweak panel,
   and more), each with a real WAI-ARIA APG accessibility contract (focus trap, roving
   tabindex, keyboard navigation — not bolted on after the fact), distributed as one CSS
-  file (`ricdom-ui.css`).
+  file (`ricdom-ui.css`). 7 themes, incl. frosted glass for transparent Electron windows.
 - **`ricdom/icons`** + `ricdom-icon` CLI — a small bundled icon set as tree-shakable
   named exports, plus a CLI that fetches and converts any [Lucide](https://lucide.dev/)
   icon on demand. Icon path data is never meant to be hand-written.
 - **`ricdom/md-editor`** — opt-in, own IIFE, adds nothing to `ricdom/ui`'s bundle.
   `createMdEditor()` is a `uiTextarea` that colors Markdown syntax as you type.
-- Not in the box, by design: an LZ self-extracting build. For single-file distribution
+- Not in the box: an LZ self-extracting build. For single-file distribution
   without gzip, use the separate MIT tool
   [ricdom-lz](https://github.com/miyoshi-tec/ricdom-lz) (needs `'unsafe-eval'` in CSP;
   the IIFE bundles assign `globalThis.ricdom`/`ricdomUI` explicitly so they survive
@@ -98,6 +98,6 @@ License: [MIT](LICENSE). A few bundled icons derive from Lucide (ISC); see
 - [TUTORIAL.md](docs/TUTORIAL.md) — a 10-chapter, code-first walkthrough
 - [SPEC.md](docs/SPEC.md) — the full contract: diffing rules, reactivity, every
   component's props and ARIA behavior
-- [examples/](examples/index.html) — five build-free demo pages
+- [examples/](examples/index.html) — 7 build-free demo pages
 - [CHANGELOG.md](CHANGELOG.md) — release history
 - [CONTRIBUTING.md](CONTRIBUTING.md) — developing ricdom itself

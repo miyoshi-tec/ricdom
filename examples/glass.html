@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>RicDOM 2 — glass theme (frosted glass / Acrylic / iOS 半透明、no build step)</title>
+<link rel="stylesheet" href="../dist/ricdom-ui.css">
+<style>
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    font-family: system-ui, sans-serif;
+    min-height: 100vh;
+  }
+  /* 壁紙: 外部アセット無しで CSS グラデーション + ぼかし円だけで作った疑似デスクトップ
+     背景。実際の Electron 透明ウィンドウでは、この壁紙の代わりに OS デスクトップ自体が
+     透けて見える (docs/TUTORIAL.md §6「Frosted glass over the desktop (Electron)」参照)。
+     glass/glass-dark テーマの半透明面 (dialog/popup/toast/tooltip/dropdown/panel/tweak) が
+     この壁紙越しに実際にぼけることを目視確認できるようにするためのデモ専用装飾。 */
+  .wallpaper {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    overflow: hidden;
+    background: linear-gradient(160deg, #0ea5e9 0%, #6366f1 45%, #ec4899 100%);
+  }
+  .wallpaper__blob {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(40px);
+    opacity: 0.85;
+  }
+  .wallpaper__blob--1 { width: 380px; height: 380px; top: -80px; left: -60px; background: #f97316; }
+  .wallpaper__blob--2 { width: 420px; height: 420px; bottom: -120px; right: -80px; background: #22d3ee; }
+  .wallpaper__blob--3 { width: 300px; height: 300px; top: 38%; left: 55%; background: #a3e635; }
+  .wallpaper__blob--4 { width: 260px; height: 260px; bottom: 8%; left: 8%; background: #f43f5e; }
+
+  h1 { font-size: 1.15rem; }
+  h2 { font-size: 0.95rem; margin: 1rem 0 4px; }
+  .row { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin: 0.6rem 0; }
+</style>
+</head>
+<body>
+<!--
+  利用側はビルド不要 (設計書 G1)。IIFE 2 本 (ricdom → ricdom/ui) + CSS <link> だけで
+  glass/glass-dark テーマ (2.0.0-alpha.18) が動くことの証明。dialog/popup/dropdown/
+  toast/tooltip/panel/tweak パネルの半透明面と、コントロール (input/checkbox/range) は
+  backdrop-filter を掛けない方針 (SPEC §8 FACT) を一覧で確認できる。
+-->
+<div class="wallpaper">
+  <div class="wallpaper__blob wallpaper__blob--1"></div>
+  <div class="wallpaper__blob wallpaper__blob--2"></div>
+  <div class="wallpaper__blob wallpaper__blob--3"></div>
+  <div class="wallpaper__blob wallpaper__blob--4"></div>
+</div>
+<div id="app"></div>
+
+<script src="../dist/ricdom.iife.min.js"></script>
+<script src="../dist/ricdom-ui.iife.min.js"></script>
+<script>
+  // IIFE ビルドはグローバル `ricdom` / `ricdomUI` として公開される (tsup.config.ts の globalName)。
+  const U = ricdomUI;
+  const THEMES = ['glass', 'glass-dark', 'light', 'dark', 'teal', 'cyber', 'aqua'];
+
+  const state = {
+    theme: 'glass',
+    name: '山崎',
+    subscribe: true,
+    volume: 60,
+    params: { size: 100, color: '#4f8ef7', rounded: 16 },
+  };
+
+  // 状態を持つ部品はモジュールスコープの変数に保持し、render の外・createApp 直後に
+  // use() する (設計書 §3.4)。
+  let dlg, menu, dd, toast, tip, tweak;
+
+  const themeRow = (s) =>
+    U.uiRow({
+      children: [
+        U.uiText({ variant: 'label', children: ['テーマ:'] }),
+        ...THEMES.map((t) =>
+          U.uiButton({
+            variant: t === s.theme ? 'primary' : 'default',
+            children: [t],
+            onclick: () => { s.theme = t; },
+          }),
+        ),
+      ],
+    });
+
+  // app.use() は createApp の戻り値を受け取った「後」でしか呼べないため、最初の render
+  // 呼び出し時点では dlg/menu/... はまだ undefined (composite.html と同じガード方法)。
+  const allPartsReady = () => dlg && menu && dd && toast && tip && tweak;
+
+  const app = ricdom.createApp(
+    '#app',
+    state,
+    (s) =>
+      !allPartsReady()
+        ? { tag: 'div' }
+        : U.uiPanel({
+            style: { maxWidth: '760px', margin: '2rem auto' },
+            children: [
+              { tag: 'h1', children: ['RicDOM 2 — glass theme'] },
+              U.uiText({
+                children: [
+                  'フロストガラス (Windows 11 Acrylic / iOS 半透明) 風テーマ。このパネル越しに背景の壁紙がぼけて見えることを確認してください。',
+                ],
+              }),
+              themeRow(s),
+              U.uiSeparator(),
+
+              { tag: 'h2', children: ['floating surfaces (backdrop-filter あり)'] },
+              {
+                tag: 'div',
+                class: 'row',
+                children: [
+                  dlg({
+                    triggerChildren: ['dialog を開く'],
+                    title: '確認',
+                    children: ['この本文の背景もフロストガラスです。'],
+                    actions: [U.uiButton({ variant: 'primary', children: ['OK'], onclick: () => dlg.close() })],
+                  }),
+                  menu({
+                    trigger: ['popup メニュー ▾'],
+                    children: [
+                      U.uiButton({ children: ['項目 A'], onclick: () => toast.show('項目 A を選択') }),
+                      U.uiButton({ children: ['項目 B'], onclick: () => toast.show('項目 B を選択') }),
+                    ],
+                  }),
+                  dd({
+                    label: 'dropdown: ' + s.name,
+                    chevron: true,
+                    children: ['name', 'date', 'size'].map((v) =>
+                      U.uiButton({ children: [v], onclick: () => dd.close() }),
+                    ),
+                  }),
+                  U.uiButton({ children: ['toast を出す'], onclick: () => toast.show('保存しました', { type: 'success' }) }),
+                  tip({
+                    content: 'tooltip もフロストガラスです',
+                    children: [U.uiButton({ children: ['tooltip をホバー'] })],
+                  }),
+                ],
+              },
+              U.uiSeparator(),
+
+              { tag: 'h2', children: ['コントロール (backdrop-filter は掛けない、半透明の rgba 背景のみ)'] },
+              U.uiCol({
+                children: [
+                  U.bindInput(s, 'name', { placeholder: '名前' }),
+                  U.bindCheckbox(s, 'subscribe', { children: ['通知を受け取る'] }),
+                  U.bindRange(s, 'volume', { min: 0, max: 100 }),
+                ],
+              }),
+              U.uiSeparator(),
+
+              { tag: 'h2', children: ['tweak panel'] },
+              tweak({ title: 'パラメータ', data: s.params }),
+              U.uiSeparator(),
+
+              { tag: 'h2', children: ['legibility (可読性の確認)'] },
+              U.uiText({
+                children: [
+                  '半透明の面に乗った通常の文字も、はっきり読めることを確認してください。 The quick brown fox jumps over the lazy dog. 0123456789.',
+                ],
+              }),
+            ],
+          }),
+  );
+
+  dlg = app.use(U.createDialog());
+  menu = app.use(U.createPopup());
+  dd = app.use(U.createDropdown());
+  toast = app.use(U.createToast());
+  tip = app.use(U.createTooltip());
+  tweak = app.use(U.createTweakPanel());
+
+  U.applyTheme(document.getElementById('app'), { theme: state.theme });
+  // theme が変わるたびに applyTheme も呼び直す (render とは別軸の副作用として明示的に、
+  // controls.html/composite.html/tweak.html と同じパターン)。
+  const originalRender = app.render;
+  app.render = (s) => {
+    U.applyTheme(document.getElementById('app'), { theme: s.theme });
+    return originalRender(s);
+  };
+</script>
+</body>
+</html>

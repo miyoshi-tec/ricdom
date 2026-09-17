@@ -274,10 +274,11 @@ import { applyTheme } from 'ricdom/ui';
 applyTheme(document.getElementById('app'), { theme: 'dark', density: 'compact' });
 ```
 
-Built-in themes: `light`, `dark`, `teal`, `cyber`, `aqua`. Densities: `comfortable`
-(default), `compact`, `tight`. You can also pass your own `{ '--ric-color-accent': '#e91e8c', ... }`
-object as `theme` for a fully custom palette, or `createTheme('teal', { ... })` to start
-from a bundled theme and override just a few variables.
+Built-in themes: `light`, `dark`, `teal`, `cyber`, `aqua`, `glass`, `glass-dark`. Densities:
+`comfortable` (default), `compact`, `tight`. You can also pass your own
+`{ '--ric-color-accent': '#e91e8c', ... }` object as `theme` for a fully custom palette, or
+`createTheme('teal', { ... })` to start from a bundled theme and override just a few
+variables.
 
 `applyTheme` also paints `background`/`color`/`font-size` on the element itself
 (background/color since 2.0.0-alpha.3, font-size added in alpha.6) — with v1's
@@ -288,6 +289,57 @@ inheritance either way).
 If you skipped the `<link rel="stylesheet">` in chapter 4 (e.g. a pure `<script>`-only
 page), call `ricdomUI.injectStyles()` once instead — it inserts the same stylesheet at
 runtime and is safe to call more than once.
+
+### Frosted glass over the desktop (Electron)
+
+`glass`/`glass-dark` (`2.0.0-alpha.18`) model Windows 11 Acrylic / iOS translucency:
+floating surfaces (dialog, popup, dropdown, toast, tooltip, panel, the tweak panel) get a
+`backdrop-filter` blur via the `--ric-surface-blur` token, and controls (`uiInput` etc.)
+stay translucent (`rgba()` backgrounds) without the blur itself — see SPEC.md §8 for which
+surfaces get it and why controls don't.
+
+In a plain browser, `glass` looks right out of the box because its `--ric-color-bg` is a
+built-in gradient. In an Electron app with a transparent window, you want the *real*
+desktop behind your UI instead of that gradient — override `--ric-color-bg` to
+`'transparent'`:
+
+```js
+// main process
+const win = new BrowserWindow({
+  backgroundMaterial: 'acrylic', // or 'mica' | 'tabbed' — Windows 11 22H2+, Electron 22+
+  // macOS: vibrancy: 'under-window' (or 'sidebar') instead of backgroundMaterial
+  // Linux / other: best effort — transparent: true, frame: false
+});
+```
+
+```js
+// renderer, after the window is created with the options above
+document.documentElement.style.background = 'transparent';
+document.body.style.background = 'transparent';
+applyTheme(document.getElementById('app'), {
+  theme: createTheme('glass', { '--ric-color-bg': 'transparent' }),
+});
+```
+
+The OS-level window material (`backgroundMaterial`/`vibrancy`/`transparent`) supplies the
+blur of the *desktop* behind your whole window; `--ric-surface-blur` adds a second,
+per-surface blur on top of that for dialogs/popups/etc., the same way it would over any
+other background. Performance note: `backdrop-filter` is not applied to controls
+specifically because its cost scales with the number of elements using it — a handful of
+floating surfaces is fine, hundreds of inputs would not be.
+
+`prefers-reduced-transparency` is checked once, when `applyTheme` runs — not a live
+subscription (SPEC.md §8). To track the setting live, re-apply the theme on change:
+
+```js
+matchMedia('(prefers-reduced-transparency: reduce)').addEventListener('change', () => {
+  applyTheme(document.getElementById('app'), { theme: 'glass' });
+});
+```
+
+Be honest about scope: this is a look, not a guarantee — your app still owns its own
+background wherever the window itself is transparent (e.g. behind content `glass`'s
+surfaces don't cover).
 
 ---
 

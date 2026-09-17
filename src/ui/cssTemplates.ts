@@ -50,8 +50,18 @@ const sbth = 'var(--ric-scrollbar-thumb-hover)'; // スクロールバーつま�
 // --ric-popup-blur / --ric-panel-shadow は cyber/aqua テーマだけが明示する値 (theme.ts)。
 // 他テーマでは未定義のままだと var() がフォールバック無しで空になり宣言ごと無効になるため、
 // フォールバック値を明示する (v1 は毎テーマに既定値があったため意識しなくてよかった差分)。
-const bl = 'var(--ric-popup-blur, none)';
+// `--ric-popup-blur` (公開トークン) → 未指定なら `--ric-surface-blur` (2.0.0-alpha.18 新設、
+// glass/glass-dark 用) → それも未指定なら 'none' の 3 段フォールバック。既存 5 テーマは
+// どちらも変えていないので popup/panel の見た目は不変 (cyber/aqua は --ric-popup-blur を
+// 引き続き明示、他は両方とも 'none')。
+const bl = 'var(--ric-popup-blur, var(--ric-surface-blur, none))';
 const ps = 'var(--ric-panel-shadow, var(--ric-shadow))';
+// フローティング面 (dialog/toast/tooltip/dropdown/tweak/inline-menu) の backdrop-filter
+// (2.0.0-alpha.18)。popup/panel だけは上の `bl` (--ric-popup-blur 優先) を使う — 理由は
+// bl 自身のコメント参照。入力・ボタン・textarea・table・select には掛けない
+// (backdrop-filter はコストが要素数に比例するため、常に大量に存在しうるコントロール類には
+// 掛けない方針。SPEC §8 に FACT として明記)。
+const sbf = 'var(--ric-surface-blur, none)';
 const fs = 'var(--ric-font-size, 14px)';
 // ricdom/md-editor (opt-in サブパス) のトークン。このファイル (ricdom/ui) には
 // createMdEditor の実装コードは一切無い — CSS だけをここに置く理由は「CSS は 1 枚」の
@@ -223,6 +233,8 @@ const DIALOG_CSS = `
   box-shadow: ${sh};
   width: min(360px, 90vw);
   overflow: hidden;
+  backdrop-filter: ${sbf};
+  -webkit-backdrop-filter: ${sbf};
   animation: ric-dlg-in ${da};
 }
 .ric-dialog--out { animation: ric-dlg-out ${da} forwards; pointer-events: none; }
@@ -280,6 +292,8 @@ const POPUP_CSS = `
   display: flex;
   flex-direction: column;
   gap: 2px;
+  backdrop-filter: ${bl};
+  -webkit-backdrop-filter: ${bl};
 }
 .ric-popup__body--below { transform-origin: top; animation: ric-popup-in ${da}; }
 .ric-popup__body--above { transform-origin: bottom; animation: ric-popup-in ${da}; }
@@ -321,6 +335,8 @@ const TOAST_CSS = `
   border: ${b1};
   border-radius: ${r};
   box-shadow: ${sh};
+  backdrop-filter: ${sbf};
+  -webkit-backdrop-filter: ${sbf};
   pointer-events: auto;
 }
 .ric-toast__item--in  { animation: ric-toast-in  ${da} both; }
@@ -355,6 +371,8 @@ const TOOLTIP_CSS = `
   pointer-events: none;
   max-width: 200px;
   z-index: 401;
+  backdrop-filter: ${sbf};
+  -webkit-backdrop-filter: ${sbf};
 }
 .ric-tooltip__popup--top    { transform: translateX(-50%); transform-origin: center bottom; animation: ric-tip-h ${da}; }
 .ric-tooltip__popup--bottom { transform: translateX(-50%); transform-origin: center top; animation: ric-tip-h ${da}; }
@@ -1151,6 +1169,8 @@ const DROPDOWN_CSS = `
   box-shadow: ${sh};
   overflow: auto;
   padding: ${gm};
+  backdrop-filter: ${sbf};
+  -webkit-backdrop-filter: ${sbf};
 }`;
 
 // portal を持たない軽量ポップオーバー (createPopup/createDropdown と違い overlay も
@@ -1162,6 +1182,8 @@ const INLINE_MENU_CSS = `
   border-radius: ${r};
   padding: 4px;
   box-shadow: ${sh};
+  backdrop-filter: ${sbf};
+  -webkit-backdrop-filter: ${sbf};
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -1188,6 +1210,8 @@ const TWEAK_CSS = `
   user-select: none;
   overflow: hidden;
   box-sizing: border-box;
+  backdrop-filter: ${sbf};
+  -webkit-backdrop-filter: ${sbf};
 }
 .ric-tweak__title {
   font-size: 1em;

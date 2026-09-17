@@ -5,6 +5,85 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.0.0-alpha.18] — not yet published
+
+User decision (2026-09-17): added a frosted-glass theme (Windows 11 Acrylic / iOS
+translucency), motivated by Electron apps whose window background shows the desktop
+through the UI.
+
+### Added
+
+- **`glass` (light frost, `color-scheme: light`) and `glass-dark` (dark frost,
+  `color-scheme: dark`) bundled themes** (`ThemeName`, `src/ui/theme.ts`) — 5 → 7 bundled
+  themes. Both ship a built-in wallpaper-like `--ric-color-bg` gradient (so the theme looks
+  intentional in a plain browser without any consumer setup), translucent `rgba()`
+  `--ric-color-control`/`--ric-color-border`/`--ric-popup-bg`, and a soft `--ric-shadow`
+  with an inset highlight for a glass edge. Every token key the other five palettes define
+  is defined for `glass`/`glass-dark` too (extended the token-set-completeness test in
+  `tests/ui/theme.test.ts`).
+- **`--ric-surface-blur` token** — the `backdrop-filter` value for `glass`/`glass-dark`
+  (e.g. `blur(24px) saturate(160%)`); the other five bundled themes set it to the literal
+  `'none'` so the token is always present and round-trips through `exportTheme`/
+  `exportSettings` regardless of theme. `ricdom-ui.css` applies
+  `backdrop-filter`/`-webkit-backdrop-filter: var(--ric-surface-blur, none)` to every
+  floating surface: `.ric-dialog`, `.ric-toast__item`, `.ric-tooltip__popup`,
+  `.ric-dropdown__body`, the tweak panel root, and `.ric-inline-menu`. `.ric-popup__body`
+  and `.ric-panel` resolve through the existing `--ric-popup-blur` token instead, whose
+  fallback chain is now `var(--ric-popup-blur, var(--ric-surface-blur, none))` —
+  `glass`/`glass-dark` set `--ric-popup-blur` to the same literal value as
+  `--ric-surface-blur` (not a `var()` reference, so both round-trip independently through
+  `exportTheme`), the same way `cyber`/`aqua` already set `--ric-popup-blur` on their own.
+  Controls (`.ric-input`, `.ric-textarea`, `.ric-button`, `.ric-select`, etc.) are excluded
+  on purpose — `backdrop-filter` cost scales with the number of filtered elements, and
+  controls can exist in large numbers, unlike the handful of floating surfaces open at
+  once; they still look translucent under `glass`/`glass-dark` via `rgba()` backgrounds,
+  just without the blur itself. New browser test file `tests/browser/uiGlassTheme.test.ts`
+  verifies computed `backdropFilter` on all of the above under `glass` (contains `blur(`)
+  and under `light` (`none`), plus that `.ric-input` never gets `backdrop-filter` but does
+  get a translucent background.
+- **`prefers-reduced-transparency` support in `applyTheme`**: when `theme` is given as the
+  literal string `'glass'`/`'glass-dark'` (not a custom `ThemeVars` object) and
+  `window.matchMedia('(prefers-reduced-transparency: reduce)').matches` is true, an opaque
+  override set is merged in before the variables are applied
+  (`--ric-surface-blur`/`--ric-popup-blur` → `'none'`,
+  `--ric-color-control`/`--ric-popup-bg`/`--ric-color-border` → opaque colors). An
+  environment without `matchMedia` (e.g. `jsdom`) or one where calling it throws is treated
+  as "not reduced" rather than failing. **This check happens once, at the moment
+  `applyTheme` runs** — not a live subscription; `docs/TUTORIAL.md` §6 shows the
+  `matchMedia(...).addEventListener('change', ...)` snippet for consumers who want to
+  track the setting live.
+- **`examples/glass.html`** — a CSS-only "wallpaper" background (gradients + blurred
+  circles, no external assets) demonstrating all 7 themes (defaults to `glass`) with
+  dialog, popup, dropdown, toast, tooltip, panel, inputs, and the tweak panel. Registered
+  in `examples/index.html` (five → seven examples total; `scripts/examplesSmoke.mjs`
+  enumerates `examples/*.html` automatically, no changes needed there).
+- `docs/TUTORIAL.md` §6 sub-section "Frosted glass over the desktop (Electron)": the
+  `BrowserWindow({ backgroundMaterial: 'acrylic' | 'mica' | 'tabbed' })` /
+  `vibrancy: 'under-window'` / `transparent: true` recipe, plus
+  `applyTheme(root, { theme: createTheme('glass', { '--ric-color-bg': 'transparent' }) })`
+  to let the OS-level window material show through instead of the theme's built-in
+  gradient background.
+- `docs/SPEC.md` §8: FACTs for `glass`/`glass-dark` and `--ric-surface-blur`, the
+  `prefers-reduced-transparency` one-shot behavior, and confirmation that
+  `--ric-color-bg: 'transparent'` passes through `applyTheme` unvalidated (the mechanism
+  the Electron recipe above relies on).
+
+### Changed
+
+- Nothing user-visible for the five pre-existing themes — `--ric-surface-blur` resolves to
+  `'none'` for all of them and `--ric-popup-blur`'s fallback chain is otherwise unchanged
+  (`cyber`/`aqua` still set it explicitly; the rest still fall through to `none`), verified
+  with the existing browser theme tests (`tests/browser/uiTheme.test.ts`,
+  `tests/browser/uiScrollbarTheme.test.ts`) and `npm run test:examples`.
+
+### Docs
+
+- `docs/V1_VS_V2.ja.md`: theme row now notes `glass`/`glass-dark` (and
+  `--ric-surface-blur`) are v2-only additions with no v1 counterpart.
+- `README.md`/`README.ja.md`: theme count mentioned in the `ricdom/ui` bullet (5 → 7,
+  incl. frosted glass for transparent Electron windows) and examples count (5 → 7, the
+  stale "five" predated `md-editor.html`'s addition — corrected while touching this line).
+
 ## [2.0.0-alpha.17] — not yet published
 
 Raccoon Memo (pilot #5) adopted alpha.16 the same day it was documented and sent back four

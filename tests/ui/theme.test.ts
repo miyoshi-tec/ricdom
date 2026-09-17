@@ -3,10 +3,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { applyTheme, createTheme, createDensity, createFontSize, exportTheme, exportSettings } from '../../src/ui/theme.js';
 
-const THEMES = ['light', 'dark', 'teal', 'cyber', 'aqua'] as const;
-const DARK_LIKE = new Set(['dark', 'cyber']);
+const THEMES = ['light', 'dark', 'teal', 'cyber', 'aqua', 'glass', 'glass-dark'] as const;
+const DARK_LIKE = new Set(['dark', 'cyber', 'glass-dark']);
 
-describe('applyTheme: 5 テーマの color-scheme が bg 明暗と整合する', () => {
+describe('applyTheme: 7 テーマの color-scheme が bg 明暗と整合する (2.0.0-alpha.18 で glass/glass-dark 追加)', () => {
   it.each(THEMES)('%s テーマは意図した color-scheme を持つ', (theme) => {
     const el = document.createElement('div');
     applyTheme(el, { theme });
@@ -125,6 +125,122 @@ describe('applyTheme: 無効な theme/density/fontSize の warn (2.0.0-alpha.7)'
   });
 });
 
+// トークン集合の完全性 (2.0.0-alpha.18、glass/glass-dark 新設)。他の palette が定義する
+// トークンキーはすべて glass/glass-dark にも存在しなければならない (fixed design decisions
+// #1) — 1 つでも欠けると、そのテーマだけ該当コンポーネントの見た目が var() のフォール
+// バック値に落ちて他テーマと挙動が変わってしまう。`--ric-surface-blur` は今回の新設
+// トークンで、既存 5 テーマ側にも 'none' を明示済み (トークン集合を全テーマで揃える設計、
+// theme.ts 参照) なので、7 テーマ共通の網羅チェックにそのまま含められる。
+const CORE_TOKEN_KEYS = [
+  '--ric-color-fg',
+  '--ric-color-fg-muted',
+  '--ric-color-bg',
+  '--ric-color-control',
+  '--ric-color-border',
+  '--ric-color-accent',
+  '--ric-color-accent-fg',
+  '--ric-tooltip-bg',
+  '--ric-tooltip-fg',
+  '--ric-code-bg',
+  '--ric-code-fg',
+  '--ric-shadow',
+  '--ric-radius',
+  '--ric-surface-blur',
+  '--ric-md-heading',
+  '--ric-md-emphasis',
+  '--ric-md-link',
+  '--ric-md-url',
+  '--ric-md-code-bg',
+  '--ric-md-quote',
+  '--ric-md-marker',
+  '--ric-md-meta',
+  'color-scheme',
+] as const;
+
+describe('applyTheme: 7 テーマすべてが共通トークン一式を過不足なく定義する', () => {
+  it.each(THEMES)('%s テーマは CORE_TOKEN_KEYS を漏れなく定義する', (theme) => {
+    const el = document.createElement('div');
+    applyTheme(el, { theme });
+    for (const key of CORE_TOKEN_KEYS) {
+      expect(el.style.getPropertyValue(key), `${theme} の ${key} が空`).not.toBe('');
+    }
+  });
+
+  it('glass/glass-dark は --ric-popup-blur も (--ric-surface-blur と同じ値を) 明示する (cyber/aqua と同じ形)', () => {
+    const light = document.createElement('div');
+    applyTheme(light, { theme: 'glass' });
+    expect(light.style.getPropertyValue('--ric-popup-blur')).toBe(light.style.getPropertyValue('--ric-surface-blur'));
+    expect(light.style.getPropertyValue('--ric-surface-blur')).not.toBe('none');
+
+    const dark = document.createElement('div');
+    applyTheme(dark, { theme: 'glass-dark' });
+    expect(dark.style.getPropertyValue('--ric-popup-blur')).toBe(dark.style.getPropertyValue('--ric-surface-blur'));
+    expect(dark.style.getPropertyValue('--ric-surface-blur')).not.toBe('none');
+  });
+
+  it('glass 以外の 5 テーマは --ric-surface-blur が none (見た目が変わらないことの回帰ガード)', () => {
+    for (const theme of ['light', 'dark', 'teal', 'cyber', 'aqua'] as const) {
+      const el = document.createElement('div');
+      applyTheme(el, { theme });
+      expect(el.style.getPropertyValue('--ric-surface-blur'), theme).toBe('none');
+    }
+  });
+});
+
+describe('applyTheme: prefers-reduced-transparency (2.0.0-alpha.18)', () => {
+  const mockMatchMedia = (matches: boolean): void => {
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches,
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    }));
+  };
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('reduce: true のとき glass は --ric-surface-blur が none になり control が不透明になる', () => {
+    mockMatchMedia(true);
+    const el = document.createElement('div');
+    applyTheme(el, { theme: 'glass' });
+    expect(el.style.getPropertyValue('--ric-surface-blur')).toBe('none');
+    expect(el.style.getPropertyValue('--ric-popup-blur')).toBe('none');
+    expect(el.style.getPropertyValue('--ric-color-control')).not.toContain('rgba');
+  });
+
+  it('reduce: true のとき glass-dark も同様にオパーク化する', () => {
+    mockMatchMedia(true);
+    const el = document.createElement('div');
+    applyTheme(el, { theme: 'glass-dark' });
+    expect(el.style.getPropertyValue('--ric-surface-blur')).toBe('none');
+    expect(el.style.getPropertyValue('--ric-color-control')).not.toContain('rgba');
+  });
+
+  it('reduce: false のとき glass は半透明のまま (既定どおり blur が入る)', () => {
+    mockMatchMedia(false);
+    const el = document.createElement('div');
+    applyTheme(el, { theme: 'glass' });
+    expect(el.style.getPropertyValue('--ric-surface-blur')).toContain('blur(');
+    expect(el.style.getPropertyValue('--ric-color-control')).toContain('rgba');
+  });
+
+  it('reduce: true でも glass/glass-dark 以外のテーマは影響を受けない', () => {
+    mockMatchMedia(true);
+    const el = document.createElement('div');
+    applyTheme(el, { theme: 'light' });
+    expect(el.style.getPropertyValue('--ric-color-control')).toBe('#ffffff'); // COLOR_VARS_LIGHT のまま
+  });
+
+  it('matchMedia が無い環境 (jsdom 相当) では reduce ではない扱いになり、glass は半透明のまま', () => {
+    vi.stubGlobal('matchMedia', undefined);
+    const el = document.createElement('div');
+    applyTheme(el, { theme: 'glass' });
+    expect(el.style.getPropertyValue('--ric-surface-blur')).toContain('blur(');
+  });
+});
+
 describe('createTheme: 継承・上書き', () => {
   it('ベーステーマの値を継承する', () => {
     const custom = createTheme('teal');
@@ -143,6 +259,23 @@ describe('createTheme: 継承・上書き', () => {
     applyTheme(el, { theme: custom });
     expect(el.style.getPropertyValue('--ric-color-accent')).toBe('#ff00ff');
     expect(el.style.getPropertyValue('color-scheme')).toBe('dark'); // dark ベースの color-scheme も継承
+  });
+
+  // Electron の透明ウィンドウ対応 (2.0.0-alpha.18、docs/TUTORIAL.md §6「Frosted glass over
+  // the desktop (Electron)」): `--ric-color-bg` に 'transparent' を渡しても
+  // バリデーションで弾かれず、そのまま applyTheme → 要素の inline style に通ることを確認する。
+  // applyTheme 自身は任意の文字列値を素通しするだけ (theme.ts に値の妥当性チェックは無い)
+  // ので、ここでは「glass ベースに transparent を上書きしても他の glass トークンは
+  // そのまま残る」ことも合わせて確認する。
+  it('createTheme("glass", { "--ric-color-bg": "transparent" }) は透明な bg を継承する (Electron 透明ウィンドウ対応)', () => {
+    const custom = createTheme('glass', { '--ric-color-bg': 'transparent' });
+    expect(custom['--ric-color-bg']).toBe('transparent');
+    expect(custom['--ric-color-accent']).toBe('#2563eb'); // 上書きしていない値は glass のまま
+
+    const el = document.createElement('div');
+    applyTheme(el, { theme: custom });
+    expect(el.style.getPropertyValue('--ric-color-bg')).toBe('transparent');
+    expect(el.style.getPropertyValue('color-scheme')).toBe('light'); // glass ベースの color-scheme も継承
   });
 });
 
@@ -222,6 +355,21 @@ describe('exportTheme: round-trip', () => {
     expect(exported['--ric-control-h']).toBeUndefined();
     expect(exported['--ric-font-size']).toBeUndefined();
     expect(exported['--ric-color-fg']).toBeDefined();
+  });
+
+  // 2.0.0-alpha.18 で新設した --ric-surface-blur が exportTheme で正しく往復することの確認
+  // (glass のトークンはすべて `--ric-*` のリテラル文字列なので、他のトークンと同じ判定
+  // ロジック (isThemeKey) で自然に拾われる — density/fontSize 系ではないので除外もされない)。
+  it('--ric-surface-blur が exportTheme で往復する (glass テーマ)', () => {
+    const el = document.createElement('div');
+    applyTheme(el, { theme: 'glass' });
+    const exported = exportTheme(el);
+    expect(exported['--ric-surface-blur']).toBe('blur(24px) saturate(160%)');
+    expect(exported['--ric-popup-blur']).toBe('blur(24px) saturate(160%)');
+
+    const el2 = document.createElement('div');
+    applyTheme(el2, { theme: exported });
+    expect(el2.style.getPropertyValue('--ric-surface-blur')).toBe('blur(24px) saturate(160%)');
   });
 
   it('exportTheme の結果を別要素に applyTheme できる (往復)', () => {

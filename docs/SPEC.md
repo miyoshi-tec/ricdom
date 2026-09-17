@@ -777,7 +777,7 @@ one-line rule to your own CSS, or sidestep the auto-generated portal altogether 
 
 ```ts
 applyTheme(el: Element, opts?: {
-  theme?: 'light' | 'dark' | 'teal' | 'cyber' | 'aqua' | Record<string, string>;
+  theme?: 'light' | 'dark' | 'teal' | 'cyber' | 'aqua' | 'glass' | 'glass-dark' | Record<string, string>;
   density?: 'comfortable' | 'compact' | 'tight' | Record<string, string>;
   fontSize?: 'sm' | 'md' | 'lg' | Record<string, string>;
 }): void;
@@ -793,16 +793,17 @@ descendants normally.
 
 ### CSS variables set by `applyTheme`
 
-Color/theme (from the `theme` option — one of the five bundled names, or your own
+Color/theme (from the `theme` option — one of the seven bundled names, or your own
 `Record<string, string>` of the same keys):
 
 `--ric-color-fg`, `--ric-color-fg-muted`, `--ric-color-bg`, `--ric-color-control`,
 `--ric-color-border`, `--ric-color-accent`, `--ric-color-accent-fg`, `--ric-tooltip-bg`,
 `--ric-tooltip-fg`, `--ric-code-bg`, `--ric-code-fg`, `--ric-shadow`, `--ric-radius`,
-`color-scheme` — plus, on `cyber`/`aqua` only, `--ric-popup-bg`, `--ric-popup-blur`,
-`--ric-panel-shadow`, `--ric-duration`, `--ric-easing` (other themes fall back to the CSS
-defaults baked into `ricdom-ui.css`, via `var(--x, fallback)`, rather than redeclaring
-them).
+`--ric-surface-blur` (new in `2.0.0-alpha.18`, see below), `color-scheme` — plus, on
+`cyber`/`aqua`/`glass`/`glass-dark` only, `--ric-popup-bg`, `--ric-popup-blur`; `cyber`/
+`aqua` also set `--ric-panel-shadow`, `--ric-duration`, `--ric-easing` (other themes fall
+back to the CSS defaults baked into `ricdom-ui.css`, via `var(--x, fallback)`, rather than
+redeclaring them).
 
 Density (from the `density` option): `--ric-gap`, `--ric-pad-x`, `--ric-pad-y`,
 `--ric-control-h`.
@@ -814,6 +815,68 @@ Computed regardless of options, if not already supplied by the resolved theme/ov
 `--ric-color-fg` when a custom `theme` object omits them), `--ric-scrollbar-thumb`,
 `--ric-scrollbar-thumb-hover`, `--ric-gap-md` (`calc(var(--ric-gap) * 2)`),
 `--ric-duration` (`200ms`), `--ric-easing` (`ease`).
+
+### FACT: `glass`/`glass-dark` (frosted glass, `2.0.0-alpha.18`) and `--ric-surface-blur`
+
+Two new bundled themes, `glass` (light frost, `color-scheme: light`) and `glass-dark`
+(dark frost, `color-scheme: dark`), model Windows 11 Acrylic / iOS translucency: a
+built-in gradient `--ric-color-bg` (so the theme looks intentional in a plain browser
+out of the box), translucent `rgba()` `--ric-color-control`/`--ric-color-border`/
+`--ric-popup-bg`, and a soft `--ric-shadow` with an inset highlight for a glass edge.
+
+`--ric-surface-blur` is the new public token holding the actual `backdrop-filter` value
+for `glass`/`glass-dark` (e.g. `blur(24px) saturate(160%)`); the other five bundled
+themes set it to the literal string `'none'` so the token is always present (`exportTheme`
+round-trips it regardless of theme). `ricdom-ui.css` applies
+`backdrop-filter: var(--ric-surface-blur, none)` (plus the `-webkit-` prefix) to every
+**floating** surface: `.ric-dialog`, `.ric-toast__item`, `.ric-tooltip__popup`,
+`.ric-dropdown__body`, the tweak panel root (`.ric-tweak`), and `.ric-inline-menu`.
+`.ric-popup__body` and `.ric-panel` instead resolve through the existing `--ric-popup-blur`
+token, whose CSS fallback chain is now `var(--ric-popup-blur, var(--ric-surface-blur,
+none))` — `glass`/`glass-dark` set `--ric-popup-blur` to the same literal value as
+`--ric-surface-blur` (not a `var()` reference, so both are independently readable via
+`exportTheme`), matching how `cyber`/`aqua` already set `--ric-popup-blur` on their own.
+**Controls are excluded on purpose**: `.ric-input`, `.ric-textarea`, `.ric-button`,
+`.ric-select`, `.ric-checkbox`, `.ric-radio`, tables, etc. never receive `backdrop-filter`
+— its rendering cost scales with the number of filtered elements, and controls can exist
+in large numbers, unlike the handful of floating surfaces open at once. Controls still look
+translucent under `glass`/`glass-dark` because `--ric-color-control`/`--ric-color-border`
+are `rgba()` values, just without the blur itself.
+
+Because the five pre-`glass` themes all resolve `--ric-surface-blur` to `'none'`, and
+`--ric-popup-blur`'s fallback chain is unchanged for them (`cyber`/`aqua` still set it
+explicitly; the rest still fall through to `none`), their rendering is unaffected —
+verified with the existing browser theme tests and the examples smoke test.
+
+### FACT: `prefers-reduced-transparency` is applied once, at `applyTheme` call time
+
+Theme variables are written as **inline style** by `applyTheme` (see above), so a
+stylesheet `@media (prefers-reduced-transparency: reduce)` rule cannot override them.
+Instead, `applyTheme` checks `window.matchMedia('(prefers-reduced-transparency: reduce)')`
+itself: if `theme` is given as the literal string `'glass'` or `'glass-dark'` (not a custom
+`ThemeVars` object — there is no way to infer the right opaque override for an arbitrary
+custom theme) and the media query matches, an opaque override set is merged in before the
+variables are applied — `--ric-surface-blur`/`--ric-popup-blur` become `'none'` and
+`--ric-color-control`/`--ric-popup-bg`/`--ric-color-border` become opaque colors. An
+environment without `matchMedia` (e.g. `jsdom`) or one where calling it throws is treated
+as "not reduced" — the theme renders translucent as normal, rather than failing.
+
+**This check happens once, at the moment `applyTheme` runs** — it is not a live
+subscription. An app that wants to react to the user changing this OS setting while the
+page is open must re-call `applyTheme` itself, e.g. from a
+`matchMedia(...).addEventListener('change', ...)` handler (see
+[TUTORIAL.md §6](TUTORIAL.md#6-theme-and-css) for a snippet).
+
+### FACT: `--ric-color-bg: transparent` works, for Electron's transparent-window themes
+
+`applyTheme` does not validate the value of any `--ric-*` variable — a `theme` object (or
+`createTheme(base, overrides)` result) with `--ric-color-bg: 'transparent'` passes straight
+through to `style.setProperty` like any other value, and `[data-ricdom-theme]`'s only other
+paint is `color`/`font-size` (§ below) — there is no other opaque background declared on
+the attribute selector that would block it. This is the mechanism a `glass`/`glass-dark`
+consumer uses to let an Electron `BrowserWindow`'s own transparency (`backgroundMaterial:
+'acrylic'`/`'mica'`, `vibrancy`, or `transparent: true`) show through instead of the
+theme's built-in wallpaper-gradient `--ric-color-bg` — see TUTORIAL.md §6.
 
 ### `color-scheme` and native controls
 
@@ -870,7 +933,8 @@ setter that loops over a list of root elements).
 ### FACT: `applyTheme` warns on an invalid `theme`/`density`/`fontSize` name (2.0.0-alpha.7)
 
 If `theme`, `density`, or `fontSize` is given as a string that isn't one of the bundled
-names (`light`/`dark`/`teal`/`cyber`/`aqua`; `comfortable`/`compact`/`tight`; `sm`/`md`/`lg`
+names (`light`/`dark`/`teal`/`cyber`/`aqua`/`glass`/`glass-dark`; `comfortable`/`compact`/
+`tight`; `sm`/`md`/`lg`
 respectively), `applyTheme` logs one `console.warn` per call naming the invalid value, the
 valid names, and which default it fell back to — before this release, a typo (e.g.
 `density: 'md'`, which isn't a density name) silently fell back to the default with no
@@ -1690,7 +1754,7 @@ script before both components render to avoid the mismatch entirely.
 
 ### Theme tokens
 
-Five new `--ric-md-*` CSS variables, defined for all five bundled themes (`applyTheme`,
+Five new `--ric-md-*` CSS variables, defined for all seven bundled themes (`applyTheme`,
 §8) and picked up automatically by `exportTheme`/`exportSettings` (they filter on the
 `--ric-` prefix, §8): `--ric-md-heading`, `--ric-md-emphasis`, `--ric-md-link`,
 `--ric-md-url`, `--ric-md-code-bg`, `--ric-md-quote`, `--ric-md-marker`, `--ric-md-meta`.

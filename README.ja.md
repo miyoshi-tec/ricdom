@@ -67,7 +67,8 @@ import { createApp } from 'https://esm.sh/ricdom@2';
   popup・toast・tooltip・dropdown・splitter・tabs・accordion・dat.GUI 風パラメータ調整
   パネル 他)。それぞれが後付けではない本物の WAI-ARIA APG アクセシビリティ契約
   (focus trap・roving tabindex・キーボード操作) を持ち、CSS は 1 ファイル
-  (`ricdom-ui.css`) として配布される。
+  (`ricdom-ui.css`) として配布される。テーマは 7 種 (Electron の透明ウィンドウ向けの
+  フロストガラス風テーマを含む)。
 - **`ricdom/icons`** + `ricdom-icon` CLI — 少数の同梱アイコンセットを tree-shakable な
   named export として提供し、CLI で任意の [Lucide](https://lucide.dev/) アイコンを
   その場で取得・変換できる。アイコンの path データを手書きすることは想定していない。
@@ -98,6 +99,6 @@ CI パイプラインで一から作り直したもの。v1 とのソース互�
 - [docs/TUTORIAL.md](docs/TUTORIAL.md) — 10 章構成、コード先行のチュートリアル (英語)
 - [docs/SPEC.md](docs/SPEC.md) — 契約全体: 差分パッチの規則・リアクティビティ・各部品の
   props と ARIA 契約 (英語)
-- [examples/](examples/index.html) — ビルド不要のデモ 5 本
+- [examples/](examples/index.html) — ビルド不要のデモ 7 本
 - [CHANGELOG.md](CHANGELOG.md) — リリース履歴
 - [CONTRIBUTING.md](CONTRIBUTING.md) — ricdom 自体の開発 (英語)

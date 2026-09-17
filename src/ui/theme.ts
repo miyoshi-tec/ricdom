@@ -21,7 +21,7 @@
 
 import { bakedDevMode, isDevMode } from './internal/pureHelpers.js';
 
-export type ThemeName = 'light' | 'dark' | 'teal' | 'cyber' | 'aqua';
+export type ThemeName = 'light' | 'dark' | 'teal' | 'cyber' | 'aqua' | 'glass' | 'glass-dark';
 export type DensityName = 'comfortable' | 'compact' | 'tight';
 export type FontSizeName = 'sm' | 'md' | 'lg';
 
@@ -50,6 +50,10 @@ const COLOR_VARS_LIGHT: ThemeVars = {
   '--ric-code-fg': '#24292f',
   '--ric-shadow': '0 4px 16px rgba(0,0,0,0.10)',
   '--ric-radius': '8px',
+  // フローティング面 (dialog/popup/toast/tooltip/panel 等) の backdrop-filter 用トークン
+  // (2.0.0-alpha.18、glass/glass-dark 新設に伴う追加)。glass 系以外は 'none' を明示して
+  // トークン集合を全テーマで揃える (exportTheme の往復・トークン網羅テストの対象にするため)。
+  '--ric-surface-blur': 'none',
   // ricdom/md-editor (opt-in サブパス) のトークン。VS Code の light テーマに寄せた配色。
   '--ric-md-heading': '#1f5fbf',
   '--ric-md-emphasis': '#b45309',
@@ -76,6 +80,7 @@ const COLOR_VARS_DARK: ThemeVars = {
   '--ric-code-fg': '#f9fafb',
   '--ric-shadow': '0 4px 24px rgba(0,0,0,0.50)',
   '--ric-radius': '8px',
+  '--ric-surface-blur': 'none',
   '--ric-md-heading': '#8ab4f8',
   '--ric-md-emphasis': '#f59e0b',
   '--ric-md-link': '#60a5fa',
@@ -101,6 +106,7 @@ const COLOR_VARS_TEAL: ThemeVars = {
   '--ric-code-fg': '#0d2b24',
   '--ric-shadow': '0 4px 16px rgba(0,60,50,0.12)',
   '--ric-radius': '8px',
+  '--ric-surface-blur': 'none',
   '--ric-md-heading': '#1d6fa5',
   '--ric-md-emphasis': '#c2410c',
   '--ric-md-link': '#007f6d',
@@ -127,6 +133,7 @@ const COLOR_VARS_CYBER: ThemeVars = {
   '--ric-code-fg': '#38bdf8',
   '--ric-popup-bg': 'rgba(10,18,40,0.4)',
   '--ric-popup-blur': 'blur(10px)',
+  '--ric-surface-blur': 'none',
   '--ric-panel-shadow': 'inset 0 1px 0 rgba(255,255,255,0.15), inset 0 0 0 1px rgba(80,200,255,0.5)',
   '--ric-radius': '0px',
   '--ric-shadow': '0 0 20px rgba(0,200,255,0.25), inset 0 1px 0 rgba(80,200,255,0.15)',
@@ -158,6 +165,7 @@ const COLOR_VARS_AQUA: ThemeVars = {
   '--ric-code-fg': '#1a2c3c',
   '--ric-popup-bg': 'rgba(255,255,255,0.4)',
   '--ric-popup-blur': 'blur(10px)',
+  '--ric-surface-blur': 'none',
   '--ric-panel-shadow': '0 8px 32px rgba(20,80,140,0.08), inset 0 1px 0 rgba(255,255,255,0.75)',
   '--ric-radius': '20px',
   '--ric-shadow': '0 4px 20px rgba(20,80,140,0.12), inset 0 1px 0 rgba(255,255,255,0.60)',
@@ -175,6 +183,97 @@ const COLOR_VARS_AQUA: ThemeVars = {
   'color-scheme': 'light',
 };
 
+// glass / glass-dark (2.0.0-alpha.18、フロストガラス／Windows 11 Acrylic／iOS 半透明風テーマ、
+// ユーザー決定 2026-09-17)。動機は「デスクトップの背景が透けて見える透明ウィンドウの
+// Electron アプリで見栄えがする UI」— `--ric-color-bg` に組み込みの壁紙風グラデーションを
+// 持たせているのはプレーンなブラウザでも単体で様になるようにするため (consumer は
+// Electron 側で `--ric-color-bg: transparent` に上書きする、docs/TUTORIAL.md §6 参照)。
+// 新設トークン `--ric-surface-blur` はフローティング面 (dialog/popup/dropdown/toast/
+// tooltip/panel/tweak/inline-menu) にかける backdrop-filter の実体 (cssTemplates.ts)。
+// **`--ric-popup-blur` にも同じ値を "リテラルで" 重複代入する** (var() 経由にしない) —
+// exportTheme はインラインスタイルの生値をそのまま読み出すだけなので、var() 参照だと
+// ラウンドトリップ後に別要素へ当てたときに `--ric-surface-blur` 側が無いと解決できない
+// (2 つの独立したカスタムプロパティとして両方を持たせるのが正しい、既存の cyber/aqua が
+// --ric-popup-blur を独自に明示しているのと同じ形)。
+const COLOR_VARS_GLASS: ThemeVars = {
+  '--ric-color-fg': '#111827',
+  '--ric-color-fg-muted': '#4b5563',
+  '--ric-color-bg': 'linear-gradient(135deg, #dbeafe 0%, #fce7f3 45%, #d1fae5 100%)',
+  '--ric-color-control': 'rgba(255,255,255,0.55)',
+  '--ric-color-border': 'rgba(255,255,255,0.6)',
+  '--ric-color-accent': '#2563eb',
+  '--ric-color-accent-fg': '#ffffff',
+  '--ric-tooltip-bg': 'rgba(17,24,39,0.75)',
+  '--ric-tooltip-fg': '#f9fafb',
+  '--ric-code-bg': 'rgba(255,255,255,0.55)',
+  '--ric-code-fg': '#111827',
+  '--ric-popup-bg': 'rgba(255,255,255,0.5)',
+  '--ric-popup-blur': 'blur(24px) saturate(160%)',
+  '--ric-surface-blur': 'blur(24px) saturate(160%)',
+  // ガラスの縁を表現するソフトな外側シャドウ + 内側ハイライト。
+  '--ric-shadow': '0 8px 32px rgba(31,41,55,0.18), inset 0 1px 0 rgba(255,255,255,0.6)',
+  '--ric-radius': '12px',
+  '--ric-md-heading': '#1f5fbf',
+  '--ric-md-emphasis': '#b45309',
+  '--ric-md-link': '#2563eb',
+  '--ric-md-url': '#4b5563',
+  '--ric-md-code-bg': 'rgba(255,255,255,0.35)',
+  '--ric-md-quote': '#4b5563',
+  '--ric-md-marker': '#4b5563',
+  '--ric-md-meta': '#4b5563',
+  'color-scheme': 'light',
+};
+
+const COLOR_VARS_GLASS_DARK: ThemeVars = {
+  '--ric-color-fg': '#f1f5f9',
+  '--ric-color-fg-muted': '#94a3b8',
+  '--ric-color-bg': 'linear-gradient(135deg, #0f172a 0%, #312e81 50%, #134e4a 100%)',
+  '--ric-color-control': 'rgba(15,23,42,0.45)',
+  '--ric-color-border': 'rgba(255,255,255,0.18)',
+  '--ric-color-accent': '#60a5fa',
+  '--ric-color-accent-fg': '#0f172a',
+  '--ric-tooltip-bg': 'rgba(15,23,42,0.85)',
+  '--ric-tooltip-fg': '#f1f5f9',
+  '--ric-code-bg': 'rgba(15,23,42,0.55)',
+  '--ric-code-fg': '#f1f5f9',
+  '--ric-popup-bg': 'rgba(15,23,42,0.5)',
+  '--ric-popup-blur': 'blur(24px) saturate(140%)',
+  '--ric-surface-blur': 'blur(24px) saturate(140%)',
+  '--ric-shadow': '0 8px 32px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.08)',
+  '--ric-radius': '12px',
+  '--ric-md-heading': '#93c5fd',
+  '--ric-md-emphasis': '#fbbf24',
+  '--ric-md-link': '#60a5fa',
+  '--ric-md-url': '#94a3b8',
+  '--ric-md-code-bg': 'rgba(255,255,255,0.08)',
+  '--ric-md-quote': '#94a3b8',
+  '--ric-md-marker': '#94a3b8',
+  '--ric-md-meta': '#94a3b8',
+  'color-scheme': 'dark',
+};
+
+// prefers-reduced-transparency で glass/glass-dark に上書きするオパーク (不透明) セット
+// (2.0.0-alpha.18)。テーマ変数は applyTheme が inline style として当てるため、CSS 側の
+// `@media (prefers-reduced-transparency: reduce)` では上書きできない — 呼び出し時点で
+// 判定し、該当すればこのセットをベースのテーマ変数にマージしてから適用する
+// (下の `prefersReducedTransparency`/`applyTheme` 参照)。
+const GLASS_REDUCED_TRANSPARENCY: Record<'glass' | 'glass-dark', ThemeVars> = {
+  glass: {
+    '--ric-surface-blur': 'none',
+    '--ric-popup-blur': 'none',
+    '--ric-color-control': '#f1f5f9',
+    '--ric-popup-bg': '#ffffff',
+    '--ric-color-border': '#cbd5e1',
+  },
+  'glass-dark': {
+    '--ric-surface-blur': 'none',
+    '--ric-popup-blur': 'none',
+    '--ric-color-control': '#1e293b',
+    '--ric-popup-bg': '#0f172a',
+    '--ric-color-border': '#334155',
+  },
+};
+
 // ── density → 寸法変数 ──
 
 const SIZE_VARS_COMFORTABLE: ThemeVars = { '--ric-gap': '6px', '--ric-pad-x': '14px', '--ric-pad-y': '8px', '--ric-control-h': '36px' };
@@ -188,7 +287,7 @@ const FONT_VARS_MD: ThemeVars = { '--ric-font-size': '14px' };
 const FONT_VARS_LG: ThemeVars = { '--ric-font-size': '16px' };
 
 // 有効な名前一覧 (無効値検知 + warn メッセージ組み立ての両方に使う、2.0.0-alpha.7)。
-const THEME_NAMES: readonly ThemeName[] = ['light', 'dark', 'teal', 'cyber', 'aqua'];
+const THEME_NAMES: readonly ThemeName[] = ['light', 'dark', 'teal', 'cyber', 'aqua', 'glass', 'glass-dark'];
 const DENSITY_NAMES: readonly DensityName[] = ['comfortable', 'compact', 'tight'];
 const FONT_SIZE_NAMES: readonly FontSizeName[] = ['sm', 'md', 'lg'];
 
@@ -211,7 +310,34 @@ const warnIfInvalidName = <T extends string>(kind: string, value: T | ThemeVars 
 const resolveColorVars = (theme: ThemeName | ThemeVars | undefined): ThemeVars => {
   if (theme && typeof theme === 'object') return theme;
   warnIfInvalidName('theme', theme, THEME_NAMES, 'light');
-  return theme === 'dark' ? COLOR_VARS_DARK : theme === 'teal' ? COLOR_VARS_TEAL : theme === 'cyber' ? COLOR_VARS_CYBER : theme === 'aqua' ? COLOR_VARS_AQUA : COLOR_VARS_LIGHT;
+  return theme === 'dark'
+    ? COLOR_VARS_DARK
+    : theme === 'teal'
+      ? COLOR_VARS_TEAL
+      : theme === 'cyber'
+        ? COLOR_VARS_CYBER
+        : theme === 'aqua'
+          ? COLOR_VARS_AQUA
+          : theme === 'glass'
+            ? COLOR_VARS_GLASS
+            : theme === 'glass-dark'
+              ? COLOR_VARS_GLASS_DARK
+              : COLOR_VARS_LIGHT;
+};
+
+// prefers-reduced-transparency の判定 (2.0.0-alpha.18)。matchMedia が無い環境 (jsdom 等) や
+// 例外を投げる環境では「reduce ではない」として扱う (判定不能なら透明のまま = 見た目が
+// 変わらない側にフォールバックする。silent failure を増やさない方針はコアの isDevMode と同じ)。
+// **一発勝負であることに注意**: ここで読むのは applyTheme が呼ばれた瞬間の設定値であり、
+// 以後の設定変更を継続監視するものではない。ライブ追従が要る consumer は
+// `matchMedia('(prefers-reduced-transparency: reduce)').addEventListener('change', ...)`
+// を自前で張り、変化のたびに applyTheme を呼び直す (docs/TUTORIAL.md §6 にスニペットあり)。
+const prefersReducedTransparency = (): boolean => {
+  try {
+    return typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-transparency: reduce)').matches;
+  } catch {
+    return false;
+  }
 };
 
 const resolveSizeVars = (density: DensityName | ThemeVars | undefined): ThemeVars => {
@@ -267,6 +393,13 @@ export const applyTheme = (el: Element, opts: ApplyThemeOptions = {}): void => {
     return;
   }
   const vars = computeThemeVars(opts);
+  // glass/glass-dark を **文字列名で** 指定した場合のみ、OS の prefers-reduced-transparency
+  // 設定を見て不透明な上書きセットをマージする (2.0.0-alpha.18)。ThemeVars オブジェクト
+  // (自前のカスタムテーマ) は対象外 — どの上書きセットを使うべきか判別できないため。
+  const { theme } = opts;
+  if ((theme === 'glass' || theme === 'glass-dark') && prefersReducedTransparency()) {
+    Object.assign(vars, GLASS_REDUCED_TRANSPARENCY[theme]);
+  }
   const style = (el as HTMLElement).style;
   // vars のキーは常に `--ric-*` か `color-scheme` のいずれか (COLOR_VARS_*/SIZE_VARS_*/
   // FONT_VARS_* の定義・createTheme の overrides とも同じ形)。setProperty はどちらの
