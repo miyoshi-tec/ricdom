@@ -84,6 +84,14 @@ through the UI.
   incl. frosted glass for transparent Electron windows) and examples count (5 → 7, the
   stale "five" predated `md-editor.html`'s addition — corrected while touching this line).
 
+### Sizes
+
+- Measured with `gzip -9 -c FILE | wc -c`: `dist/ricdom-ui.iife.min.js` 25,637 → 26,164
+  bytes (+527B: two palettes, the `--ric-surface-blur` token in all seven, and the
+  `backdrop-filter` declarations on the floating surfaces); `dist/ricdom-ui.css` 6,917 →
+  6,966 bytes; `dist/ricdom.iife.min.js` unchanged at 4,877B; `dist/ricdom-md-editor.iife.min.js`
+  unchanged at 4,566B.
+
 ## [2.0.0-alpha.17] — not yet published
 
 Raccoon Memo (pilot #5) adopted alpha.16 the same day it was documented and sent back four
