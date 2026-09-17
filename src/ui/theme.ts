@@ -40,6 +40,11 @@ const COLOR_VARS_LIGHT: ThemeVars = {
   '--ric-color-fg': '#111827',
   '--ric-color-fg-muted': '#6b7280',
   '--ric-color-bg': '#f9fafb',
+  // フローティング/コンテナ面 (.ric-panel/.ric-tweak) の背景トークン (2.0.0-alpha.20、
+  // Trend Guard #16 で発覚した「透明ウィンドウ recipe が panel の見た目まで消す」バグの
+  // 修正、詳細は cssTemplates.ts の PANEL_CSS/TWEAK_CSS 直前のコメント参照)。既存 5 テーマ
+  // は `--ric-color-bg` と完全に同じ値 (リテラルコピー) にして見た目を一切変えない。
+  '--ric-panel-bg': '#f9fafb',
   '--ric-color-control': '#ffffff',
   '--ric-color-border': '#e5e7eb',
   '--ric-color-accent': '#2563eb',
@@ -72,6 +77,7 @@ const COLOR_VARS_DARK: ThemeVars = {
   '--ric-color-fg': '#e5e7eb',
   '--ric-color-fg-muted': '#9ca3af',
   '--ric-color-bg': '#111318',
+  '--ric-panel-bg': '#111318',
   '--ric-color-control': '#1a1d24',
   '--ric-color-border': '#2a2f3a',
   '--ric-color-accent': '#60a5fa',
@@ -99,6 +105,7 @@ const COLOR_VARS_TEAL: ThemeVars = {
   '--ric-color-fg': '#0d2b24',
   '--ric-color-fg-muted': '#46605a',
   '--ric-color-bg': 'linear-gradient(135deg, #e6f9f0 0%, #f2f9f7 40%, #fef3c7 70%, #fce7f3 100%)',
+  '--ric-panel-bg': 'linear-gradient(135deg, #e6f9f0 0%, #f2f9f7 40%, #fef3c7 70%, #fce7f3 100%)',
   '--ric-color-control': 'rgba(255,255,255,0.9)',
   '--ric-color-border': '#c5ddd8',
   '--ric-color-accent': '#007f6d',
@@ -126,6 +133,8 @@ const COLOR_VARS_CYBER: ThemeVars = {
   '--ric-color-fg': '#e2e8f0',
   '--ric-color-fg-muted': '#7aa8c8',
   '--ric-color-bg':
+    'radial-gradient(ellipse at top left,#5500aa 0%,transparent 50%),radial-gradient(ellipse at top right,#007799 0%,transparent 50%),radial-gradient(ellipse at bottom left,#660033 0%,transparent 50%),radial-gradient(ellipse at bottom right,#003388 0%,transparent 50%),#04070f',
+  '--ric-panel-bg':
     'radial-gradient(ellipse at top left,#5500aa 0%,transparent 50%),radial-gradient(ellipse at top right,#007799 0%,transparent 50%),radial-gradient(ellipse at bottom left,#660033 0%,transparent 50%),radial-gradient(ellipse at bottom right,#003388 0%,transparent 50%),#04070f',
   '--ric-color-control': 'rgba(10,18,40,0.5)',
   '--ric-color-border': 'rgba(80,200,255,0.65)',
@@ -159,6 +168,8 @@ const COLOR_VARS_AQUA: ThemeVars = {
   '--ric-color-fg': '#1a2c3c',
   '--ric-color-fg-muted': '#5c7a8a',
   '--ric-color-bg':
+    'radial-gradient(ellipse at top left,#c0e8f8 0%,transparent 55%),radial-gradient(ellipse at top right,#a0d4f0 0%,transparent 55%),radial-gradient(ellipse at bottom left,#7ab8e8 0%,transparent 55%),radial-gradient(ellipse at bottom right,#90c8e0 0%,transparent 55%),#a0d8f0',
+  '--ric-panel-bg':
     'radial-gradient(ellipse at top left,#c0e8f8 0%,transparent 55%),radial-gradient(ellipse at top right,#a0d4f0 0%,transparent 55%),radial-gradient(ellipse at bottom left,#7ab8e8 0%,transparent 55%),radial-gradient(ellipse at bottom right,#90c8e0 0%,transparent 55%),#a0d8f0',
   '--ric-color-control': 'rgba(255,255,255,0.5)',
   '--ric-color-border': 'rgba(100,170,210,0.35)',
@@ -205,6 +216,12 @@ const COLOR_VARS_GLASS: ThemeVars = {
   '--ric-color-fg': '#111827',
   '--ric-color-fg-muted': '#4b5563',
   '--ric-color-bg': 'linear-gradient(135deg, #dbeafe 0%, #fce7f3 45%, #d1fae5 100%)',
+  // `--ric-color-bg` とは独立した値 (2.0.0-alpha.20、Trend Guard #16)。Electron 透明ウィンドウ
+  // recipe (TUTORIAL.md §6) は `--ric-color-bg` だけを 'transparent' に上書きするが、
+  // .ric-panel/.ric-tweak はこのトークンを読むため、ページ背景を透明にしても panel の
+  // 表面 (surface) は rgba(255,255,255,0.45) の半透明白のまま残る — デスクトップの上に
+  // すりガラスの panel が浮く、これが本来の glass の見た目。
+  '--ric-panel-bg': 'rgba(255,255,255,0.45)',
   '--ric-color-control': 'rgba(255,255,255,0.55)',
   '--ric-color-border': 'rgba(255,255,255,0.6)',
   '--ric-color-accent': '#2563eb',
@@ -235,6 +252,8 @@ const COLOR_VARS_GLASS_DARK: ThemeVars = {
   '--ric-color-fg': '#f1f5f9',
   '--ric-color-fg-muted': '#94a3b8',
   '--ric-color-bg': 'linear-gradient(135deg, #0f172a 0%, #312e81 50%, #134e4a 100%)',
+  // COLOR_VARS_GLASS の --ric-panel-bg 直前のコメント参照 (2.0.0-alpha.20、Trend Guard #16)。
+  '--ric-panel-bg': 'rgba(15,23,42,0.5)',
   '--ric-color-control': 'rgba(15,23,42,0.45)',
   '--ric-color-border': 'rgba(255,255,255,0.18)',
   '--ric-color-accent': '#60a5fa',
@@ -279,6 +298,10 @@ const GLASS_REDUCED_TRANSPARENCY: Record<'glass' | 'glass-dark', ThemeVars> = {
     '--ric-color-control': '#f1f5f9',
     '--ric-popup-bg': '#ffffff',
     '--ric-color-border': '#cbd5e1',
+    // .ric-panel/.ric-tweak も他のフローティング面と同じくオパーク化する (2.0.0-alpha.20)。
+    // --ric-color-control の reduced 値 (#f1f5f9) と揃える — どちらも「不透明なコントロール面」
+    // という同じ役割の色なので、別の色を新設せず既存の判断を再利用する。
+    '--ric-panel-bg': '#f1f5f9',
   },
   'glass-dark': {
     '--ric-surface-blur': 'none',
@@ -286,6 +309,7 @@ const GLASS_REDUCED_TRANSPARENCY: Record<'glass' | 'glass-dark', ThemeVars> = {
     '--ric-color-control': '#1e293b',
     '--ric-popup-bg': '#0f172a',
     '--ric-color-border': '#334155',
+    '--ric-panel-bg': '#1e293b',
   },
 };
 

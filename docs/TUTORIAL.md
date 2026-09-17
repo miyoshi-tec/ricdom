@@ -307,6 +307,10 @@ desktop behind your UI instead of that gradient — override `--ric-color-bg` to
 // main process
 const win = new BrowserWindow({
   backgroundMaterial: 'acrylic', // or 'mica' | 'tabbed' — Windows 11 22H2+, Electron 22+
+  backgroundColor: '#00000000', // fully transparent — an opaque backgroundColor (even the
+  // Electron default) blocks acrylic/mica entirely on Windows, rendering `glass` as solid
+  // white instead of translucent. If you already set backgroundColor for another reason,
+  // change it to '#00000000' (or drop the option) rather than adding a second one.
   // macOS: vibrancy: 'under-window' (or 'sidebar') instead of backgroundMaterial
   // Linux / other: best effort — transparent: true, frame: false
 });
@@ -325,6 +329,16 @@ This `createTheme('glass', ...)` form keeps the same `prefers-reduced-transparen
 fallback and `data-ricdom-theme="glass"` attribute as passing the plain string `'glass'`
 would (`2.0.0-alpha.19`, via the `--ric-theme` marker every bundled palette carries — see
 SPEC.md §8) — you don't lose either by overriding `--ric-color-bg`.
+
+This override only clears the *page* background — `--ric-color-bg` is read solely by
+`[data-ricdom-theme]`, the paint rule on the element you called `applyTheme` on. Every
+floating/container surface (dialog, popup, toast, tooltip, dropdown, `uiPanel`, the tweak
+panel) reads its own surface token instead (`--ric-color-control`, `--ric-popup-bg`,
+`--ric-panel-bg`, `--ric-tooltip-bg` — see SPEC.md §8), so those keep their own translucent
+`glass`/`glass-dark` background and stay visible over whatever desktop shows through. As of
+`2.0.0-alpha.20` this is true for `uiPanel`/the tweak panel too — before that, both read
+`--ric-color-bg` directly and went fully transparent under this exact recipe (reported by
+Trend Guard, #16).
 
 The OS-level window material (`backgroundMaterial`/`vibrancy`/`transparent`) supplies the
 blur of the *desktop* behind your whole window; `--ric-surface-blur` adds a second,

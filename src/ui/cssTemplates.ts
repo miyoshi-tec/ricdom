@@ -813,6 +813,19 @@ const GRID_CSS = `
 // v1 は make_css_vars 由来のテーマ上書き props を持ったが、v2 の uiPanel はそれを持たない
 // (設計書 §13)。disabled の見た目 (opacity) は JS 側で inline style を計算せず、
 // `inert` 属性が付いた panel に対する CSS セレクタで表現する。
+//
+// **背景トークンの原則 (2.0.0-alpha.20、Trend Guard #16、SPEC §8 に FACT として明記)**:
+// フローティング/コンテナ面は「表面 (surface)」トークン (`--ric-color-control` /
+// `--ric-popup-bg` / `--ric-panel-bg` 等) を読む、`--ric-color-bg` (ページ背景トークン) は
+// 絶対に読まない。理由: TUTORIAL.md §6 の Electron 透明ウィンドウ recipe は
+// `createTheme('glass', { '--ric-color-bg': 'transparent' })` で **ページ背景だけ** を
+// 透明にする設計 (SPEC §8「--ric-color-bg: transparent works」FACT) — .ric-panel がこの
+// 原則を破って `${bg}` (= `--ric-color-bg`) を直接読んでいたため、その recipe を適用した
+// 瞬間にすべての panel の表面まで消えてしまっていた (glass-dark では ほぼ白に近い
+// `--ric-color-fg` の文字が背景ごと透けて読めなくなる実害)。`--ric-panel-bg` は 5 テーマで
+// `--ric-color-bg` と全く同じ値 (見た目は不変)、glass/glass-dark だけ独立した半透明値を持つ
+// (theme.ts の COLOR_VARS_GLASS/COLOR_VARS_GLASS_DARK 参照)。フォールバックの
+// `var(--ric-panel-bg, ${bg})` は `--ric-panel-bg` を持たない完全自前パレットのための保険。
 const PANEL_CSS = `
 .ric-panel {
   display: flex;
@@ -820,7 +833,7 @@ const PANEL_CSS = `
   gap: ${gm};
   color: ${fg};
   font-size: var(--ric-font-size, inherit);
-  background: ${bg};
+  background: var(--ric-panel-bg, ${bg});
   border: ${b1};
   border-radius: ${r};
   padding: ${gm};
@@ -1198,12 +1211,17 @@ const INLINE_MENU_CSS = `
 // folder は v1 のネイティブ <details> (::before の三角形 + rotate) を廃止し、
 // createAccordion と同じ <button> + grid-template-rows トリックに置き換えた
 // (tweakPanel.ts のヘッダコメント参照)。
+// .ric-tweak 自身も SPEC §8 の「フローティング面」一覧に入っており (backdrop-filter:
+// ${sbf} を持つ)、.ric-panel と同じ「コンテナ面」の役割なので同じ --ric-panel-bg を読む
+// (2.0.0-alpha.20、PANEL_CSS 直前のコメント参照。専用トークンを新設せず既存の
+// --ric-panel-bg を再利用する — tweak は見た目・役割とも panel と同種の「囲われた
+// コンテンツ面」であり、別トークンにする理由が無い)。
 const TWEAK_CSS = `
 .ric-tweak {
   display: flex;
   flex-direction: column;
   color: ${fg};
-  background: ${bg};
+  background: var(--ric-panel-bg, ${bg});
   border: ${b1};
   border-radius: ${r};
   padding: ${g} 0;

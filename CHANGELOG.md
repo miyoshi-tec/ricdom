@@ -5,6 +5,76 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.0.0-alpha.20] — not yet published
+
+Reported by Trend Guard (pilot #2, report #16, `2026-09-17`, against `alpha.19`): the
+documented Electron transparent-window recipe (`applyTheme(el, { theme: createTheme('glass',
+{ '--ric-color-bg': 'transparent' }) })`, `docs/TUTORIAL.md` §6) hollowed out every
+`uiPanel`/tweak-panel surface, not just the page background, because `.ric-panel`/`.ric-tweak`
+read `--ric-color-bg` directly instead of a dedicated surface token. On `glass` this happened
+to look fine over a light wallpaper; on `glass-dark` the near-white `--ric-color-fg` text
+became unreadable over a bright wallpaper. Trend Guard's workaround:
+`[data-ricdom-theme="glass"] .ric-panel, [data-ricdom-theme="glass-dark"] .ric-panel {
+background: var(--ric-color-control); }`. They also found `BrowserWindow({ backgroundColor:
+'#ffffff' })` blocks acrylic entirely (renders solid white) — an opaque `backgroundColor`
+(even Electron's own default) does this independent of `--ric-color-bg`.
+
+### Added
+
+- **`--ric-panel-bg` CSS variable** (`src/ui/theme.ts`) — the surface background token for
+  `.ric-panel` and the tweak panel (`.ric-tweak`), present on all seven bundled palettes.
+  Identical to `--ric-color-bg` on the five pre-`glass` themes (verified by a parity test,
+  see Fixed below); an independent translucent value on `glass`/`glass-dark`
+  (`rgba(255,255,255,0.45)`/`rgba(15,23,42,0.5)`) so the surface stays visible when a
+  consumer clears `--ric-color-bg` for a transparent Electron window.
+  `GLASS_REDUCED_TRANSPARENCY` sets it to an opaque color for both glass themes
+  (`#f1f5f9`/`#1e293b`, matching `--ric-color-control`'s reduced value).
+
+### Fixed
+
+- **`.ric-panel`/`.ric-tweak` no longer go transparent under the Electron recipe** (#16) —
+  both now read `background: var(--ric-panel-bg, var(--ric-color-bg))` instead of
+  `--ric-color-bg` directly (`src/ui/cssTemplates.ts`, `PANEL_CSS`/`TWEAK_CSS`). The fallback
+  keeps a fully custom `ThemeVars` palette that omits `--ric-panel-bg` working exactly as
+  before. Audited every other `${bg}`/`var(--ric-color-bg)` background rule in
+  `cssTemplates.ts` for the same class of bug (floating/container surface reading the page
+  background token) — `.ric-panel`/`.ric-tweak` were the only two floating surfaces (of the
+  eight that get `backdrop-filter` under `glass`) doing this; the rest already read a
+  surface token (`--ric-color-control` for popup/dropdown/inline-menu, `--ric-popup-bg` for
+  dialog/toast, `--ric-tooltip-bg` for tooltip). The remaining `${bg}` usages
+  (`[data-ricdom-theme]`'s own page paint, the splitter collapse button, accordion
+  header/body, the tabs pill bar, the tweak JSON preview box, and the tweak folder header)
+  are either the intentional page-background paint or in-flow decorative fills outside the
+  glass floating-surface set — left unchanged, no consumer report against them.
+- **Existing 5 themes render pixel-identically**: measured `--ric-panel-bg === --ric-color-bg`
+  for `light`/`dark`/`teal`/`cyber`/`aqua` (`tests/ui/theme.test.ts`), and `.ric-panel`'s
+  computed `background-color` unchanged (`tests/browser/uiGlassTheme.test.ts`).
+- Tests: `tests/ui/theme.test.ts` — token-completeness (`--ric-panel-bg` added to
+  `CORE_TOKEN_KEYS`), the 5-theme parity guard above, an independence check (overriding
+  `--ric-color-bg` to `'transparent'` leaves `--ric-panel-bg` untouched), a
+  reduced-transparency opacity check, and an `exportTheme` round-trip.
+  `tests/browser/uiGlassTheme.test.ts` — a real-browser case rendering a `uiPanel` under
+  `createTheme('glass-dark', { '--ric-color-bg': 'transparent' })` and asserting the panel's
+  computed `background-color` has `alpha > 0` while the theme root's is
+  `rgba(0, 0, 0, 0)` (confirmed RED before the CSS fix, GREEN after), plus the
+  light/dark parity check above.
+
+### Docs
+
+- `docs/TUTORIAL.md` §6: added `backgroundColor: '#00000000'` to the `BrowserWindow` snippet
+  (an opaque `backgroundColor` blocks acrylic/mica on Windows regardless of
+  `--ric-color-bg`), and a paragraph on which surfaces read which token and why the Electron
+  recipe only clears the page paint.
+- `docs/SPEC.md` §8: documented `--ric-panel-bg`, and added a FACT ("floating/container
+  surfaces read a *surface* token, never `--ric-color-bg`") listing which token each surface
+  reads and requiring any new floating/container CSS rule to follow the same principle.
+
+### Sizes
+
+- Measured with `gzip -9 -c FILE | wc -c`: `dist/ricdom-ui.iife.min.js` 26,204 → 26,272
+  bytes (+68B: the token in seven palettes and the reduced-transparency override);
+  `dist/ricdom-ui.css` 6,966 → 6,973 bytes; `dist/ricdom.iife.min.js` unchanged at 4,877B.
+
 ## [2.0.0-alpha.19] — not yet published
 
 Found by the maintainer while drafting the consumer letter for `glass`/`glass-dark`

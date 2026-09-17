@@ -800,7 +800,8 @@ Color/theme (from the `theme` option — one of the seven bundled names, or your
 `--ric-color-border`, `--ric-color-accent`, `--ric-color-accent-fg`, `--ric-tooltip-bg`,
 `--ric-tooltip-fg`, `--ric-code-bg`, `--ric-code-fg`, `--ric-shadow`, `--ric-radius`,
 `--ric-surface-blur` (new in `2.0.0-alpha.18`, see below), `--ric-theme` (new in
-`2.0.0-alpha.19`, see below), `color-scheme` — plus, on `cyber`/`aqua`/`glass`/`glass-dark`
+`2.0.0-alpha.19`, see below), `--ric-panel-bg` (new in `2.0.0-alpha.20`, see below),
+`color-scheme` — plus, on `cyber`/`aqua`/`glass`/`glass-dark`
 only, `--ric-popup-bg`, `--ric-popup-blur`; `cyber`/`aqua` also set `--ric-panel-shadow`,
 `--ric-duration`, `--ric-easing` (other themes fall back to the CSS defaults baked into
 `ricdom-ui.css`, via `var(--x, fallback)`, rather than redeclaring them).
@@ -916,7 +917,40 @@ paint is `color`/`font-size` (§ below) — there is no other opaque background 
 the attribute selector that would block it. This is the mechanism a `glass`/`glass-dark`
 consumer uses to let an Electron `BrowserWindow`'s own transparency (`backgroundMaterial:
 'acrylic'`/`'mica'`, `vibrancy`, or `transparent: true`) show through instead of the
-theme's built-in wallpaper-gradient `--ric-color-bg` — see TUTORIAL.md §6.
+theme's built-in wallpaper-gradient `--ric-color-bg` — see TUTORIAL.md §6. `backgroundColor`
+must also be transparent (e.g. `'#00000000'`) — an opaque `backgroundColor` on the
+`BrowserWindow` (even Electron's own default) blocks acrylic/mica outright on Windows,
+independent of anything `--ric-color-bg` does.
+
+### FACT: floating/container surfaces read a *surface* token, never `--ric-color-bg`
+(`--ric-panel-bg`, `2.0.0-alpha.20`)
+
+The FACT above means `--ric-color-bg` overriding to `'transparent'` only clears the *page*
+paint (`[data-ricdom-theme]`). Every floating or container surface in `ricdom-ui.css` is
+designed to keep its own opacity regardless of what the page background is set to, by
+reading a dedicated surface token instead: `.ric-dialog`/`.ric-toast__item` read
+`var(--ric-popup-bg, var(--ric-color-bg))`, `.ric-popup__body`/`.ric-dropdown__body`/
+`.ric-inline-menu` read `--ric-color-control`, `.ric-tooltip__popup` reads
+`--ric-tooltip-bg`, and — new in `2.0.0-alpha.20` — `.ric-panel`/the tweak panel
+(`.ric-tweak`) read `var(--ric-panel-bg, var(--ric-color-bg))`. `--ric-panel-bg` is a new
+public token, present on all seven bundled palettes (`exportTheme`/`exportSettings` round-trip
+it like any other `--ric-*` key): identical to that theme's `--ric-color-bg` value on the
+five pre-`glass` themes (`light`/`dark`/`teal`/`cyber`/`aqua`), so their rendering is
+pixel-unchanged; an independent translucent value on `glass`/`glass-dark`
+(`rgba(255,255,255,0.45)` / `rgba(15,23,42,0.5)`) so the panel keeps a visible surface over
+a transparent page background. `GLASS_REDUCED_TRANSPARENCY` (see the
+`prefers-reduced-transparency` FACT below) also sets an opaque `--ric-panel-bg` for both
+glass themes, matching `--ric-color-control`'s reduced value.
+
+Before this fix, `.ric-panel`/`.ric-tweak` read `--ric-color-bg` directly — so the Electron
+recipe two FACTs up (which exists specifically to make `--ric-color-bg` transparent) hollowed
+out every panel's surface along with the page, leaving only its `backdrop-filter` blur. On
+`glass-dark` this made the near-white `--ric-color-fg` text unreadable over a bright
+wallpaper (reported by Trend Guard, pilot #2, report #16, `2026-09-17`). Any *new*
+floating/container CSS rule must follow this same principle: read a surface token
+(`--ric-color-control`, `--ric-popup-bg`, `--ric-panel-bg`, or a dedicated token like
+`--ric-tooltip-bg`), never `--ric-color-bg`/`${bg}` directly — see the comment above
+`PANEL_CSS` in `src/ui/cssTemplates.ts`.
 
 ### `color-scheme` and native controls
 

@@ -146,6 +146,7 @@ const CORE_TOKEN_KEYS = [
   '--ric-shadow',
   '--ric-radius',
   '--ric-surface-blur',
+  '--ric-panel-bg',
   '--ric-md-heading',
   '--ric-md-emphasis',
   '--ric-md-link',
@@ -184,6 +185,69 @@ describe('applyTheme: 7 テーマすべてが共通トークン一式を過不�
       applyTheme(el, { theme });
       expect(el.style.getPropertyValue('--ric-surface-blur'), theme).toBe('none');
     }
+  });
+});
+
+// `--ric-panel-bg` (2.0.0-alpha.20、Trend Guard #16): .ric-panel/.ric-tweak が読む
+// 「コンテナ面」トークン。cssTemplates.ts の PANEL_CSS 直前のコメント参照 —
+// フローティング/コンテナ面は `--ric-color-bg` (ページ背景) を直接読んではいけない、という
+// 原則の実装。既存 5 テーマは --ric-color-bg と完全に同じ値でなければならない (見た目不変の
+// 回帰ガード)。glass/glass-dark だけ独立した半透明値を持つ。
+describe('applyTheme: --ric-panel-bg (パネル/tweak の表面トークン、2.0.0-alpha.20)', () => {
+  it('既存 5 テーマは --ric-panel-bg が --ric-color-bg と完全に一致する (見た目不変の回帰ガード)', () => {
+    for (const theme of ['light', 'dark', 'teal', 'cyber', 'aqua'] as const) {
+      const el = document.createElement('div');
+      applyTheme(el, { theme });
+      expect(el.style.getPropertyValue('--ric-panel-bg'), theme).toBe(el.style.getPropertyValue('--ric-color-bg'));
+    }
+  });
+
+  it('glass/glass-dark は --ric-panel-bg が --ric-color-bg と異なる独立した半透明値を持つ', () => {
+    const glass = document.createElement('div');
+    applyTheme(glass, { theme: 'glass' });
+    expect(glass.style.getPropertyValue('--ric-panel-bg')).toBe('rgba(255,255,255,0.45)');
+    expect(glass.style.getPropertyValue('--ric-panel-bg')).not.toBe(glass.style.getPropertyValue('--ric-color-bg'));
+
+    const glassDark = document.createElement('div');
+    applyTheme(glassDark, { theme: 'glass-dark' });
+    expect(glassDark.style.getPropertyValue('--ric-panel-bg')).toBe('rgba(15,23,42,0.5)');
+    expect(glassDark.style.getPropertyValue('--ric-panel-bg')).not.toBe(glassDark.style.getPropertyValue('--ric-color-bg'));
+  });
+
+  // Electron 透明ウィンドウ recipe (TUTORIAL.md §6) を適用しても --ric-panel-bg は
+  // --ric-color-bg を上書きした影響を一切受けない (別々の CSS カスタムプロパティなので当然
+  // だが、これが本バグ修正の要点そのものなので明示的に確認する)。
+  it('--ric-color-bg を transparent に上書きしても --ric-panel-bg は影響を受けない (Electron recipe)', () => {
+    const el = document.createElement('div');
+    applyTheme(el, { theme: createTheme('glass-dark', { '--ric-color-bg': 'transparent' }) });
+    expect(el.style.getPropertyValue('--ric-color-bg')).toBe('transparent');
+    expect(el.style.getPropertyValue('--ric-panel-bg')).toBe('rgba(15,23,42,0.5)');
+  });
+
+  it('reduce: true のとき glass/glass-dark は --ric-panel-bg が不透明な色になる (--ric-color-control の reduced 値と同じ)', () => {
+    vi.stubGlobal('matchMedia', (query: string) => ({ matches: true, media: query, addEventListener: () => {}, removeEventListener: () => {} }));
+
+    const glass = document.createElement('div');
+    applyTheme(glass, { theme: 'glass' });
+    expect(glass.style.getPropertyValue('--ric-panel-bg')).toBe('#f1f5f9');
+    expect(glass.style.getPropertyValue('--ric-panel-bg')).not.toContain('rgba');
+
+    const glassDark = document.createElement('div');
+    applyTheme(glassDark, { theme: 'glass-dark' });
+    expect(glassDark.style.getPropertyValue('--ric-panel-bg')).toBe('#1e293b');
+
+    vi.unstubAllGlobals();
+  });
+
+  it('exportTheme で --ric-panel-bg が往復する (glass テーマ)', () => {
+    const el = document.createElement('div');
+    applyTheme(el, { theme: 'glass' });
+    const exported = exportTheme(el);
+    expect(exported['--ric-panel-bg']).toBe('rgba(255,255,255,0.45)');
+
+    const el2 = document.createElement('div');
+    applyTheme(el2, { theme: exported });
+    expect(el2.style.getPropertyValue('--ric-panel-bg')).toBe('rgba(255,255,255,0.45)');
   });
 });
 

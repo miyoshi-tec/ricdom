@@ -171,3 +171,47 @@ describe('実ブラウザ: 透明ウィンドウ対応 (createTheme override、2
     expect(getComputedStyle(document.querySelector('.ric-dialog')!).backdropFilter).toContain('blur(');
   });
 });
+
+// Trend Guard #16 (パイロット第 2 号、2026-09-17、alpha.19): TUTORIAL.md §6 の Electron
+// recipe (`createTheme('glass-dark', { '--ric-color-bg': 'transparent' })`) を適用すると、
+// `.ric-panel` も `--ric-color-bg` を直接読んでいたため surface ごと透明になり、
+// glass-dark のほぼ白い `--ric-color-fg` テキストが (壁紙次第で) 読めなくなっていた。
+// `--ric-panel-bg` (2.0.0-alpha.20) 導入後は、ページ (`[data-ricdom-theme]`) 自身は
+// 透明のままで、`.ric-panel` の表面だけは不透明度を保つ。
+const parseAlpha = (rgba: string): number => {
+  const m = rgba.match(/rgba?\(\s*[\d.]+\s*,\s*[\d.]+\s*,\s*[\d.]+\s*(?:,\s*([\d.]+)\s*)?\)/);
+  if (!m) throw new Error(`rgba(...) の形式ではない: ${rgba}`);
+  return m[1] === undefined ? 1 : Number(m[1]);
+};
+
+describe('実ブラウザ: .ric-panel の表面は透明ウィンドウ recipe の影響を受けない (Trend Guard #16、2.0.0-alpha.20)', () => {
+  it('glass-dark + --ric-color-bg: transparent でも panel の computed background-color は不透明 (alpha > 0)、ページ自身は透明のまま', async () => {
+    const app = setupApp();
+    applyTheme(app, { theme: createTheme('glass-dark', { '--ric-color-bg': 'transparent' }) });
+    createApp('#app', {}, () => uiPanel({ children: ['本文'] }));
+    await flush();
+
+    // ページ (theme 適用先の要素自身) の背景は recipe どおり透明。
+    expect(getComputedStyle(app).backgroundColor).toBe('rgba(0, 0, 0, 0)');
+
+    // panel の表面は --ric-panel-bg (rgba(15,23,42,0.5)) を読み続けるので不透明度が残る
+    // (修正前は --ric-color-bg を直接読んでいたため、ここが rgba(0, 0, 0, 0) になっていた
+    // = このアサーションが RED になることを修正前のコードで確認済み)。
+    const panelBg = getComputedStyle(app.querySelector('.ric-panel')!).backgroundColor;
+    expect(parseAlpha(panelBg)).toBeGreaterThan(0);
+  });
+
+  it('light/dark テーマでは panel の computed background-color がテーマの色そのまま (見た目不変の回帰ガード)', async () => {
+    const light = setupApp();
+    applyTheme(light, { theme: 'light' });
+    createApp('#app', {}, () => uiPanel({ children: ['本文'] }));
+    await flush();
+    expect(getComputedStyle(light.querySelector('.ric-panel')!).backgroundColor).toBe('rgb(249, 250, 251)'); // #f9fafb
+
+    const dark = setupApp();
+    applyTheme(dark, { theme: 'dark' });
+    createApp('#app', {}, () => uiPanel({ children: ['本文'] }));
+    await flush();
+    expect(getComputedStyle(dark.querySelector('.ric-panel')!).backgroundColor).toBe('rgb(17, 19, 24)'); // #111318
+  });
+});
