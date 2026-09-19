@@ -5,6 +5,51 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.0.0-alpha.22] — not yet published
+
+Reported by Trend Guard (pilot #2, follow-up report #2, `2026-09-19`, against `alpha.20`):
+`glass-dark`'s default surface alphas failed WCAG AA contrast against a bright (worst-case
+white) wallpaper behind a transparent Electron window.
+
+### Changed
+
+- **Raised the `glass`/`glass-dark` translucent surface alphas** (`src/ui/theme.ts`) so the
+  worst-case composited color (`glass-dark` over a pure-white backdrop, `glass` over a pure
+  black one — `glass` is light-frost/dark-text, so *lighter* backdrops only help it) clears
+  WCAG AA (`4.5:1`) against that theme's `--ric-color-fg`. The RGB base of each token
+  (`rgb(15,23,42)` for `glass-dark`, `rgb(255,255,255)` for `glass`) is unchanged — only the
+  alpha channel moved:
+
+  | theme | token | old α | old ratio | new α | new ratio |
+  | --- | --- | --- | --- | --- | --- |
+  | `glass-dark` | `--ric-panel-bg` | `0.5` | `3.11:1` | `0.72` | `6.51:1` |
+  | `glass-dark` | `--ric-popup-bg` | `0.5` | `3.11:1` | `0.80` | `8.70:1` |
+  | `glass-dark` | `--ric-color-control` | `0.45` | `2.68:1` | `0.65` | `5.08:1` |
+  | `glass` | `--ric-panel-bg` | `0.45` | `3.73:1` | `0.55` | `5.29:1` |
+  | `glass` | `--ric-popup-bg` | `0.5` | `4.46:1` | `0.55` | `5.29:1` |
+
+  (`glass`'s `--ric-color-control` was already `0.55`/`5.29:1` and is unchanged.) See the
+  new contrast FACT in SPEC.md §8 for the full method and table.
+- Tests: `tests/ui/theme.test.ts` adds a pure-math WCAG contrast contract — composites each
+  `glass`/`glass-dark` surface token over its worst-case backdrop (sRGB alpha blend, no
+  linearization) and asserts `≥ 4.5:1` via the standard relative-luminance formula, so a
+  future palette tweak is graded on the actual ratio rather than a specific alpha value.
+  Confirmed this contract fails against the pre-`alpha.22` values (`3.11:1`/`2.68:1`/
+  `3.11:1`) before the fix and passes after. Existing literal-value assertions for
+  `--ric-panel-bg` (`glass`/`glass-dark`) updated to the new alphas.
+
+### Docs
+
+- SPEC.md §8: new FACT with the contrast table above and the "lower these alphas via
+  `createTheme` at your own contrast risk" guidance.
+- TUTORIAL.md §6: two additions — containers with no background of their own (a header,
+  footer, or status bar you build yourself) sit directly on the wallpaper under the
+  transparent-window recipe and need a surface added back (the opposite direction from
+  "remove opaque backgrounds" elsewhere on the page); and a note that Windows 11 itself
+  (not `ricdom` or your app) falls back Acrylic/Mica to a solid color on an inactive window
+  (and under reduced transparency / battery saver / Remote Desktop / a weak GPU) — `win.blur()`
+  does not reproduce this for local testing, only a real focus change does.
+
 ## [2.0.0-alpha.21] — not yet published
 
 Reported by Rancha (pilot #6, `2026-09-17`, against `alpha.20`): `applyTheme(el, { theme:

@@ -300,12 +300,12 @@ describe('applyTheme: --ric-panel-bg (パネル/tweak の表面トークン、2.
   it('glass/glass-dark は --ric-panel-bg が --ric-color-bg と異なる独立した半透明値を持つ', () => {
     const glass = document.createElement('div');
     applyTheme(glass, { theme: 'glass' });
-    expect(glass.style.getPropertyValue('--ric-panel-bg')).toBe('rgba(255,255,255,0.45)');
+    expect(glass.style.getPropertyValue('--ric-panel-bg')).toBe('rgba(255,255,255,0.55)');
     expect(glass.style.getPropertyValue('--ric-panel-bg')).not.toBe(glass.style.getPropertyValue('--ric-color-bg'));
 
     const glassDark = document.createElement('div');
     applyTheme(glassDark, { theme: 'glass-dark' });
-    expect(glassDark.style.getPropertyValue('--ric-panel-bg')).toBe('rgba(15,23,42,0.5)');
+    expect(glassDark.style.getPropertyValue('--ric-panel-bg')).toBe('rgba(15,23,42,0.72)');
     expect(glassDark.style.getPropertyValue('--ric-panel-bg')).not.toBe(glassDark.style.getPropertyValue('--ric-color-bg'));
   });
 
@@ -316,7 +316,7 @@ describe('applyTheme: --ric-panel-bg (パネル/tweak の表面トークン、2.
     const el = document.createElement('div');
     applyTheme(el, { theme: createTheme('glass-dark', { '--ric-color-bg': 'transparent' }) });
     expect(el.style.getPropertyValue('--ric-color-bg')).toBe('transparent');
-    expect(el.style.getPropertyValue('--ric-panel-bg')).toBe('rgba(15,23,42,0.5)');
+    expect(el.style.getPropertyValue('--ric-panel-bg')).toBe('rgba(15,23,42,0.72)');
   });
 
   it('reduce: true のとき glass/glass-dark は --ric-panel-bg が不透明な色になる (--ric-color-control の reduced 値と同じ)', () => {
@@ -338,11 +338,11 @@ describe('applyTheme: --ric-panel-bg (パネル/tweak の表面トークン、2.
     const el = document.createElement('div');
     applyTheme(el, { theme: 'glass' });
     const exported = exportTheme(el);
-    expect(exported['--ric-panel-bg']).toBe('rgba(255,255,255,0.45)');
+    expect(exported['--ric-panel-bg']).toBe('rgba(255,255,255,0.55)');
 
     const el2 = document.createElement('div');
     applyTheme(el2, { theme: exported });
-    expect(el2.style.getPropertyValue('--ric-panel-bg')).toBe('rgba(255,255,255,0.45)');
+    expect(el2.style.getPropertyValue('--ric-panel-bg')).toBe('rgba(255,255,255,0.55)');
   });
 });
 
@@ -657,5 +657,80 @@ describe('exportSettings: theme/density/fontSize のグループ分け + round-t
 
   it('無効な要素を渡すと console.error して 3 つとも空オブジェクトを返す', () => {
     expect(exportSettings(null as unknown as Element)).toEqual({ theme: {}, density: {}, fontSize: {} });
+  });
+});
+
+// glass/glass-dark の半透明面 (panel-bg/popup-bg/control) の WCAG AA コントラスト契約
+// (2.0.0-alpha.22、Trend Guard 追報 2)。半透明の rgba() は「何の上に乗るか」次第で
+// 実効色が変わるため、テーマ CSS 変数の文字列値そのものを assert しても不十分 — ここでは
+// 最悪ケース (glass-dark は明るい壁紙 = 白背景、glass は暗い壁紙 = 黒背景) の上に
+// 合成した実効色と、そのテーマの本文文字色 (--ric-color-fg) とのコントラスト比を
+// WCAG 2.x の相対輝度式で計算し、AA (4.5:1、通常文字サイズ) を満たすことを contract として
+// 固定する。旧値 (glass-dark: panel-bg/popup-bg 0.5、control 0.45) がこのテストで実際に
+// RED になることを ↓ 手動確認済み (計算結果はコメントに記載、このテスト自体は新値を
+// 固定するのでその場に old/new を再現するコードは残さない):
+//   旧 panel-bg 0.5  → rgb(135,139,149) → 3.11:1 (未達)
+//   旧 control  0.45 → rgb(147,151,159) → 2.68:1 (未達)
+//   旧 popup-bg 0.5  → rgb(135,139,149) → 3.11:1 (未達)
+// 新値 (下の CONTRAST_CASES) はいずれも 4.5:1 以上 (実測値は it.each の説明文に出る)。
+describe('applyTheme: glass/glass-dark の半透明面が WCAG AA (4.5:1) を満たす (2.0.0-alpha.22、Trend Guard 追報 2)', () => {
+  // sRGB (0-255) 1 チャンネルを相対輝度計算用に線形化する (WCAG 2.x 定義どおり)。
+  const srgbToLinear = (c: number): number => {
+    const v = c / 255;
+    return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+  };
+  const relativeLuminance = ([r, g, b]: readonly [number, number, number]): number =>
+    0.2126 * srgbToLinear(r) + 0.7152 * srgbToLinear(g) + 0.0722 * srgbToLinear(b);
+  const contrastRatio = (a: readonly [number, number, number], b: readonly [number, number, number]): number => {
+    const lumA = relativeLuminance(a);
+    const lumB = relativeLuminance(b);
+    const lighter = Math.max(lumA, lumB);
+    const darker = Math.min(lumA, lumB);
+    return (lighter + 0.05) / (darker + 0.05);
+  };
+  // rgba(r,g,b,a) を不透明な backdrop の上に sRGB 空間でそのまま合成する (CSS のアルファ
+  // 合成と同じ、線形化はしない — 線形化は輝度計算の内部でのみ行う)。
+  const compositeOverBackdrop = (fg: readonly [number, number, number], alpha: number, backdrop: readonly [number, number, number]): [number, number, number] => [
+    alpha * fg[0] + (1 - alpha) * backdrop[0],
+    alpha * fg[1] + (1 - alpha) * backdrop[1],
+    alpha * fg[2] + (1 - alpha) * backdrop[2],
+  ];
+  // `rgba(r,g,b,a)` 文字列から [r,g,b,a] を取り出す (このテーマの該当トークンは全て
+  // この形式で書かれている前提、unexpected な形式ならテスト自体が例外で落ちて気づける)。
+  const parseRgba = (value: string): { rgb: [number, number, number]; alpha: number } => {
+    const m = value.match(/^rgba\((\d+),(\d+),(\d+),([\d.]+)\)$/);
+    if (!m) throw new Error(`予期しない色の形式: ${value}`);
+    return { rgb: [Number(m[1]), Number(m[2]), Number(m[3])], alpha: Number(m[4]) };
+  };
+  const parseHex = (value: string): [number, number, number] => {
+    const m = value.match(/^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i);
+    if (!m) throw new Error(`予期しない色の形式: ${value}`);
+    return [parseInt(m[1]!, 16), parseInt(m[2]!, 16), parseInt(m[3]!, 16)];
+  };
+
+  const WHITE: [number, number, number] = [255, 255, 255];
+  const BLACK: [number, number, number] = [0, 0, 0];
+
+  // 最悪ケースの backdrop: glass-dark は明るい壁紙 (白)、glass (light frost/dark text) は
+  // 暗い壁紙 (黒) — Trend Guard 報告どおり、glass はより明るい背景ほど有利になる非対称形。
+  const CONTRAST_CASES: Array<{ label: string; theme: 'glass' | 'glass-dark'; token: '--ric-panel-bg' | '--ric-popup-bg' | '--ric-color-control'; backdrop: [number, number, number] }> = [
+    { label: 'glass-dark panel-bg over white', theme: 'glass-dark', token: '--ric-panel-bg', backdrop: WHITE },
+    { label: 'glass-dark popup-bg over white', theme: 'glass-dark', token: '--ric-popup-bg', backdrop: WHITE },
+    { label: 'glass-dark control over white', theme: 'glass-dark', token: '--ric-color-control', backdrop: WHITE },
+    { label: 'glass panel-bg over black', theme: 'glass', token: '--ric-panel-bg', backdrop: BLACK },
+    { label: 'glass popup-bg over black', theme: 'glass', token: '--ric-popup-bg', backdrop: BLACK },
+    { label: 'glass control over black', theme: 'glass', token: '--ric-color-control', backdrop: BLACK },
+  ];
+
+  it.each(CONTRAST_CASES)('$label は本文文字とのコントラストが 4.5:1 以上', ({ theme, token, backdrop }) => {
+    const el = document.createElement('div');
+    applyTheme(el, { theme });
+    const fg = parseHex(el.style.getPropertyValue('--ric-color-fg'));
+    const { rgb, alpha } = parseRgba(el.style.getPropertyValue(token));
+    const composited = compositeOverBackdrop(rgb, alpha, backdrop);
+    const ratio = contrastRatio(fg, composited);
+    // 失敗時にメッセージへ実測比率が出るよう toBeGreaterThanOrEqual の第 2 引数ではなく
+    // 独自メッセージにする (vitest の toBeGreaterThanOrEqual は expected 側しか出さないため)。
+    expect(ratio, `${theme} ${token}: 実測 ${ratio.toFixed(2)}:1`).toBeGreaterThanOrEqual(4.5);
   });
 });

@@ -238,9 +238,12 @@ const COLOR_VARS_GLASS: ThemeVars = {
   // `--ric-color-bg` とは独立した値 (2.0.0-alpha.20、Trend Guard #16)。Electron 透明ウィンドウ
   // recipe (TUTORIAL.md §6) は `--ric-color-bg` だけを 'transparent' に上書きするが、
   // .ric-panel/.ric-tweak はこのトークンを読むため、ページ背景を透明にしても panel の
-  // 表面 (surface) は rgba(255,255,255,0.45) の半透明白のまま残る — デスクトップの上に
+  // 表面 (surface) は rgba(255,255,255,0.55) の半透明白のまま残る — デスクトップの上に
   // すりガラスの panel が浮く、これが本来の glass の見た目。
-  '--ric-panel-bg': 'rgba(255,255,255,0.45)',
+  // 0.45 → 0.55 (2.0.0-alpha.22、Trend Guard 追報 2): 最悪ケース (黒背景) で本文文字
+  // (--ric-color-fg #111827) とのコントラストが 3.73:1 で AA (4.5:1) 未達だったのを修正
+  // (--ric-popup-bg も同じ理由・同じ値、下記参照)。詳細は docs/SPEC.md §8 のコントラスト表。
+  '--ric-panel-bg': 'rgba(255,255,255,0.55)',
   '--ric-color-control': 'rgba(255,255,255,0.55)',
   '--ric-color-border': 'rgba(255,255,255,0.6)',
   '--ric-color-accent': '#2563eb',
@@ -249,7 +252,8 @@ const COLOR_VARS_GLASS: ThemeVars = {
   '--ric-tooltip-fg': '#f9fafb',
   '--ric-code-bg': 'rgba(255,255,255,0.55)',
   '--ric-code-fg': '#111827',
-  '--ric-popup-bg': 'rgba(255,255,255,0.5)',
+  // 0.5 → 0.55 (2.0.0-alpha.22、--ric-panel-bg の同名コメント参照)。
+  '--ric-popup-bg': 'rgba(255,255,255,0.55)',
   '--ric-popup-blur': 'blur(24px) saturate(160%)',
   '--ric-surface-blur': 'blur(24px) saturate(160%)',
   // ガラスの縁を表現するソフトな外側シャドウ + 内側ハイライト。
@@ -277,8 +281,13 @@ const COLOR_VARS_GLASS_DARK: ThemeVars = {
   '--ric-color-fg-muted': '#94a3b8',
   '--ric-color-bg': 'linear-gradient(135deg, #0f172a 0%, #312e81 50%, #134e4a 100%)',
   // COLOR_VARS_GLASS の --ric-panel-bg 直前のコメント参照 (2.0.0-alpha.20、Trend Guard #16)。
-  '--ric-panel-bg': 'rgba(15,23,42,0.5)',
-  '--ric-color-control': 'rgba(15,23,42,0.45)',
+  // 0.5 → 0.72 (2.0.0-alpha.22、Trend Guard 追報 2): 最悪ケース (白背景) で本文文字
+  // (--ric-color-fg #f1f5f9) とのコントラストが 3.1:1 で AA (4.5:1) 未達だった実測報告を
+  // 受けて引き上げ (新値で 6.5:1)。RGB (15,23,42) 自体は変えていない。詳細は
+  // docs/SPEC.md §8 のコントラスト表。
+  '--ric-panel-bg': 'rgba(15,23,42,0.72)',
+  // 0.45 → 0.65 (2.0.0-alpha.22、--ric-panel-bg の同名コメント参照。旧値は 2.68:1)。
+  '--ric-color-control': 'rgba(15,23,42,0.65)',
   '--ric-color-border': 'rgba(255,255,255,0.18)',
   '--ric-color-accent': '#60a5fa',
   '--ric-color-accent-fg': '#0f172a',
@@ -286,7 +295,8 @@ const COLOR_VARS_GLASS_DARK: ThemeVars = {
   '--ric-tooltip-fg': '#f1f5f9',
   '--ric-code-bg': 'rgba(15,23,42,0.55)',
   '--ric-code-fg': '#f1f5f9',
-  '--ric-popup-bg': 'rgba(15,23,42,0.5)',
+  // 0.5 → 0.80 (2.0.0-alpha.22、--ric-panel-bg の同名コメント参照。旧値は 3.1:1)。
+  '--ric-popup-bg': 'rgba(15,23,42,0.80)',
   '--ric-popup-blur': 'blur(24px) saturate(140%)',
   '--ric-surface-blur': 'blur(24px) saturate(140%)',
   '--ric-shadow': '0 8px 32px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.08)',

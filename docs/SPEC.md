@@ -941,7 +941,8 @@ public token, present on all seven bundled palettes (`exportTheme`/`exportSettin
 it like any other `--ric-*` key): identical to that theme's `--ric-color-bg` value on the
 five pre-`glass` themes (`light`/`dark`/`teal`/`cyber`/`aqua`), so their rendering is
 pixel-unchanged; an independent translucent value on `glass`/`glass-dark`
-(`rgba(255,255,255,0.45)` / `rgba(15,23,42,0.5)`) so the panel keeps a visible surface over
+(`rgba(255,255,255,0.55)` / `rgba(15,23,42,0.72)`, raised from the original `0.45`/`0.5` in
+`2.0.0-alpha.22` — see the contrast FACT below) so the panel keeps a visible surface over
 a transparent page background. `GLASS_REDUCED_TRANSPARENCY` (see the
 `prefers-reduced-transparency` FACT below) also sets an opaque `--ric-panel-bg` for both
 glass themes, matching `--ric-color-control`'s reduced value.
@@ -955,6 +956,42 @@ floating/container CSS rule must follow this same principle: read a surface toke
 (`--ric-color-control`, `--ric-popup-bg`, `--ric-panel-bg`, or a dedicated token like
 `--ric-tooltip-bg`), never `--ric-color-bg`/`${bg}` directly — see the comment above
 `PANEL_CSS` in `src/ui/cssTemplates.ts`.
+
+### FACT: the bundled `glass`/`glass-dark` surface alphas target WCAG AA against a
+pure-white/pure-black backdrop (`2.0.0-alpha.22`)
+
+A translucent `rgba()` surface's *effective* color depends on what sits behind it — for
+`glass`/`glass-dark` (see the two FACTs above) that's whatever the desktop wallpaper (or
+page content) happens to be, which `applyTheme` cannot know in advance. The bundled
+defaults are chosen so that the worst realistic case — a pure white wallpaper behind
+`glass-dark`, a pure black one behind `glass` (`glass` is light-frost/dark-text, so it only
+gets *more* readable against a lighter backdrop; `glass-dark` is the opposite) — still
+clears WCAG AA (`4.5:1`, normal-size body text) between `--ric-color-fg` and the composited
+surface color. Measured by compositing `rgba(r,g,b,a)` directly over the backdrop in sRGB
+space (no linearization) and then computing WCAG 2.x contrast from the two colors'
+relative luminance:
+
+| theme | token | old α (< `2.0.0-alpha.22`) | old ratio | new α | new ratio |
+| --- | --- | --- | --- | --- | --- |
+| `glass-dark` | `--ric-panel-bg` (over white) | `0.5` | `3.11:1` (fail) | `0.72` | `6.51:1` |
+| `glass-dark` | `--ric-popup-bg` (over white) | `0.5` | `3.11:1` (fail) | `0.80` | `8.70:1` |
+| `glass-dark` | `--ric-color-control` (over white) | `0.45` | `2.68:1` (fail) | `0.65` | `5.08:1` |
+| `glass` | `--ric-panel-bg` (over black) | `0.45` | `3.73:1` (fail) | `0.55` | `5.29:1` |
+| `glass` | `--ric-popup-bg` (over black) | `0.5` | `4.46:1` (fail, just under) | `0.55` | `5.29:1` |
+| `glass` | `--ric-color-control` (over black) | `0.55` | `5.29:1` (pass, unchanged) | `0.55` | `5.29:1` |
+
+(reported by Trend Guard, pilot #2, follow-up report #2, `2026-09-19`; the RGB base of each
+token — `rgb(15,23,42)` for `glass-dark`, `rgb(255,255,255)` for `glass` — is unchanged,
+only the alpha channel moved). `tests/ui/theme.test.ts` fixes this as a contract: it
+composites every `glass`/`glass-dark` surface token over its worst-case backdrop and asserts
+`≥ 4.5:1`, independent of the literal alpha values above (so a future palette tweak that
+keeps the ratio above AA doesn't need a matching test change).
+
+If you lower these alphas via `createTheme('glass'|'glass-dark', { '--ric-panel-bg': ... })`
+(or the other surface tokens) for a more transparent look, you take on the contrast risk
+yourself — `applyTheme` does not validate `--ric-*` values, and there is no dynamic
+per-wallpaper contrast check (RicDOM has no way to sample what's actually behind the
+window).
 
 ### FACT: every bundled palette defines the same key set (`2.0.0-alpha.21`)
 

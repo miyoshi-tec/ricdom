@@ -420,6 +420,36 @@ scrim:
 applyTheme(el, { theme: createTheme('glass-dark', { '--ric-color-bg': 'rgba(15,23,42,0.35)' }) });
 ```
 
+(As of `2.0.0-alpha.22` the bundled `glass`/`glass-dark` surface tokens already target AA
+contrast against a pure-white/pure-black wallpaper — see the contrast FACT in SPEC.md §8 —
+so this scrim is now for extra headroom or a specific known wallpaper, not a baseline fix.)
+
+### Give containers with no background of their own a surface
+
+`ricdom/ui` controls (`uiPanel`, dialogs, popups, …) all read a surface token
+(`--ric-panel-bg`, `--ric-popup-bg`, …, see SPEC.md §8) precisely so the Electron
+transparent-window recipe above doesn't hollow them out. But plain layout containers you
+build yourself — a header bar, a footer, a status bar — have no background of their own
+unless you give them one, so under this recipe they sit directly on the wallpaper, not on
+`--ric-color-bg`. This is the opposite direction from the advice everywhere else on this
+page ("remove opaque backgrounds so the desktop shows through"): here, a container holding
+`--ric-color-fg`-colored text needs a surface added back, e.g.
+`background: var(--ric-panel-bg)` (or `--ric-color-control`/your own translucent value),
+or its text loses contrast against whatever happens to be behind the window — the same
+underlying problem the contrast FACT above addresses for the bundled surfaces, just for
+containers RicDOM doesn't style for you.
+
+### Acrylic/Mica can fall back to a solid color
+
+Windows 11 itself — not `ricdom`, not your app — swaps `backgroundMaterial: 'acrylic'`/
+`'mica'` for a solid color whenever the window isn't the active/focused one (`IsInputActive`
+in Windows' own design), and also when transparency effects are turned off in Settings, on
+battery saver, over Remote Desktop, or on a weak/unsupported GPU. If your window looks like
+`glass` only while focused and turns opaque the moment focus moves elsewhere, that's this —
+not a bug to work around in `--ric-*` tokens. `win.blur()` does **not** reliably reproduce
+it for local testing; only a real focus change to another window (e.g. actually clicking a
+different app) does.
+
 ---
 
 ## 7. Dialog and popup

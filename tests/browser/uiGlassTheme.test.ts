@@ -193,7 +193,7 @@ describe('実ブラウザ: .ric-panel の表面は透明ウィンドウ recipe �
     // ページ (theme 適用先の要素自身) の背景は recipe どおり透明。
     expect(getComputedStyle(app).backgroundColor).toBe('rgba(0, 0, 0, 0)');
 
-    // panel の表面は --ric-panel-bg (rgba(15,23,42,0.5)) を読み続けるので不透明度が残る
+    // panel の表面は --ric-panel-bg (rgba(15,23,42,0.72)) を読み続けるので不透明度が残る
     // (修正前は --ric-color-bg を直接読んでいたため、ここが rgba(0, 0, 0, 0) になっていた
     // = このアサーションが RED になることを修正前のコードで確認済み)。
     const panelBg = getComputedStyle(app.querySelector('.ric-panel')!).backgroundColor;

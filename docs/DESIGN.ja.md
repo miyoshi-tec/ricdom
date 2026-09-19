@@ -176,6 +176,36 @@ v1 は 5 か月・46 リリース・社内 11 アプリの実戦で API が磨�
 - **追報 4 (alpha.4 取り込み) で第 2 号は完了**: 再現スクリプト 5→5→5→5→5、E2E 10/10、回避策ゼロ。初報 10 + 追報 5 = 15 件が同日中に公式 API で閉じた
 - ~~観察 (対応なし)~~ → **§23 で実バグ (#14) と判明**。DPI 150% の実機で右端密着トリガーの dropdown body の `right` が `innerWidth` を 0.33px 超えた件、統括は「`clampLeft` が右端も収めるので最終位置では起き得ない、実測フェーズの rect を拾ったのでは」と判断したが誤り。consumer が再計測後 (200ms / 600ms) の inline `left` / `offsetWidth` / 本来幅を取り直し、**測った幅そのものが位置依存で過小**になっていることを示した (§23)。教訓: 「式は正しい」で止めず、式に入る実測値の取り方まで疑う
 
+## 40. Trend Guard 追報 2 = オーナーの数日実使用から: glass-dark の既定濃度は白背景で AA を割る (2026-09-19、2.0.0-alpha.22)
+
+- **報告 (不具合ではなく既定値と docs の提案 3 件)**: ①glass-dark の面 `rgba(15,23,42,0.5)` は純白の背景に合成すると `#878b94` で、`--ric-color-fg: #f1f5f9` とのコントラスト **3.1:1 (AA の 4.5 未満)**。0.80 なら `#3f4555` で 8.7:1。TG は createTheme で panel 0.80 / popup 0.85 / control 0.7 に上書き済み。**glass-dark は「暗い面 + 明るい文字」なので背景が明るいほど不利、glass (明) は逆に有利で同じアルファでも破綻しない**、という非対称の指摘 ②背景を持たないレイアウト用コンテナ (ヘッダ・フッター) は透過レシピでページ背景が消えると壁紙に文字が直接乗る = 「不透明背景を外す」の逆方向の注意が依頼文に無かった ③Acrylic はウィンドウ非アクティブで単色に落ちる (Windows 11 の仕様、`IsInputActive`。透明効果オフ・バッテリー節約・RDP・非力 GPU も同様。`win.blur()` では完全再現しない)
+- **判断**: ①は**既定値を変える** (glass-dark のみ: control 0.45 → 0.65、panel-bg 0.5 → 0.72、popup-bg 0.5 → 0.80)。§36 で「文字コントラストは背景次第で保証できない」と正直に書いたが、**「純白 / 純黒の背景に合成しても本文が AA を満たす」までは既定値の責任**として引き受け、**unit の契約テスト (合成 + WCAG 比の純計算) で固定** — glass-dark は白背景、glass は黒背景の対称な最悪条件で ≥ 4.5:1。「もっと透けるように」とアルファを下げる変更をテストが止める。より透ける見た目が欲しい consumer は createTheme で下げる (SPEC にコントラストの表を FACT として提示)。オーナー = ユーザー本人の「明るすぎて読みづらい」が起点なので、映え優先の §36 の判断とは矛盾しない (映えは blur と壁紙の透けで残る)
+- ②③は docs (依頼文 + TUTORIAL §6)。②は依頼文の「透けさせる」節に「逆に面を与える (`background: var(--ric-panel-bg)`)」を追記
+- 第 2 号は 18 件クローズのまま。実装・検証の数値は agent 完了後に追記
+- **実装・検証完了 (2026-09-19)**: `src/ui/theme.ts` を alpha.22 の値に更新
+  (glass-dark: control 0.45→0.65・panel-bg 0.5→0.72・popup-bg 0.5→0.80、glass:
+  panel-bg 0.45→0.55・popup-bg 0.5→0.55、RGB 基底値は不変)。`tests/ui/theme.test.ts` に
+  WCAG 契約テスト (sRGB 合成 + 相対輝度からのコントラスト比を純計算、`--ric-*` の
+  リテラル値ではなく実測比率で assert) を追加、**旧値で実際に RED になることを手動確認**
+  (glass-dark panel-bg 3.11:1 / popup-bg 3.11:1 / control 2.68:1 — 一時的に旧値へ戻して
+  再実行→failed 3 件、報告どおりの数値と一致。直後に新値へ復元し 6 件 green を再確認)。
+  glass (黒背景最悪ケース) は報告未言及だったが同じ契約テストで検算したところ
+  panel-bg 3.73:1・popup-bg 4.46:1 (どちらも AA 未達、popup-bg はぎりぎり) だったため
+  0.55 に引き上げ (5.29:1、control の既存値 0.55/5.29:1 と揃える形)。
+  `npx tsc --noEmit` clean (テストのタプル分割代入で `l1`/`l2` possibly undefined の
+  エラーが 1 件出たため min/max 方式に書き換えて解消)。`npx vitest run --project unit`
+  60 files / 727 tests all green。`npm run build` 成功。
+  `npx vitest run --project browser tests/browser/uiGlassTheme.test.ts
+  tests/browser/uiTheme.test.ts` 2 files / 19 tests all green。`npm run test:examples`
+  全 8 例 (glass.html 含む) green。gzip サイズは 3 つとも指示どおり据え置き
+  (ricdom.iife.min.js 4,877B / ricdom-ui.iife.min.js 26,237B / ricdom-ui.css 6,848B、
+  1 byte も変化なし — アルファ値の桁数変化が正味ゼロだったため)。docs は
+  SPEC.md §8 に新 FACT (コントラスト表 + 「下げるなら自己責任」の案内)、
+  TUTORIAL.md §6 に 2 節追加 (無背景コンテナへの注意・Acrylic 非アクティブ時フォール
+  バック)、CHANGELOG.md に alpha.22 セクション。examples/glass.html はハードコード値
+  なし (grep 確認済み、変更不要)。`package.json` は不変更 (2.0.0-alpha.21 のまま、
+  CHANGELOG のみ alpha.22 セクションを追加)
+
 ## 39. テーマ 7 種対応の第 2 報 = Rancha (第 6 号): applyTheme の残留変数、Chromium 121+ で死んでいたスクロールバー装飾、frameless + acrylic の最大化問題 (2026-09-17、2.0.0-alpha.21)
 
 - **報告**: 7 種切替可 (path bar の半月アイコン → `uiInlineMenu` 7 項目、既存メニューと開閉挙動を揃える判断)、選択は `state.json` に保存、Electron 透過あり (Win11 / Electron 32 / acrylic + `backgroundColor: '#00000000'` / frameless、`transparent: true` は不使用 = ドラッグと Aero Snap を壊さない)。**透過可否は純粋関数 `glass_capable({platform, release})` + 同期 IPC で renderer に渡し、false なら `--ric-color-bg` を抜かない** (抜くと「ただの黒い窓」)。hljs のテーマ CSS は **`applyTheme` 後の computed `color-scheme` で決める** (テーマ名で分岐しないので 7 種に自動で効く — 他アプリに勧められる形)。アプリ側 CSS は不透明色 1 箇所 (Brownies ダイアログ) + 自前浮遊面 6 種に `--ric-surface-blur` + 派生トークン `--app-*` + no-drag 脚注。unit 890 / e2e 128、スナップショット不変、alpha.15 → 20 で使用 API に破壊的変更ゼロ
