@@ -450,6 +450,28 @@ not a bug to work around in `--ric-*` tokens. `win.blur()` does **not** reliably
 it for local testing; only a real focus change to another window (e.g. actually clicking a
 different app) does.
 
+### Theming inline SVG: `var()` works in CSS, not in presentation attributes
+
+If your app draws its own SVG (a chart, a gear outline, crosshairs), note that SVG
+*presentation attributes* such as `stroke="…"`/`fill="…"` do not accept `var(--ric-color-fg)`
+— the attribute value is parsed as a color, and the `var()` reference is invalid there.
+Give the element a class and set the color in CSS instead, where custom properties resolve
+normally (reported by the 歯車DXFジェネレーター pilot, which themes its crosshair lines this
+way across all seven themes):
+
+```css
+.gear-crosshair { stroke: var(--ric-color-fg-muted); }
+```
+
+```js
+{ tag: 'line', class: 'gear-crosshair', x1: 0, y1: -10, x2: 0, y2: 10 }
+```
+
+Plain browser apps with no native window still get a complete `glass`/`glass-dark` — the
+themes' built-in `--ric-color-bg` gradient is what the frost sits on, so the "transparent
+window" steps above simply don't apply (same pilot: a `file://`-opened static page, 7/7
+themes, no app-side workarounds).
+
 ---
 
 ## 7. Dialog and popup
