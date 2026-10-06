@@ -1598,6 +1598,10 @@ bodies (`.ric-tweak-folder__body`), both `role="region"`. While closed, the body
   own, clipped by the zero-height `overflow: hidden` inner wrapper). Because the body is
   `inert`, those controls are excluded from keyboard focus (`Tab` from the closed header
   moves on to whatever follows the component) and from the accessibility tree.
+- Consequence for tests: an E2E step that fills an input inside a *closed* folder no longer
+  reaches it — open the folder (click the header, wait for `inert` to clear) before
+  interacting, exactly as a user would (ギア軽量化デモ rewrote three such steps when adopting
+  `2.0.0-alpha.23`).
 - Why not `hidden`: the library's own `display: grid` rule is an author rule and outranks
   the user-agent `[hidden] { display: none }`, and `hidden` has no accessibility semantics
   of its own — so through `2.0.0-alpha.22` a closed body was still rendered, its inputs were
