@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ricdom — Icons</title>
+<link rel="stylesheet" href="dist/ricdom-ui.css">
+<link rel="stylesheet" href="_site.css">
+</head>
+<body>
+<!--
+  Icon playground. The bundled icons are an ES module (dist/icons.js, the `ricdom/icons`
+  subpath); the page imports it directly and draws each one with ricdomUI.uiIcon from the IIFE
+  bundle. Click an icon to copy its import line and descriptor.
+-->
+<main class="site-main"><div id="app"></div></main>
+
+<script src="dist/ricdom.iife.min.js"></script>
+<script src="dist/ricdom-ui.iife.min.js"></script>
+<script src="examples/_i18n.js"></script>
+<script src="_site.js"></script>
+<script src="examples/_nav.js"></script>
+<script type="module">
+  import * as icons from './dist/icons.js';
+
+  const U = ricdomUI;
+  const { t, addDict, onLangChange } = ricdomI18n;
+
+  addDict('ja', {
+    'Icons': 'アイコン',
+    'The icons bundled in ricdom/icons. Click one to copy its import line and descriptor.':
+      'ricdom/icons に同梱しているアイコンです。クリックすると import 行と descriptor をコピーします。',
+    'Size': 'サイズ',
+    'Stroke width': '線の太さ',
+    'Filter': '絞り込み',
+    'Filter by name': '名前で絞り込み',
+    'Copied {0}': '{0} をコピーしました',
+    'Could not copy to the clipboard': 'クリップボードにコピーできませんでした',
+    'No icon matches.': '一致するアイコンがありません。',
+    'Need an icon that is not bundled? Fetch it with `npx ricdom-icon <name>` instead of writing the path by hand.':
+      '同梱されていないアイコンが必要なときは、path を手書きせず `npx ricdom-icon <name>` で取得してください。',
+  });
+
+  // ICON_NAMES maps the camelCase export name to the kebab-case Lucide name.
+  const entries = Object.keys(icons.ICON_NAMES).map((exportName) => ({
+    exportName,
+    kebab: icons.ICON_NAMES[exportName],
+    descriptor: icons[exportName],
+  }));
+
+  const state = { size: 32, strokeWidth: 2, query: '' };
+  let toast;
+
+  const copy = async (entry) => {
+    const text = `import { ${entry.exportName} } from 'ricdom/icons';\n// ${JSON.stringify(entry.descriptor)}`;
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.show(t`Copied ${entry.exportName}`, { type: 'success' });
+    } catch {
+      toast.show(t('Could not copy to the clipboard'), { type: 'error' });
+    }
+  };
+
+  const app = ricdom.createApp(
+    '#app',
+    state,
+    (s) => {
+      const query = s.query.trim().toLowerCase();
+      const shown = entries.filter((e) => !query || e.kebab.includes(query) || e.exportName.toLowerCase().includes(query));
+      return {
+        tag: 'div',
+        children: [
+          { tag: 'h1', children: [t('Icons')] },
+          { tag: 'p', class: 'site-lede', children: [t('The icons bundled in ricdom/icons. Click one to copy its import line and descriptor.')] },
+          {
+            tag: 'div',
+            class: 'icon-controls',
+            children: [
+              { tag: 'label', children: [t('Size'), U.bindRange(s, 'size', { min: 12, max: 64, step: 2 }), String(s.size)] },
+              { tag: 'label', children: [t('Stroke width'), U.bindRange(s, 'strokeWidth', { min: 0.5, max: 4, step: 0.25 }), String(s.strokeWidth)] },
+              U.bindInput(s, 'query', { placeholder: t('Filter by name'), 'aria-label': t('Filter') }),
+            ],
+          },
+          shown.length === 0
+            ? { tag: 'p', class: 'site-note', children: [t('No icon matches.')] }
+            : {
+                tag: 'div',
+                class: 'icon-grid',
+                children: shown.map((e) => ({
+                  tag: 'button',
+                  key: e.exportName,
+                  type: 'button',
+                  class: 'icon-cell',
+                  title: `import { ${e.exportName} } from 'ricdom/icons'`,
+                  onclick: () => copy(e),
+                  children: [U.uiIcon(e.descriptor, { size: s.size, strokeWidth: s.strokeWidth }), { tag: 'span', children: [e.kebab] }],
+                })),
+              },
+          { tag: 'p', class: 'site-footer', children: [t('Need an icon that is not bundled? Fetch it with `npx ricdom-icon <name>` instead of writing the path by hand.')] },
+        ],
+      };
+    },
+    { setup: (a) => { toast = a.use(U.createToast()); } },
+  );
+
+  // Strings read through t() are plain values, so re-render when the language changes.
+  onLangChange(() => app.renderNow());
+</script>
+</body>
+</html>

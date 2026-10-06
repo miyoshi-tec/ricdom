@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ricdom — Spec</title>
+<link rel="stylesheet" href="dist/ricdom-ui.css">
+<link rel="stylesheet" href="_site.css">
+</head>
+<body>
+<!--
+  docs/SPEC.md fetched and drawn with uiMdPre (dogfooding). The spec is English only; in
+  Japanese a note says so.
+-->
+<main class="site-main"><div id="app"></div></main>
+
+<script src="dist/ricdom.iife.min.js"></script>
+<script src="dist/ricdom-ui.iife.min.js"></script>
+<script src="examples/_i18n.js"></script>
+<script src="_site.js"></script>
+<script src="examples/_nav.js"></script>
+<script src="_doc.js"></script>
+<script>
+  const { t, addDict } = ricdomI18n;
+  addDict('ja', {
+    'The specification is written in English only. The Japanese tutorial is on the Tutorial page.':
+      '仕様書は英語のみです。日本語の解説はチュートリアルのページにあります。',
+  });
+
+  ricdomDoc.mount({
+    target: '#app',
+    url: () => 'docs/SPEC.md',
+    // The note is shown in Japanese only; English readers do not need it.
+    note: (lang) => (lang === 'ja' ? t('The specification is written in English only. The Japanese tutorial is on the Tutorial page.') : null),
+  });
+</script>
+</body>
+</html>

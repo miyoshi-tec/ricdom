@@ -7,3 +7,4 @@ _drafts/
 
 # Vitest browser mode: 失敗時のスクリーンショット (デバッグ用、成果物ではない)
 tests/browser/__screenshots__/
+_site/

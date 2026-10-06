@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>ricdom — 08 Themes and frosted glass (no build step)</title>
+<link rel="stylesheet" href="../dist/ricdom-ui.css">
+<style>
+  html, body { min-height: 100%; }
+  body { font-family: system-ui, sans-serif; min-height: 100vh; }
+  /* A fake desktop wallpaper made only of CSS gradients and blurred circles (no external
+     asset). In a real Electron transparent window the OS desktop shows through instead (see
+     docs/TUTORIAL.md section 6, "Frosted glass over the desktop (Electron)"). It lets you check
+     with your own eyes that the translucent glass / glass-dark surfaces (dialog, popup, toast,
+     tooltip, dropdown, panel, tweak) really blur what is behind them. */
+  .wallpaper {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    overflow: hidden;
+    background: linear-gradient(160deg, #0ea5e9 0%, #6366f1 45%, #ec4899 100%);
+  }
+  .wallpaper__blob {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(40px);
+    opacity: 0.85;
+  }
+  .wallpaper__blob--1 { width: 380px; height: 380px; top: -80px; left: -60px; background: #f97316; }
+  .wallpaper__blob--2 { width: 420px; height: 420px; bottom: -120px; right: -80px; background: #22d3ee; }
+  .wallpaper__blob--3 { width: 300px; height: 300px; top: 38%; left: 55%; background: #a3e635; }
+  .wallpaper__blob--4 { width: 260px; height: 260px; bottom: 8%; left: 8%; background: #f43f5e; }
+
+  h1 { font-size: 1.15rem; }
+  h2 { font-size: 0.95rem; margin: 1rem 0 4px; }
+  .row { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin: 0.6rem 0; }
+</style>
+</head>
+<body>
+<!--
+  No build step for consumers (design goal G1): two IIFE bundles and one CSS <link> are enough
+  for the glass / glass-dark themes. Floating surfaces (dialog, popup, dropdown, toast, tooltip,
+  panel, tweak panel) get backdrop-filter; controls (input, checkbox, range) deliberately do not
+  (SPEC section 8, FACT).
+
+  The whole page is themed by the shared nav bar (_nav.js calls applyTheme on <body>). The
+  seven buttons below are this page's own switcher; they go through ricdomNav so they write the
+  same localStorage key as the nav's theme <select> and the two stay in agreement.
+
+  The wallpaper only matters for the glass themes; the page background is still themed.
+-->
+<div class="wallpaper">
+  <div class="wallpaper__blob wallpaper__blob--1"></div>
+  <div class="wallpaper__blob wallpaper__blob--2"></div>
+  <div class="wallpaper__blob wallpaper__blob--3"></div>
+  <div class="wallpaper__blob wallpaper__blob--4"></div>
+</div>
+<div id="app"></div>
+
+<script src="../dist/ricdom.iife.min.js"></script>
+<script src="../dist/ricdom-ui.iife.min.js"></script>
+<script src="_i18n.js"></script><script src="_samples.js"></script><script src="_nav.js"></script>
+<script>
+  const U = ricdomUI;
+  const { t, addDict, onLangChange } = ricdomI18n;
+  const nav = ricdomNav; // theme store shared with the nav bar
+
+  addDict('ja', {
+    'ricdom — themes and frosted glass': 'ricdom — テーマとフロストガラス',
+    'Frosted glass (Windows 11 Acrylic / iOS translucency) style theme. Check that the wallpaper behind this panel looks blurred.':
+      'フロストガラス (Windows 11 Acrylic / iOS 半透明) 風テーマ。このパネル越しに背景の壁紙がぼけて見えることを確認してください。',
+    'Theme:': 'テーマ:',
+    'Floating surfaces (with backdrop-filter)': 'フローティング面 (backdrop-filter あり)',
+    'Open dialog': 'ダイアログを開く',
+    'Confirm': '確認',
+    'The body of this dialog is frosted glass too.': 'このダイアログの本文の背景もフロストガラスです。',
+    'Popup menu ▾': 'ポップアップメニュー ▾',
+    'Item A': '項目 A',
+    'Item B': '項目 B',
+    'Selected item A': '項目 A を選択',
+    'Selected item B': '項目 B を選択',
+    'Dropdown: ': 'ドロップダウン: ',
+    'Show a toast': 'トーストを出す',
+    'Saved': '保存しました',
+    'Hover for a tooltip': 'ツールチップをホバー',
+    'The tooltip is frosted glass too': 'ツールチップもフロストガラスです',
+    'Controls (no backdrop-filter, only a translucent rgba background)': 'コントロール (backdrop-filter は掛けない、半透明の rgba 背景のみ)',
+    'Name': '名前',
+    'Notify me': '通知を受け取る',
+    'Tweak panel': 'tweak パネル',
+    'Parameters': 'パラメータ',
+    'Legibility check': '可読性の確認',
+    'Normal text on a translucent surface must stay clearly readable. The quick brown fox jumps over the lazy dog. 0123456789.':
+      '半透明の面に乗った通常の文字も、はっきり読めることを確認してください。 The quick brown fox jumps over the lazy dog. 0123456789.',
+  });
+
+  const state = {
+    theme: nav.getTheme(),
+    name: 'Alex',
+    subscribe: true,
+    volume: 60,
+    params: { size: 100, color: '#4f8ef7', rounded: 16 },
+  };
+
+  // Stateful components are registered in `setup`, before the first render.
+  let dlg, menu, dd, toast, tip, tweak;
+
+  const themeRow = (s) =>
+    U.uiRow({
+      children: [
+        U.uiText({ variant: 'label', children: [t('Theme:')] }),
+        ...nav.THEMES.map((name) =>
+          U.uiButton({
+            variant: name === s.theme ? 'primary' : 'default',
+            children: [name],
+            onclick: () => nav.setTheme(name),
+          }),
+        ),
+      ],
+    });
+
+  const app = ricdom.createApp(
+    '#app',
+    state,
+    (s) =>
+      U.uiPanel({
+        style: { maxWidth: '760px', margin: '2rem auto' },
+        children: [
+          { tag: 'h1', children: [t('ricdom — themes and frosted glass')] },
+          U.uiText({
+            children: [t('Frosted glass (Windows 11 Acrylic / iOS translucency) style theme. Check that the wallpaper behind this panel looks blurred.')],
+          }),
+          themeRow(s),
+          U.uiSeparator(),
+
+          { tag: 'h2', children: [t('Floating surfaces (with backdrop-filter)')] },
+          {
+            tag: 'div',
+            class: 'row',
+            children: [
+              dlg({
+                triggerChildren: [t('Open dialog')],
+                title: t('Confirm'),
+                children: [t('The body of this dialog is frosted glass too.')],
+                actions: [U.uiButton({ variant: 'primary', children: ['OK'], onclick: () => dlg.close() })],
+              }),
+              menu({
+                trigger: [t('Popup menu ▾')],
+                children: [
+                  U.uiButton({ children: [t('Item A')], onclick: () => toast.show(t('Selected item A')) }),
+                  U.uiButton({ children: [t('Item B')], onclick: () => toast.show(t('Selected item B')) }),
+                ],
+              }),
+              dd({
+                label: t('Dropdown: ') + s.name,
+                chevron: true,
+                children: ['name', 'date', 'size'].map((v) => U.uiButton({ children: [v], onclick: () => dd.close() })),
+              }),
+              U.uiButton({ children: [t('Show a toast')], onclick: () => toast.show(t('Saved'), { type: 'success' }) }),
+              tip({
+                content: t('The tooltip is frosted glass too'),
+                children: [U.uiButton({ children: [t('Hover for a tooltip')] })],
+              }),
+            ],
+          },
+          U.uiSeparator(),
+
+          { tag: 'h2', children: [t('Controls (no backdrop-filter, only a translucent rgba background)')] },
+          U.uiCol({
+            children: [
+              U.bindInput(s, 'name', { placeholder: t('Name') }),
+              U.bindCheckbox(s, 'subscribe', { children: [t('Notify me')] }),
+              U.bindRange(s, 'volume', { min: 0, max: 100 }),
+            ],
+          }),
+          U.uiSeparator(),
+
+          { tag: 'h2', children: [t('Tweak panel')] },
+          tweak({ title: t('Parameters'), data: s.params }),
+          U.uiSeparator(),
+
+          { tag: 'h2', children: [t('Legibility check')] },
+          U.uiText({
+            children: [t('Normal text on a translucent surface must stay clearly readable. The quick brown fox jumps over the lazy dog. 0123456789.')],
+          }),
+        ],
+      }),
+    {
+      setup: (a) => {
+        dlg = a.use(U.createDialog());
+        menu = a.use(U.createPopup());
+        dd = a.use(U.createDropdown());
+        toast = a.use(U.createToast());
+        tip = a.use(U.createTooltip());
+        tweak = a.use(U.createTweakPanel());
+      },
+    },
+  );
+
+  // The nav bar owns the theme. When it (or the buttons above) changes it, mirror it into state
+  // so the active button is highlighted.
+  nav.onThemeChange((name) => { app.theme = name; });
+  onLangChange(() => app.renderNow());
+</script>
+</body>
+</html>

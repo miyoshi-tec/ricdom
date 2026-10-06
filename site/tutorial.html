@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ricdom — Tutorial</title>
+<link rel="stylesheet" href="dist/ricdom-ui.css">
+<link rel="stylesheet" href="_site.css">
+</head>
+<body>
+<!--
+  The tutorial is the Markdown file in docs/, fetched and drawn with uiMdPre (dogfooding).
+  English -> docs/TUTORIAL.md, Japanese -> docs/TUTORIAL.ja.md, switched by the nav bar's
+  language selector. ```html live fences become a code block plus a running sandboxed iframe
+  (see _doc.js).
+-->
+<main class="site-main"><div id="app"></div></main>
+
+<script src="dist/ricdom.iife.min.js"></script>
+<script src="dist/ricdom-ui.iife.min.js"></script>
+<script src="examples/_i18n.js"></script>
+<script src="_site.js"></script>
+<script src="examples/_nav.js"></script>
+<script src="_doc.js"></script>
+<script>
+  ricdomDoc.mount({
+    target: '#app',
+    url: (lang) => (lang === 'ja' ? 'docs/TUTORIAL.ja.md' : 'docs/TUTORIAL.md'),
+  });
+</script>
+</body>
+</html>

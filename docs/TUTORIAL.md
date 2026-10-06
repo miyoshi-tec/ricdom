@@ -611,7 +611,7 @@ for `spin` — the row type is inferred from the value's type (booleans → chec
 → number input, hex/`rgba()` strings → color picker, everything else → text). Nest a plain
 object to get a collapsible folder. Override individual rows (min/max/step/options/type)
 with the `keys` prop, or append your own hand-built rows with `rows` — see
-[SPEC.md §10](SPEC.md#10-components) or `examples/tweak.html` for the full three-tier API.
+[SPEC.md §10](SPEC.md#10-components) or `examples/10-tweak-panel.html` for the full three-tier API.
 
 A row doesn't have to come from `data`: give a `keys` entry a `get` (and optionally `set`)
 function and it renders as its own row without ever reading or writing `data[key]` —
@@ -718,7 +718,7 @@ With the IIFE build (no bundler), load it as a third `<script>` tag alongside th
 ```
 
 `ricdomMdEditor.createMdEditor` is then available as its own global — see
-`examples/md-editor.html` for a full working page.
+`examples/09-markdown.html` for a full working page.
 
 ---
 

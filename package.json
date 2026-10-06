@@ -85,7 +85,9 @@
     "test": "vitest run --project unit",
     "pretest:browser": "npm run build",
     "test:browser": "vitest run --project browser",
-    "pretest:examples": "npm run build",
+    "build:site": "npm run build && node scripts/build-site.mjs",
+    "check:i18n": "node scripts/checkI18n.mjs",
+    "pretest:examples": "npm run build && node scripts/build-site.mjs && node scripts/checkI18n.mjs",
     "test:examples": "node scripts/examplesSmoke.mjs",
     "typecheck": "tsc --noEmit"
   },

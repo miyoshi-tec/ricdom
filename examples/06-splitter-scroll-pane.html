@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>ricdom — 06 Splitter, scroll pane and more (no build step)</title>
+<link rel="stylesheet" href="../dist/ricdom-ui.css">
+<style>
+  body { font-family: system-ui, sans-serif; }
+  h1 { font-size: 1.1rem; }
+  h2 { font-size: 0.95rem; margin: 1.5rem 0 4px; }
+  .app-shell { max-width: 900px; margin: 0 auto; }
+</style>
+</head>
+<body>
+<!--
+  TODO (later wave): tabs, accordion and dropdown move to their own page 07; this page keeps
+  the splitter and the scroll pane (06) until then.
+
+  No build step for consumers (design goal G1): two IIFE bundles (ricdom -> ricdom/ui) and one
+  CSS <link> show the stateful components (splitter, scrollPane, collapseBox, accordion, tabs,
+  dropdown) and the pure inlineMenu.
+-->
+<div id="app"></div>
+
+<script src="../dist/ricdom.iife.min.js"></script>
+<script src="../dist/ricdom-ui.iife.min.js"></script>
+<script src="_i18n.js"></script><script src="_samples.js"></script><script src="_nav.js"></script>
+<script>
+  const U = ricdomUI;
+  const { t, addDict, onLangChange } = ricdomI18n;
+
+  addDict('ja', {
+    'ricdom — splitter, scroll pane and more': 'ricdom — スプリッター・スクロールペインほか',
+    'Side panel': 'サイドパネル',
+    'Main panel (drag the divider, or focus it and use the arrow keys)': 'メインパネル (仕切り線をドラッグ、またはフォーカスして矢印キー)',
+    'Message': 'メッセージ',
+    'Send': '送信',
+    'To the end': '末尾へ',
+    'Hide details': '詳細を隠す',
+    'Show details': '詳細を表示',
+    'The details go here. Opening and closing is animated.': 'ここに詳細な説明文が入ります。開閉はアニメーションします。',
+    'Do I need a build?': 'ビルドは必要ですか？',
+    'No. Two IIFE bundles and one CSS <link> are enough.': 'いいえ。IIFE 2 本と CSS の <link> 1 本だけで動きます。',
+    'How do I register a stateful component?': '状態を持つ部品はどう登録しますか？',
+    'Explicitly, with app.use(createX()).': 'app.use(createX()) で明示的に登録します。',
+    'Profile': 'プロフィール',
+    'Contents of the profile tab': 'プロフィールタブの中身',
+    'Notifications': '通知設定',
+    'Contents of the notifications tab': '通知設定タブの中身',
+    'Billing': '請求',
+    'Contents of the billing tab': '請求タブの中身',
+    'Sort: ': '並び順: ',
+    'Export': 'エクスポート',
+    'Import': 'インポート',
+    'Row A': '行 A',
+    'Row B': '行 B',
+    'Rename': '名前を変更',
+    'Delete': '削除',
+    // The seed chat messages are stored as English strings and passed through t() when drawn,
+    // so a message typed by the user (which has no entry here) is shown exactly as typed.
+    'Welcome!': 'ようこそ！',
+    'This is a createScrollPane demo.': 'これは createScrollPane のデモです。',
+    'Sending a message scrolls to the end automatically.': 'メッセージを送ると自動で末尾までスクロールします。',
+  });
+
+  // An icon descriptor fetched with `npx ricdom-icon settings`; do not hand-write them.
+  const ICON_GEAR = { p: ['M12 2v2', 'M12 20v2', 'M4.93 4.93l1.41 1.41', 'M17.66 17.66l1.41 1.41', 'M2 12h2', 'M20 12h2', 'M4.93 19.07l1.41-1.41', 'M17.66 6.34l1.41-1.41', 'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z'] };
+
+  const state = {
+    sidebarCollapsed: false, // splitter
+    messages: ['Welcome!', 'This is a createScrollPane demo.', 'Sending a message scrolls to the end automatically.'], // scrollPane (chat)
+    draft: '',
+    detailsOpen: false, // collapseBox
+    sort: 'name', // dropdown
+    menuForRow: null, // inlineMenu
+  };
+
+  // Stateful components are registered with app.use(); doing it in `setup` means they exist
+  // before the first render (no "is it ready yet" guard needed in the render function).
+  let split, pane, box, acc, tabs, sortDD, actionsDD;
+
+  const splitterDemo = (s) =>
+    U.uiCol({
+      children: [
+        { tag: 'h2', children: ['createSplitter'] },
+        {
+          tag: 'div',
+          style: { height: '180px', border: '1px solid var(--ric-color-border)', borderRadius: 'var(--ric-radius)' },
+          children: [
+            split({
+              collapsed: s.sidebarCollapsed,
+              onCollapseChange: (v) => { s.sidebarCollapsed = v; },
+              side: [{ tag: 'div', style: { padding: '8px' }, children: [U.uiText({ children: [t('Side panel')] })] }],
+              main: [{ tag: 'div', style: { padding: '8px' }, children: [U.uiText({ children: [t('Main panel (drag the divider, or focus it and use the arrow keys)')] })] }],
+            }),
+          ],
+        },
+      ],
+    });
+
+  const scrollPaneDemo = (s) =>
+    U.uiCol({
+      children: [
+        { tag: 'h2', children: ['createScrollPane (follow: "bottom")'] },
+        pane({
+          style: { height: '140px', border: '1px solid var(--ric-color-border)', borderRadius: 'var(--ric-radius)', padding: '8px' },
+          children: s.messages.map((m) => ({ tag: 'div', children: [t(m)] })),
+        }),
+        U.uiRow({
+          children: [
+            U.bindInput(s, 'draft', { placeholder: t('Message') }),
+            U.uiButton({
+              variant: 'primary',
+              children: [t('Send')],
+              onclick: () => {
+                if (!s.draft) return;
+                s.messages = [...s.messages, s.draft];
+                s.draft = '';
+              },
+            }),
+            U.uiButton({ variant: 'ghost', children: [t('To the end')], onclick: () => pane.scrollToBottom() }),
+          ],
+        }),
+      ],
+    });
+
+  const collapseBoxDemo = (s) =>
+    U.uiCol({
+      children: [
+        { tag: 'h2', children: ['createCollapseBox'] },
+        U.uiButton({
+          id: 'details-toggle',
+          'aria-expanded': String(s.detailsOpen),
+          'aria-controls': box.idFor(),
+          children: [s.detailsOpen ? t('Hide details') : t('Show details')],
+          onclick: () => { s.detailsOpen = !s.detailsOpen; },
+        }),
+        box({ visible: s.detailsOpen, children: [U.uiPanel({ children: [t('The details go here. Opening and closing is animated.')] })] }),
+      ],
+    });
+
+  const accordionDemo = () =>
+    U.uiCol({
+      children: [
+        { tag: 'h2', children: ['createAccordion'] },
+        acc({
+          items: [
+            { id: 'q1', title: t('Do I need a build?'), children: [U.uiText({ children: [t('No. Two IIFE bundles and one CSS <link> are enough.')] })] },
+            { id: 'q2', title: t('How do I register a stateful component?'), children: [U.uiText({ children: [t('Explicitly, with app.use(createX()).')] })] },
+          ],
+          multi: false,
+        }),
+      ],
+    });
+
+  const tabsDemo = () =>
+    U.uiCol({
+      children: [
+        { tag: 'h2', children: ['createTabs (uncontrolled)'] },
+        tabs({
+          items: [
+            { key: 'a', label: t('Profile'), children: [U.uiText({ children: [t('Contents of the profile tab')] })] },
+            { key: 'b', label: t('Notifications'), children: [U.uiText({ children: [t('Contents of the notifications tab')] })] },
+            { key: 'c', label: t('Billing'), children: [U.uiText({ children: [t('Contents of the billing tab')] })] },
+          ],
+        }),
+      ],
+    });
+
+  const dropdownDemo = (s) =>
+    U.uiCol({
+      children: [
+        { tag: 'h2', children: ['createDropdown (label / icon modes)'] },
+        U.uiRow({
+          children: [
+            sortDD({
+              label: t('Sort: ') + s.sort,
+              chevron: true,
+              children: ['name', 'date', 'size'].map((v) =>
+                U.uiButton({ variant: v === s.sort ? 'primary' : 'ghost', children: [v], onclick: () => { s.sort = v; sortDD.close(); } }),
+              ),
+            }),
+            actionsDD({
+              icon: U.uiIcon(ICON_GEAR, { size: 16 }),
+              ghost: true,
+              children: [
+                U.uiButton({ variant: 'ghost', children: [t('Export')], onclick: () => actionsDD.close() }),
+                U.uiButton({ variant: 'ghost', children: [t('Import')], onclick: () => actionsDD.close() }),
+              ],
+            }),
+          ],
+        }),
+      ],
+    });
+
+  const inlineMenuDemo = (s) =>
+    U.uiCol({
+      children: [
+        { tag: 'h2', children: ['uiInlineMenu (pure function, no portal)'] },
+        U.uiCol({
+          children: ['Row A', 'Row B'].map((row) => ({
+            tag: 'div',
+            style: { position: 'relative', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 8px', border: '1px solid var(--ric-color-border)', borderRadius: 'var(--ric-radius)' },
+            children: [
+              t(row),
+              U.uiButton({
+                variant: 'ghost',
+                children: ['⋯'],
+                onclick: (e) => {
+                  e.stopPropagation();
+                  s.menuForRow = s.menuForRow === row ? null : row;
+                },
+              }),
+              U.uiInlineMenu({
+                open: s.menuForRow === row,
+                anchor: 'br',
+                onClose: () => { s.menuForRow = null; },
+                children: [
+                  U.uiButton({ children: [t('Rename')], onclick: () => { s.menuForRow = null; } }),
+                  U.uiButton({ children: [t('Delete')], onclick: () => { s.menuForRow = null; } }),
+                ],
+              }),
+            ],
+          })),
+        }),
+      ],
+    });
+
+  const app = ricdom.createApp(
+    '#app',
+    state,
+    (s) =>
+      U.uiPanel({
+        class: 'app-shell',
+        style: { margin: '2rem auto' },
+        children: [
+          { tag: 'h1', children: [t('ricdom — splitter, scroll pane and more')] },
+          splitterDemo(s),
+          U.uiSeparator(),
+          scrollPaneDemo(s),
+          U.uiSeparator(),
+          collapseBoxDemo(s),
+          U.uiSeparator(),
+          accordionDemo(),
+          U.uiSeparator(),
+          tabsDemo(),
+          U.uiSeparator(),
+          dropdownDemo(s),
+          U.uiSeparator(),
+          inlineMenuDemo(s),
+        ],
+      }),
+    {
+      setup: (a) => {
+        split = a.use(U.createSplitter({ side: 'left', size: 180, min: 100, max: 320 }));
+        pane = a.use(U.createScrollPane({ follow: 'bottom' }));
+        box = a.use(U.createCollapseBox());
+        acc = a.use(U.createAccordion({ defaultOpen: { q1: true } }));
+        tabs = a.use(U.createTabs());
+        sortDD = a.use(U.createDropdown());
+        actionsDD = a.use(U.createDropdown());
+      },
+    },
+  );
+
+  // Close the inline menu on an outside click: the library keeps no global listener for it, so
+  // the caller writes this one. Read through `app` (the reactive handle), not the original `state`.
+  document.addEventListener('click', () => {
+    if (app.menuForRow !== null) app.menuForRow = null;
+  });
+
+  // Strings read through t() are plain values, so re-render when the language changes.
+  onLangChange(() => app.renderNow());
+</script>
+</body>
+</html>

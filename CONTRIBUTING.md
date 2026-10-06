@@ -73,6 +73,26 @@ mid-animation, a re-render firing while an input is mid-edit, a component used w
 required setup step, empty/zero/negative edge cases in numeric props. A bug that only
 shows up under adversarial conditions is still a bug.
 
+## Docs site
+
+The docs site (landing page, tutorial, spec, icon playground and the numbered samples in
+`examples/`) is plain HTML rendered by ricdom itself, with no build step of its own.
+
+- `npm run build:site` builds the library and assembles `_site/` (git-ignored) from `site/`,
+  `examples/`, `docs/*.md` and the browser-facing files of `dist/`. Serve it with any static
+  server, for example `npx http-server _site`; the tutorial and spec fetch Markdown, which
+  browsers block under `file://`.
+- `npm run test:examples` rebuilds the site and smoke-tests every page in headless Chromium
+  (no console errors, shared nav bar, both languages, live tutorial demos).
+- Samples are numbered `examples/NN-slug.html` and listed in `examples/_samples.js`; the smoke
+  test fails if a file and its list entry do not match. Load `_i18n.js`, `_samples.js` and
+  `_nav.js` after the dist bundles, as the existing samples do.
+- i18n is gettext-style: **the English string is the key** and there is no English dictionary.
+  Write `t('English text')` (or ``t`${n} items`` for placeholders) and add the Japanese text in
+  the same file with `ricdomI18n.addDict('ja', { 'English text': '日本語' })`.
+  `npm run check:i18n` fails when a `t()` key has no `ja` entry. Code and comments in samples
+  stay in English.
+
 ## Commit messages
 
 This project uses [Conventional Commits](https://www.conventionalcommits.org/)

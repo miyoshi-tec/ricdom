@@ -2,42 +2,75 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>ricdom examples</title>
+<title>ricdom — Examples</title>
+<link rel="stylesheet" href="../dist/ricdom-ui.css">
 <style>
-  body { font-family: system-ui, sans-serif; margin: 2rem; max-width: 640px; }
-  h1 { font-size: 1.2rem; }
-  p.lede { color: #555; }
-  ul { padding-left: 1.2rem; }
-  li { margin: 0.6rem 0; }
-  code { background: #f2f2f2; padding: 0.1rem 0.3rem; border-radius: 4px; }
+  body { font-family: system-ui, sans-serif; }
+  main { padding: 2rem; max-width: 720px; }
+  h1 { font-size: 1.3rem; }
+  ol { padding-left: 0; list-style: none; }
+  li { margin: 0.9rem 0; display: flex; gap: 0.8rem; align-items: baseline; }
+  .num { font-variant-numeric: tabular-nums; color: var(--ric-color-fg-muted); min-width: 2ch; }
+  .blurb { display: block; color: var(--ric-color-fg-muted); font-size: 0.9rem; }
+  a { color: var(--ric-color-accent); }
 </style>
 </head>
 <body>
 <!--
-  Every demo below opens directly in a browser, no build step: each one loads
-  ../dist/ricdom.iife.min.js (and, where used, ../dist/ricdom-ui.iife.min.js +
-  ../dist/ricdom-ui.css) via a plain <script>/<link> tag. Run `npm run build`
-  once first so dist/ exists, then open any .html file here directly.
+  Every demo opens directly in a browser, no build step: each loads ../dist/ricdom.iife.min.js
+  (and, where used, ../dist/ricdom-ui.iife.min.js + ../dist/ricdom-ui.css) with plain
+  <script>/<link> tags. Run `npm run build` once so dist/ exists, then open any page.
+
+  This list is rendered from _samples.js, the same source the nav bar uses for previous/next.
+  `Home` points at the docs-site landing page, which exists in the output of `npm run build:site`.
 -->
-<h1>ricdom examples</h1>
-<p class="lede">Seven build-free demo pages. Each opens directly in a browser — no
-  <code>npm install</code>, no bundler.</p>
-<ul>
-  <li><a href="hello.html">hello.html</a> — the smallest possible app: one
-    <code>&lt;script&gt;</code> tag and a counter (<code>ricdom</code> core only).</li>
-  <li><a href="controls.html">controls.html</a> — every stateless control, layout, and
-    text component (<code>ricdom/ui</code>, no <code>app.use()</code> needed).</li>
-  <li><a href="ui.html">ui.html</a> — dialog, popup, toast, and tooltip (stateful
-    components registered via <code>app.use()</code>).</li>
-  <li><a href="composite.html">composite.html</a> — splitter, scroll pane, collapse box,
-    accordion, tabs, dropdown, and the inline menu.</li>
-  <li><a href="tweak.html">tweak.html</a> — <code>createTweakPanel</code>, a dat.GUI-style
-    parameter panel with live-updating output.</li>
-  <li><a href="md-editor.html">md-editor.html</a> — <code>ricdom/md-editor</code>
-    (opt-in subpath, its own IIFE): a real <code>&lt;textarea&gt;</code> with Markdown
-    syntax colors.</li>
-  <li><a href="glass.html">glass.html</a> — the <code>glass</code>/<code>glass-dark</code>
-    frosted-glass themes over a CSS-only wallpaper background, all 7 bundled themes.</li>
-</ul>
+<main>
+  <div id="app"></div>
+</main>
+
+<script src="../dist/ricdom.iife.min.js"></script>
+<script src="../dist/ricdom-ui.iife.min.js"></script>
+<script src="_i18n.js"></script><script src="_samples.js"></script>
+<script>window.RICDOM_NAV_OPTIONS = { links: [{ href: '../index.html', label: 'Home' }], source: false, samples: false };</script>
+<script src="_nav.js"></script>
+<script>
+  const { t, addDict, onLangChange, getLang } = ricdomI18n;
+
+  addDict('ja', {
+    'ricdom examples': 'ricdom サンプル',
+    'Build-free demo pages. Each one opens directly in a browser: no npm install, no bundler.':
+      'ビルド不要のデモページ集です。どれもブラウザで直接開けます (npm install も bundler も不要)。',
+  });
+
+  const app = ricdom.createApp('#app', {}, () => {
+    const lang = getLang();
+    return {
+      tag: 'div',
+      children: [
+        { tag: 'h1', children: [t('ricdom examples')] },
+        { tag: 'p', children: [t('Build-free demo pages. Each one opens directly in a browser: no npm install, no bundler.')] },
+        {
+          tag: 'ol',
+          children: RICDOM_SAMPLES.map((sample) => ({
+            tag: 'li',
+            key: sample.file,
+            children: [
+              { tag: 'span', class: 'num', children: [sample.file.slice(0, 2)] },
+              {
+                tag: 'span',
+                children: [
+                  { tag: 'a', href: sample.file, children: [sample.title[lang] || sample.title.en] },
+                  { tag: 'span', class: 'blurb', children: [sample.blurb[lang] || sample.blurb.en] },
+                ],
+              },
+            ],
+          })),
+        },
+      ],
+    };
+  });
+
+  onLangChange(() => app.renderNow());
+</script>
 </body>
 </html>

@@ -1,0 +1,46 @@
+/* Layout for the docs site pages (site/*.html). Colors, radii and borders come from the
+   --ric-* tokens only, so every page follows the theme chosen in the shared nav bar. */
+body { font-family: system-ui, sans-serif; }
+.site-main { max-width: 1100px; margin: 0 auto; padding: 24px 16px 48px; }
+.site-main h1 { font-size: 1.6rem; margin: 0 0 0.5rem; }
+.site-lede { color: var(--ric-color-fg-muted); font-size: 1.05rem; margin: 0 0 1.5rem; }
+.site-note { margin: 0 0 1rem; padding: 8px 12px; border: 1px solid var(--ric-color-border); border-radius: var(--ric-radius); color: var(--ric-color-fg-muted); font-size: 0.9rem; }
+.site-note code { background: var(--ric-code-bg); color: var(--ric-code-fg); padding: 0 4px; border-radius: 4px; }
+.site-footer { margin-top: 2rem; padding-top: 1rem; border-top: 1px solid var(--ric-color-border); color: var(--ric-color-fg-muted); font-size: 0.85rem; }
+.site-footer code { background: var(--ric-code-bg); color: var(--ric-code-fg); padding: 0 4px; border-radius: 4px; }
+a { color: var(--ric-color-accent); }
+
+/* Landing page */
+.site-points { list-style: none; padding: 0; margin: 0 0 1.5rem; display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+.site-points li { border: 1px solid var(--ric-color-border); border-radius: var(--ric-radius); padding: 12px 16px; background: color-mix(in srgb, var(--ric-color-control) 70%, transparent); }
+.site-points strong { display: block; margin-bottom: 4px; }
+.site-links { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin: 0 0 1.5rem; padding: 0; list-style: none; }
+.site-links a { display: block; border: 1px solid var(--ric-color-border); border-radius: var(--ric-radius); padding: 12px 16px; text-decoration: none; background: color-mix(in srgb, var(--ric-color-control) 70%, transparent); }
+.site-links a:hover { border-color: var(--ric-color-accent); }
+.site-links small { display: block; color: var(--ric-color-fg-muted); font-weight: normal; margin-top: 2px; }
+.site-code { margin: 0 0 1.5rem; }
+
+/* Document pages (tutorial / spec) */
+.doc-layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 24px; align-items: start; }
+.doc-toc { position: sticky; top: 64px; max-height: calc(100vh - 80px); overflow: auto; font-size: 0.85rem; }
+.doc-toc a { display: block; padding: 2px 0; color: var(--ric-color-fg-muted); text-decoration: none; }
+.doc-toc a:hover { color: var(--ric-color-accent); }
+.doc-toc a.is-h3 { padding-left: 12px; }
+.doc-body h1, .doc-body h2, .doc-body h3 { scroll-margin-top: 64px; }
+.doc-main { min-width: 0; }
+.doc-demo { margin: 0.5rem 0 1rem; }
+.doc-demo__label { font-size: 0.75rem; color: var(--ric-color-fg-muted); margin: 0 0 2px; }
+/* The iframe is a self-contained light "card": the demo code brings no theme of its own. */
+.doc-demo iframe { display: block; width: 100%; min-height: 80px; border: 1px solid var(--ric-color-border); border-radius: var(--ric-radius); background: #fff; resize: vertical; }
+@media (max-width: 800px) {
+  .doc-layout { grid-template-columns: minmax(0, 1fr); }
+  .doc-toc { position: static; max-height: none; }
+}
+
+/* Icon playground */
+.icon-controls { display: flex; flex-wrap: wrap; gap: 8px 24px; align-items: center; margin: 0 0 1rem; }
+.icon-controls label { display: inline-flex; align-items: center; gap: 8px; font-size: 0.9rem; }
+.icon-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
+.icon-cell { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 6px; border: 1px solid var(--ric-color-border); border-radius: var(--ric-radius); background: color-mix(in srgb, var(--ric-color-control) 70%, transparent); color: var(--ric-color-fg); font: inherit; cursor: pointer; }
+.icon-cell:hover, .icon-cell:focus-visible { border-color: var(--ric-color-accent); }
+.icon-cell span { font-size: 0.75rem; color: var(--ric-color-fg-muted); word-break: break-all; text-align: center; }

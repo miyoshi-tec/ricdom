@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ricdom — Write UI as plain objects</title>
+<link rel="stylesheet" href="dist/ricdom-ui.css">
+<link rel="stylesheet" href="_site.css">
+</head>
+<body>
+<!--
+  Landing page of the docs site. It is itself a ricdom app with no build step: two IIFE bundles,
+  the shared i18n helper and the shared nav bar (theme and language selectors).
+-->
+<main class="site-main"><div id="app"></div></main>
+
+<script src="dist/ricdom.iife.min.js"></script>
+<script src="dist/ricdom-ui.iife.min.js"></script>
+<script src="examples/_i18n.js"></script>
+<script src="_site.js"></script>
+<script src="examples/_nav.js"></script>
+<script>
+  const U = ricdomUI;
+  const { t, addDict, onLangChange } = ricdomI18n;
+
+  addDict('ja', {
+    'Write UI as plain objects. Assign to state. The real DOM updates.': 'UI をオブジェクトで書く。state に代入する。実 DOM が更新される。',
+    'Plain-object UI tree': 'オブジェクトで書く UI ツリー',
+    'No JSX, no template compiler, no DSL to learn. A component is just an object literal, typed end to end.':
+      'JSX もテンプレートコンパイラも専用構文も不要。コンポーネントはただのオブジェクトリテラルで、最初から最後まで型が付きます。',
+    'Proxy state, no ceremony': '儀式のいらない Proxy state',
+    'app.count += 1 re-renders. No store, no reducer, no subscription to wire up by hand.':
+      'app.count += 1 で再描画されます。ストアもリデューサも手書きの購読も不要です。',
+    'No build step, ever, for consumers': '利用側にビルド不要',
+    'One <script> tag or one import and it runs. TypeScript is how ricdom itself is built, not something you must adopt.':
+      '<script> 1 本、または import 1 本で動きます。TypeScript は ricdom 自身を作るための道具で、利用者に強制するものではありません。',
+    'Try it: the counter below is a ricdom app.': '試してみる: 下のカウンターは ricdom アプリです。',
+    'Examples': 'サンプル',
+    'Build-free demo pages, from Hello to themes': 'Hello からテーマまで、ビルド不要のデモ集',
+    'Tutorial': 'チュートリアル',
+    'From the first button to data binding': '最初のボタンからデータバインディングまで',
+    'Spec': '仕様',
+    'Every rule and FACT, in English': 'すべての規則と FACT (英語)',
+    'Icons': 'アイコン',
+    'Icon playground and copy-ready snippets': 'アイコン一覧とコピー用スニペット',
+    'GitHub': 'GitHub',
+    'Source code and issues': 'ソースコードと issue',
+    'Changelog': '変更履歴',
+    'What changed in every release': '各リリースの変更点',
+    'MIT licensed. Core is about 5 KB gzipped.': 'MIT ライセンス。コアは gzip で約 5 KB。',
+  });
+
+  const link = (href, label, sub) => ({
+    tag: 'li',
+    children: [{ tag: 'a', href, children: [{ tag: 'strong', children: [t(label)] }, { tag: 'small', children: [t(sub)] }] }],
+  });
+
+  const app = ricdom.createApp('#app', { count: 0 }, (s) => ({
+    tag: 'div',
+    children: [
+      { tag: 'h1', children: ['ricdom'] },
+      { tag: 'p', class: 'site-lede', children: [t('Write UI as plain objects. Assign to state. The real DOM updates.')] },
+      {
+        tag: 'ul',
+        class: 'site-points',
+        children: [
+          {
+            tag: 'li',
+            children: [
+              { tag: 'strong', children: [t('Plain-object UI tree')] },
+              t('No JSX, no template compiler, no DSL to learn. A component is just an object literal, typed end to end.'),
+            ],
+          },
+          {
+            tag: 'li',
+            children: [
+              { tag: 'strong', children: [t('Proxy state, no ceremony')] },
+              t('app.count += 1 re-renders. No store, no reducer, no subscription to wire up by hand.'),
+            ],
+          },
+          {
+            tag: 'li',
+            children: [
+              { tag: 'strong', children: [t('No build step, ever, for consumers')] },
+              t('One <script> tag or one import and it runs. TypeScript is how ricdom itself is built, not something you must adopt.'),
+            ],
+          },
+        ],
+      },
+      U.uiPanel({
+        class: 'site-code',
+        children: [
+          U.uiText({ children: [t('Try it: the counter below is a ricdom app.')] }),
+          U.uiRow({
+            children: [
+              U.uiButton({ children: ['-'], onclick: () => { s.count -= 1; } }),
+              { tag: 'output', children: [String(s.count)] },
+              U.uiButton({ children: ['+'], onclick: () => { s.count += 1; } }),
+            ],
+          }),
+        ],
+      }),
+      {
+        tag: 'ul',
+        class: 'site-links',
+        children: [
+          link('examples/index.html', 'Examples', 'Build-free demo pages, from Hello to themes'),
+          link('tutorial.html', 'Tutorial', 'From the first button to data binding'),
+          link('spec.html', 'Spec', 'Every rule and FACT, in English'),
+          link('icons.html', 'Icons', 'Icon playground and copy-ready snippets'),
+          link('https://github.com/miyoshi-tec/ricdom', 'GitHub', 'Source code and issues'),
+          link('https://github.com/miyoshi-tec/ricdom/blob/main/CHANGELOG.md', 'Changelog', 'What changed in every release'),
+        ],
+      },
+      { tag: 'p', class: 'site-footer', children: [t('MIT licensed. Core is about 5 KB gzipped.')] },
+    ],
+  }));
+
+  // Strings read through t() are plain values, so re-render when the language changes.
+  onLangChange(() => app.renderNow());
+</script>
+</body>
+</html>

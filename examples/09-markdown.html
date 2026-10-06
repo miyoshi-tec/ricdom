@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>ricdom — 09 Markdown editor (no build step)</title>
+<link rel="stylesheet" href="../dist/ricdom-ui.css">
+<style>
+  body { font-family: system-ui, sans-serif; }
+  main { padding: 2rem; max-width: 720px; }
+  h1 { font-size: 1.1rem; }
+  /* wrapperClass (2.0.0-alpha.17) lands this class on the wrapper div.ric-md-editor itself, not
+     on the textarea. Sizing the wrapper through `.ric-md-editor` from outside works too, but
+     wrapperClass is the documented way to do it without depending on that internal class name. */
+  .example-md-editor { width: 100%; }
+  .example-md-editor textarea { min-height: 320px; }
+</style>
+</head>
+<body>
+<!--
+  ricdom/md-editor is an opt-in subpath (not part of ricdom/ui). It ships its own IIFE,
+  dist/ricdom-md-editor.iife.min.js, with the global name `ricdomMdEditor`. The element the page
+  interacts with is still a plain <textarea> (value / oninput / ref all work exactly like
+  uiTextarea): createMdEditor only overlays a colored, aria-hidden <pre> mirror behind it, so the
+  Markdown source reads like a syntax-highlighted file without giving up any native editing
+  behavior (IME, undo, spellcheck, screen readers).
+
+  No build step for consumers (design goal G1): three <script> tags (core -> ui -> md-editor)
+  plus the ui.css <link>; this page opens directly in a browser.
+-->
+<main>
+  <div id="app"></div>
+</main>
+
+<script src="../dist/ricdom.iife.min.js"></script>
+<script src="../dist/ricdom-ui.iife.min.js"></script>
+<script src="../dist/ricdom-md-editor.iife.min.js"></script>
+<script src="_i18n.js"></script><script src="_samples.js"></script><script src="_nav.js"></script>
+<script>
+  const U = ricdomUI;
+  const MD = ricdomMdEditor;
+  const { t, addDict, onLangChange } = ricdomI18n;
+
+  addDict('ja', {
+    'ricdom/md-editor': 'ricdom/md-editor',
+    'The area below is a real <textarea>. Markdown syntax (headings, bold, emphasis, links, fenced code, tables, ...) is colored by an invisible mirror layered behind it.':
+      '下の欄は本物の <textarea> です。Markdown の構文 (見出し・太字・強調・リンク・コードブロック・表など) は、背後に重ねた見えないミラーが色分けします。',
+    'Write Markdown…': 'Markdown を書いてください…',
+  });
+
+  const SAMPLE = [
+    '---',
+    'title: ricdom/md-editor sample',
+    '---',
+    '',
+    '# ricdom/md-editor',
+    '',
+    'A **Markdown**-colored `textarea` with *no* extra dependency. Supports:',
+    '',
+    '- bullet lists',
+    '- [ ] unchecked tasks',
+    '- [x] checked tasks',
+    '',
+    '1. ordered lists',
+    '2. with a `start` attribute too',
+    '',
+    '> Blockquotes look like this.',
+    '',
+    '```js',
+    'const highlight = window.hljs ? "syntax-highlighted" : "plain colored";',
+    'console.log(highlight);',
+    '```',
+    '',
+    '| Feature | Status |',
+    '|---|---|',
+    '| Caret / IME | native textarea |',
+    '| Undo / spellcheck | native textarea |',
+    '',
+    'A [link](https://github.com/miyoshi-tec/ricdom) and an autolink <https://ricdom.dev>.',
+    '',
+    '---',
+    '',
+    'Try typing below — the colors update as you type.',
+  ].join('\n');
+
+  let md;
+
+  const app = ricdom.createApp(
+    '#app',
+    { body: SAMPLE },
+    (s) =>
+      U.uiPanel({
+        children: [
+          { tag: 'h1', children: [t('ricdom/md-editor')] },
+          U.uiText({
+            children: [t('The area below is a real <textarea>. Markdown syntax (headings, bold, emphasis, links, fenced code, tables, ...) is colored by an invisible mirror layered behind it.')],
+          }),
+          U.uiSeparator(),
+          md({
+            value: s.body,
+            placeholder: t('Write Markdown…'),
+            wrapperClass: 'example-md-editor',
+            oninput: (ev) => {
+              s.body = ev.target.value;
+            },
+          }),
+        ],
+      }),
+    { setup: (a) => { md = a.use(MD.createMdEditor()); } },
+  );
+
+  // Strings read through t() are plain values, so re-render when the language changes.
+  onLangChange(() => app.renderNow());
+</script>
+</body>
+</html>

@@ -1,67 +1,64 @@
 <!DOCTYPE html>
-<html lang="ja">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>RicDOM 2 — controls (control / layout / text、no build step)</title>
+<title>ricdom — 03 Forms and controls (no build step)</title>
 <link rel="stylesheet" href="../dist/ricdom-ui.css">
 <style>
-  body { font-family: system-ui, sans-serif; margin: 0; }
+  body { font-family: system-ui, sans-serif; }
   h1 { font-size: 1.1rem; }
   h2 { font-size: 0.95rem; margin: 0 0 4px; }
-  section.demo { margin-bottom: 4px; }
 </style>
 </head>
 <body>
 <!--
-  利用側はビルド不要 (設計書 G1)。IIFE 2 本 (ricdom → ricdom/ui) + CSS <link> だけで
-  control/layout/text 部品 (すべて純粋関数、app.use() 不要) が一覧できることの
-  証明 (設計書 §7)。npm install も webpack/vite の設定も不要 — このファイルをブラウザで
-  開くだけで動く。
+  TODO (later wave): this page is split into 02 (basic inputs), 03 (forms) and 04 (layout and
+  text); until then it carries all of them under the number 03.
+
+  No build step for consumers (design goal G1): two IIFE bundles (ricdom -> ricdom/ui) and one
+  CSS <link> show every control, layout and text component. All of them are pure functions, so
+  no app.use() is needed.
 -->
 <div id="app"></div>
 
 <script src="../dist/ricdom.iife.min.js"></script>
 <script src="../dist/ricdom-ui.iife.min.js"></script>
+<script src="_i18n.js"></script><script src="_samples.js"></script><script src="_nav.js"></script>
 <script>
-  // IIFE ビルドはグローバル `ricdom` / `ricdomUI` として公開される (tsup.config.ts の globalName)。
+  // The IIFE builds are exposed as the globals `ricdom` / `ricdomUI` (globalName in tsup.config.ts).
   const U = ricdomUI;
+  const { t, addDict, onLangChange } = ricdomI18n;
 
-  // v1 icons/src.json の 'check'/'trash-2' と同じ path (手書きしない、既存の検証済みデータ)。
+  addDict('ja', {
+    'ricdom — controls': 'ricdom — コントロール一覧',
+    'Name': '名前',
+    'I agree to the terms of use': '利用規約に同意する',
+    'Delete': '削除',
+    'Heading': '見出し',
+    '**bold**, *italic*, `code` and a [link](https://example.com)': '**太字**・*斜体*・`code`・[リンク](https://example.com)',
+    'Item A': '項目 A',
+    'Item B': '項目 B',
+    'Step 1': '手順 1',
+    'Step 2': '手順 2',
+  });
+
+  // Icon descriptors are fetched with `npx ricdom-icon <name>` (here: check, trash-2); do not hand-write them.
   const ICON_CHECK = { p: 'M20 6 9 17l-5-5' };
   const ICON_TRASH = { p: ['M3 6h18', 'M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6', 'M10 11v6', 'M14 11v6', 'M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2'] };
 
   const state = {
-    theme: 'light',
-    name: '山崎',
-    memo: '複数行のメモを\nここに書けます。',
+    name: 'Alex',
+    memo: 'Notes can span\nseveral lines.',
     agree: true,
     role: 'editor',
-    lang: 'ja',
+    locale: 'ja',
     volume: 40,
     bg: '#2563eb',
     overlay: 'rgba(37,99,235,0.35)',
   };
 
-  // 注意: render の引数 `s` が「反応する」state (createApp が内部で state をラップした
-  // Proxy そのもの) — createApp に渡した外側の `state` 変数を直接書き換えても
-  // 再描画は起きない (Proxy は s 経由の操作だけを検知する、設計書 §3.3)。
-  // themeRow は必ず render から渡された s を受け取り、s.theme を書き換える。
-  const themeRow = (s) =>
-    U.uiRow({
-      children: [
-        U.uiText({ variant: 'label', children: ['テーマ:'] }),
-        ...['light', 'dark', 'teal', 'cyber', 'aqua'].map((t) =>
-          U.uiButton({
-            variant: t === s.theme ? 'primary' : 'default',
-            children: [t],
-            onclick: () => {
-              s.theme = t;
-            },
-          }),
-        ),
-      ],
-    });
-
+  // `s` (the render argument) is the reactive state itself: a Proxy created by createApp.
+  // Writing to the outer `state` object does not re-render; only writes through `s` do.
   const app = ricdom.createApp(
     '#app',
     state,
@@ -69,8 +66,7 @@
       U.uiPanel({
         style: { maxWidth: '720px', margin: '2rem auto' },
         children: [
-          { tag: 'h1', children: ['RicDOM 2 — controls'] },
-          themeRow(s),
+          { tag: 'h1', children: [t('ricdom — controls')] },
           U.uiSeparator(),
 
           U.uiCol({
@@ -78,18 +74,18 @@
               { tag: 'h2', children: ['control'] },
               U.uiRow({
                 children: [
-                  U.bindInput(s, 'name', { placeholder: '名前' }),
+                  U.bindInput(s, 'name', { placeholder: t('Name') }),
                   U.uiSelect({ value: s.role, options: ['viewer', 'editor', 'admin'], onchange: (e) => (s.role = e.target.value) }),
                 ],
               }),
               U.bindTextarea(s, 'memo', { autoResize: { minRows: 2, maxRows: 6 } }),
               U.uiRow({
                 children: [
-                  U.bindCheckbox(s, 'agree', { children: ['利用規約に同意する'] }),
+                  U.bindCheckbox(s, 'agree', { children: [t('I agree to the terms of use')] }),
                   U.uiRadiobutton({
-                    name: 'lang',
-                    value: s.lang,
-                    onchange: (e) => (s.lang = e.target.value),
+                    name: 'locale',
+                    value: s.locale,
+                    onchange: (e) => (s.locale = e.target.value),
                     options: [
                       { value: 'ja', label: [U.uiIcon(ICON_CHECK, { size: 16 }), ' 日本語'] },
                       { value: 'en', label: 'English' },
@@ -100,7 +96,7 @@
               U.uiRow({
                 children: [
                   U.bindRange(s, 'volume', { min: 0, max: 100 }),
-                  U.uiButton({ variant: 'ghost', children: [U.uiIcon(ICON_TRASH, { size: 16, label: '削除' })] }),
+                  U.uiButton({ variant: 'ghost', children: [U.uiIcon(ICON_TRASH, { size: 16, label: t('Delete') })] }),
                 ],
               }),
               U.uiRow({
@@ -130,15 +126,15 @@
               U.uiMdPre({
                 children: [
                   [
-                    '# 見出し',
+                    '# ' + t('Heading'),
                     '',
-                    '**太字**・*斜体*・`code`・[リンク](https://example.com)',
+                    t('**bold**, *italic*, `code` and a [link](https://example.com)'),
                     '',
-                    '- 項目 A',
-                    '- 項目 B',
+                    '- ' + t('Item A'),
+                    '- ' + t('Item B'),
                     '',
-                    '1. 手順 1',
-                    '2. 手順 2',
+                    '1. ' + t('Step 1'),
+                    '2. ' + t('Step 2'),
                     '',
                     '```js',
                     "console.log('hello');",
@@ -146,20 +142,14 @@
                   ].join('\n'),
                 ],
               }),
-              U.uiCodePre({ obj: { theme: s.theme, role: s.role, volume: s.volume } }),
+              U.uiCodePre({ obj: { role: s.role, volume: s.volume, locale: s.locale } }),
             ],
           }),
         ],
       }),
   );
 
-  U.applyTheme(document.getElementById('app'), { theme: state.theme });
-  // theme が変わるたびに applyTheme も呼び直す (render とは別軸の副作用として明示的に)
-  const originalRender = app.render;
-  app.render = (s) => {
-    U.applyTheme(document.getElementById('app'), { theme: s.theme });
-    return originalRender(s);
-  };
+  onLangChange(() => app.renderNow());
 </script>
 </body>
 </html>

@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>ricdom — 05 Dialog, popup, toast, tooltip (no build step)</title>
+<link rel="stylesheet" href="../dist/ricdom-ui.css">
+<style>
+  body { font-family: system-ui, sans-serif; }
+  main { padding: 2rem; max-width: 640px; }
+  h1 { font-size: 1.1rem; }
+  .row { display: flex; gap: 0.5rem; align-items: center; margin: 0.75rem 0; }
+</style>
+</head>
+<body>
+<!--
+  No build step for consumers (design goal G1): two IIFE bundles (ricdom -> ricdom/ui) and one
+  CSS <link> are enough for dialog, popup, toast and tooltip. Open this file in a browser.
+-->
+<main>
+  <div id="app"></div>
+</main>
+
+<script src="../dist/ricdom.iife.min.js"></script>
+<script src="../dist/ricdom-ui.iife.min.js"></script>
+<script src="_i18n.js"></script><script src="_samples.js"></script><script src="_nav.js"></script>
+<script>
+  // The IIFE builds are exposed as the globals `ricdom` / `ricdomUI` (globalName in tsup.config.ts).
+  const U = ricdomUI;
+  const { t, addDict, onLangChange } = ricdomI18n;
+
+  addDict('ja', {
+    'Dialog, popup, toast, tooltip': 'ダイアログ・ポップアップ・トースト・ツールチップ',
+    '{0} clicks': '{0} 回クリック',
+    'Open dialog': 'ダイアログを開く',
+    'Confirm': '確認',
+    'Do you really want to run it?': '本当に実行しますか？',
+    'OK': 'OK',
+    'Done': '実行しました',
+    'Menu ▾': 'メニュー ▾',
+    'Duplicate': '複製',
+    'Delete': '削除',
+    'Duplicated': '複製しました',
+    'Deleted': '削除しました',
+    'Tip: this button adds one to the count': 'ヒント: このボタンはカウントを 1 増やします',
+    'Type here (focus must survive re-renders)': 'ここに入力 (再描画しても入力中の状態が保たれます)',
+  });
+
+  // Stateful components (dialog, popup, toast, tooltip) are registered with app.use() (design
+  // section 3.4). `setup` runs once, right before the first render, so the render function can
+  // call them from its very first run.
+  let dlg, menu, toast, tip;
+
+  const app = ricdom.createApp(
+    '#app',
+    { count: 0 },
+    (s) => ({
+      tag: 'div',
+      children: [
+        { tag: 'h1', children: [t('Dialog, popup, toast, tooltip')] },
+        { tag: 'p', children: [t`${s.count} clicks`] },
+        {
+          tag: 'div',
+          class: 'row',
+          children: [
+            dlg({
+              triggerChildren: [t('Open dialog')],
+              title: t('Confirm'),
+              children: [t('Do you really want to run it?')],
+              actions: [
+                U.uiButton({
+                  variant: 'primary',
+                  children: [t('OK')],
+                  onclick: () => {
+                    s.count += 1;
+                    dlg.close();
+                    toast.show(t('Done'), { type: 'success' });
+                  },
+                }),
+              ],
+            }),
+            menu({
+              trigger: [t('Menu ▾')],
+              children: [
+                U.uiButton({ children: [t('Duplicate')], onclick: () => toast.show(t('Duplicated')) }),
+                U.uiButton({ children: [t('Delete')], onclick: () => toast.show(t('Deleted'), { type: 'error' }) }),
+              ],
+            }),
+            tip({
+              content: t('Tip: this button adds one to the count'),
+              children: [U.uiButton({ children: ['+1'], onclick: () => { s.count += 1; } })],
+            }),
+          ],
+        },
+        U.uiInput({
+          placeholder: t('Type here (focus must survive re-renders)'),
+          oninput: () => {
+            s.count = s.count; // a no-op write: typing must not be disturbed by re-renders
+          },
+        }),
+      ],
+    }),
+    {
+      setup: (a) => {
+        dlg = a.use(U.createDialog());
+        menu = a.use(U.createPopup());
+        toast = a.use(U.createToast());
+        tip = a.use(U.createTooltip());
+      },
+    },
+  );
+
+  // Strings read through t() are plain values, so re-render when the language changes.
+  onLangChange(() => app.renderNow());
+</script>
+</body>
+</html>

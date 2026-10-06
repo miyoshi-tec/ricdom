@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>ricdom — 10 Tweak panel (no build step)</title>
+<link rel="stylesheet" href="../dist/ricdom-ui.css">
+<style>
+  body { font-family: system-ui, sans-serif; }
+  h1 { font-size: 1.1rem; }
+  .app-shell { max-width: 900px; margin: 2rem auto; }
+  .demo-row { display: flex; gap: 24px; align-items: flex-start; flex-wrap: wrap; }
+  .stage {
+    width: 260px; height: 260px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    border: 1px solid var(--ric-color-border); border-radius: var(--ric-radius);
+    background: color-mix(in srgb, var(--ric-color-bg) 92%, var(--ric-color-fg) 8%);
+    overflow: hidden;
+  }
+  .shape { display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 600; user-select: none; }
+</style>
+</head>
+<body>
+<!--
+  No build step for consumers (design goal G1): two IIFE bundles (ricdom -> ricdom/ui) and one
+  CSS <link> show createTweakPanel at all three tiers, with changes applied immediately.
+  Move a number, color or option in the panel and the shape on the right changes on the spot.
+-->
+<div id="app"></div>
+
+<script src="../dist/ricdom.iife.min.js"></script>
+<script src="../dist/ricdom-ui.iife.min.js"></script>
+<script src="_i18n.js"></script><script src="_samples.js"></script><script src="_nav.js"></script>
+<script>
+  const U = ricdomUI;
+  const { t, addDict, onLangChange } = ricdomI18n;
+
+  addDict('ja', {
+    'ricdom — tweak panel': 'ricdom — tweak パネル',
+    'Pass only data and the rows are generated from the types (tier 1); override a few with keys (tier 2). Move the panel and the shape on the right changes at once.':
+      'data だけ渡すと型から行が自動生成され (Tier 1)、keys で一部だけ上書きできる (Tier 2)。パネルを弄ると右の図形がその場で変わる。',
+    'Parameters': 'パラメータ',
+    'Border': '枠線',
+    'Details': '詳細',
+    'shadow': '影あり',
+    'no shadow': '影なし',
+    'Area (approx.)': '面積 (概算)',
+    'Reset to defaults': '既定値に戻す',
+  });
+
+  const defaults = () => ({
+    size: 120,
+    color: '#4f8ef7',
+    rotation: 0,
+    rounded: 16,
+    mode: 'square',
+    showLabel: true,
+    label: 'ricdom',
+    border: { width: 2, color: '#1e293b' },
+    extra: { opacity: 100, shadow: false },
+  });
+
+  // `params` is the data handed to createTweakPanel. Tier 1 generates a row from each property's
+  // type (number -> number row, string -> text/color row, boolean -> checkbox row, plain object
+  // -> folder). size / rotation / rounded are overridden to type 'range' by keys (tier 2), and
+  // mode to 'radiobutton'.
+  const state = { params: defaults() };
+
+  // Stateful components are registered in createApp's 4th argument, `setup`. It runs once right
+  // before the first render, so `tweak` is usable from the first render call.
+  let tweak;
+
+  const shapeNode = (p) => ({
+    tag: 'div',
+    class: 'shape',
+    style: {
+      width: `${p.size}px`,
+      height: `${p.size}px`,
+      background: p.color,
+      borderRadius: p.mode === 'circle' ? '50%' : `${p.rounded}px`,
+      border: `${p.border.width}px solid ${p.border.color}`,
+      transform: `rotate(${p.rotation}deg)`,
+      transition: 'all 60ms linear',
+    },
+    children: [p.showLabel ? p.label : ''],
+  });
+
+  const app = ricdom.createApp(
+    '#app',
+    state,
+    (s) =>
+      U.uiPanel({
+        class: 'app-shell',
+        children: [
+          { tag: 'h1', children: [t('ricdom — tweak panel')] },
+          U.uiText({
+            children: [t('Pass only data and the rows are generated from the types (tier 1); override a few with keys (tier 2). Move the panel and the shape on the right changes at once.')],
+          }),
+          {
+            tag: 'div',
+            class: 'demo-row',
+            children: [
+              tweak({
+                title: t('Parameters'),
+                width: 260,
+                data: s.params,
+                keys: {
+                  size: { type: 'range', min: 40, max: 220, step: 2 },
+                  rotation: { type: 'range', min: 0, max: 360, step: 5 },
+                  rounded: { type: 'range', min: 0, max: 60 },
+                  mode: { type: 'radiobutton', options: ['square', 'circle'] },
+                  border: {
+                    label: t('Border'),
+                    open: true,
+                    keys: { width: { type: 'range', min: 0, max: 10 } },
+                  },
+                  // `summary` shows in the header only while the folder is closed (alpha.23),
+                  // so a collapsed folder can still show its current values.
+                  extra: {
+                    label: t('Details'),
+                    summary: `${s.params.extra.opacity}% / ${s.params.extra.shadow ? t('shadow') : t('no shadow')}`,
+                  },
+                  // A computed row that is not in `data` (keys.get): the area is derived from
+                  // size, display-only, and never stored in s.params.
+                  area: { label: t('Area (approx.)'), get: () => Math.round(s.params.size * s.params.size) },
+                },
+                // Tier 3: append your own row (a reset button) after the generated rows.
+                rows: [
+                  U.uiButton({
+                    children: [t('Reset to defaults')],
+                    onclick: () => {
+                      s.params = defaults();
+                    },
+                  }),
+                ],
+              }),
+              { tag: 'div', class: 'stage', children: [shapeNode(s.params)] },
+            ],
+          },
+        ],
+      }),
+    { setup: (a) => { tweak = a.use(U.createTweakPanel()); } },
+  );
+
+  // Strings read through t() are plain values, so re-render when the language changes.
+  onLangChange(() => app.renderNow());
+</script>
+</body>
+</html>
