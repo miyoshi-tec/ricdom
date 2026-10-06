@@ -13,8 +13,13 @@
 //     `<button aria-expanded aria-controls>` + `role="region"` パターンに変更 (a11y、
 //     設計書付録 E)。開閉状態は v1 の DOM 自前管理 (`<details open>`) と違い、この部品が
 //     `path` (データのキー鎖を `.` 区切りにしたもの) をキーに JS state として保持する。
-//     閉じたパネルは createAccordion の §15 追補と同じく `hidden` 属性で a11y ツリーから
-//     除外する (role="region" は維持)。
+//     閉じたパネルは createAccordion と同じく `inert` 属性でフォーカスと a11y ツリーから
+//     除外する (role="region" は維持。2.0.0-alpha.23 で `hidden` から変更 — CSS の
+//     `display: grid` が UA の `[hidden]` に勝つため hidden は無効だった)。
+//   - **controlled / uncontrolled 両対応** (2.0.0-alpha.23、createAccordion と同じ規約):
+//     props の `open` (path → boolean の map) を渡せば controlled。折りたたみ状態は外部 state が
+//     唯一の真実で、ヘッダクリックは内部 openMap を更新せず `onToggle(path, next, nextMap)`
+//     を呼ぶだけ。`open` を省略すれば従来どおり内部 openMap (`keys[k].open` で初期化) を使う。
 //   - number 行の「編集中ガード」: v1 は `onfocus` でマーカーを付け、render 時に
 //     `document.activeElement` と突き合わせて vdom から `value` キーを落としていた
 //     (ローカルな局所対応)。v2 はコアの編集中ガード (`src/dom.ts` の
@@ -115,8 +120,17 @@ export interface TweakKeyOverride {
   maxlength?: number;
   /** folder の初期展開状態 (省略時 false)。2 回目以降の render では無視される
    *  (state は inst 内部の openMap が正、v1 の `<details open>` は初回のみ有効な属性
-   *  だったのと同じ「初期値」としての位置づけ) */
+   *  だったのと同じ「初期値」としての位置づけ)。props の `open` (controlled モード) が
+   *  渡されているときは常に無視される (controlled では props が唯一の真実) */
   open?: boolean;
+  /**
+   * **folder 専用** (leaf 行では無視される): folder が **閉じている間だけ** ヘッダのラベルと
+   * 開閉矢印の間に出す要約 (例: 中身の現在値 `'M2.5 / 24T'`)。開くと消える。幅が足りなければ
+   * ラベルは全文を保ち、要約が省略記号 (…) で切れる。装飾的な重複情報なので `aria-hidden="true"`
+   * (スクリーンリーダー/ヘッダのアクセシブル名には含まれない)。文字列か RicNode。
+   * `null`/`undefined`/空文字なら何も出さない。`data-ricdom-role="tweak-folder-summary"`。
+   */
+  summary?: string | RicNode;
   /** folder の子プロパティに対する再帰的な上書き */
   keys?: TweakKeys;
   /**
@@ -156,6 +170,23 @@ export interface TweakPanelProps {
   width?: number | string;
   style?: StyleValue;
   class?: ClassValue;
+  /**
+   * 指定すると folder の開閉が controlled モードになる ({ [path]: boolean }、キーは
+   * `isOpen(path)` と同じ dot 連結のキー鎖、例 `'outer.inner'`)。表示は常にこの map に従い
+   * (キーが無い folder は閉じている扱い)、`keys[k].open` の初期値は無視される。ヘッダクリック
+   * (Enter/Space 含む) は内部状態を一切更新せず `onToggle` を呼ぶだけ。省略すれば
+   * uncontrolled (内部状態で管理、従来どおり)。createAccordion の controlled と同じ契約
+   * (SPEC §10.3.3a)。
+   */
+  open?: Record<string, boolean>;
+  /**
+   * controlled モードで folder のヘッダがクリックされるたびに呼ばれる (uncontrolled では
+   * 呼ばれない — createAccordion と同じ)。`nextMap` は `{ ...open, [path]: next }` =
+   * 「uncontrolled ならこうなっていた」完全な次状態で、`s.open = nextMap` と代入するだけで
+   * 良い形。直近の render の `open` から導くため、再 render 完了前の連続クリックでは
+   * 中間のトグルが落ちうる (通常の controlled コンポーネントの契約、SPEC §10.3.3a)。
+   */
+  onToggle?: (path: string, next: boolean, nextMap: Record<string, boolean>) => void;
 }
 
 export interface TweakPanelInstance extends Component<TweakPanelProps> {
@@ -383,11 +414,19 @@ interface FolderCtx {
   fid: number;
   openMap: Record<string, boolean>;
   notify: () => void;
+  /** controlled モードのとき props の `open` (null なら uncontrolled) */
+  controlledOpen: Record<string, boolean> | null;
+  onToggle?: TweakPanelProps['onToggle'];
 }
 
 const buildFolder = (path: string, label: string, obj: Record<string, unknown>, override: TweakKeyOverride | undefined, ctx: FolderCtx): RicNode => {
-  if (!(path in ctx.openMap)) ctx.openMap[path] = override?.open ?? false;
-  const isOpen = !!ctx.openMap[path];
+  const controlled = ctx.controlledOpen;
+  // controlled では props が唯一の真実 (keys[k].open の seed も内部 openMap も使わない)。
+  if (!controlled && !(path in ctx.openMap)) ctx.openMap[path] = override?.open ?? false;
+  const isOpen = controlled ? !!controlled[path] : !!ctx.openMap[path];
+  const summary = override?.summary;
+  // 要約は「閉じている間だけ」「中身がある場合だけ」出す。
+  const showSummary = !isOpen && summary != null && summary !== '';
 
   const headerId = `ricdom-tweak-${ctx.fid}-${encodePathSegment(path)}-header`;
   const bodyId = `ricdom-tweak-${ctx.fid}-${encodePathSegment(path)}-body`;
@@ -399,6 +438,8 @@ const buildFolder = (path: string, label: string, obj: Record<string, unknown>, 
     tag: 'div',
     class: 'ric-tweak-folder',
     'data-ricdom-role': UI_ROLE.tweakFolder,
+    // leaf 行と同じ安定フック (dot 連結のキー鎖。alpha.23 で folder にも付与)。
+    'data-ricdom-tweak-key': path,
     children: [
       {
         tag: 'button',
@@ -409,11 +450,22 @@ const buildFolder = (path: string, label: string, obj: Record<string, unknown>, 
         'aria-expanded': isOpen ? 'true' : 'false',
         'aria-controls': bodyId,
         onclick: () => {
+          if (controlled) {
+            // controlled: 内部状態には一切触れず、次状態を計算して onToggle に渡すだけ
+            // (createAccordion と同じ。onToggle 未指定なら何も起きない)。
+            const next = !isOpen;
+            ctx.onToggle?.(path, next, { ...controlled, [path]: next });
+            return;
+          }
           ctx.openMap[path] = !isOpen;
           ctx.notify();
         },
         children: [
           { tag: 'span', class: 'ric-tweak-folder__label', children: [label] },
+          // 閉じている間だけ出す要約 (装飾的な重複情報なので aria-hidden)。
+          ...(showSummary
+            ? [{ tag: 'span', class: 'ric-tweak-folder__summary', 'data-ricdom-role': UI_ROLE.tweakFolderSummary, 'aria-hidden': 'true', children: [summary] } as unknown as RicElementNode]
+            : []),
           uiIcon(CHEVRON_DOWN, { size: '1em', class: 'ric-tweak-folder__arrow' }),
         ],
       },
@@ -424,9 +476,14 @@ const buildFolder = (path: string, label: string, obj: Record<string, unknown>, 
         id: bodyId,
         role: 'region',
         'aria-labelledby': headerId,
-        // 閉じた folder は hidden 属性で a11y ツリーから除外する (createAccordion の
-        // §15 追補と同じ考え方)。role="region" 自体は維持される。
-        hidden: !isOpen,
+        // 閉じた folder は inert でフォーカス (Tab) と a11y ツリーから除外する (createAccordion
+        // と同じ、2.0.0-alpha.23 ギア軽量化デモ報告)。以前の `hidden` は、CSS の
+        // `.ric-tweak-folder__body { display: grid }` (grid-template-rows のクローズ
+        // アニメーション用) が UA の `[hidden] { display: none }` に勝つため無効で、閉じていても
+        // 中の input が Tab でフォーカスされ AX ツリーにも残っていた。inert は描画に影響しない
+        // ので、アニメーションは従来どおり動く。role="region" 自体は維持される。中の要素は高さ 0 の
+        // レイアウトボックスを持ち続けるが、inert なので操作できない。
+        inert: !isOpen,
         children: [{ tag: 'div', class: 'ric-tweak-folder__body-inner', children: childRows }],
       },
     ],
@@ -524,14 +581,20 @@ export const createTweakPanel = (): TweakPanelInstance => {
   const fid = ++nextFactoryId;
   const guard: AttachGuard = createAttachGuard('createTweakPanel');
   const openMap: Record<string, boolean> = {};
+  // controlled モード時の直近の `open` props (isOpen() が両モードで正しい値を返すための参照。
+  // createAccordion の lastControlledOpen と同じ — render のたびに更新し、uncontrolled に
+  // 戻ったら null に戻す)。
+  let lastControlledOpen: Record<string, boolean> | null = null;
 
   const inst = ((props: TweakPanelProps = {}): RicNode => {
     const host = guard.ensure();
     if (!host) return null;
 
-    const { title, data, keys = {}, rows = [], width, style, class: extraClass } = props;
+    const { title, data, keys = {}, rows = [], width, style, class: extraClass, open, onToggle } = props;
     const notify = (): void => guard.host?.notify();
-    const ctx: FolderCtx = { fid, openMap, notify };
+    const controlledOpen = open !== undefined ? open : null;
+    lastControlledOpen = controlledOpen;
+    const ctx: FolderCtx = { fid, openMap, notify, controlledOpen, onToggle };
 
     // data 省略でも keys だけで get 行を宣言できる (パイロット移行の報告 #1)。
     const autoRows = data || Object.keys(keys).length > 0 ? buildRows(data ?? {}, keys, '', ctx) : [];
@@ -561,9 +624,10 @@ export const createTweakPanel = (): TweakPanelInstance => {
   inst.attach = guard.attach;
   inst.dispose = (): void => {
     for (const k of Object.keys(openMap)) delete openMap[k];
+    lastControlledOpen = null;
     guard.dispose();
   };
-  inst.isOpen = (path: string): boolean => !!openMap[path];
+  inst.isOpen = (path: string): boolean => (lastControlledOpen ? !!lastControlledOpen[path] : !!openMap[path]);
 
   return inst;
 };

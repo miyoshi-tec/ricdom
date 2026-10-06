@@ -619,6 +619,20 @@ useful for a derived/read-only value (e.g. an area computed from `size`). A fold
 `keys` entry can also carry its own `rows` array, appended at the end of that folder
 specifically (the top-level `rows` prop only ever appends to the end of the whole panel).
 
+A folder can show a one-line `summary` in its header while it is closed (it disappears when the
+folder opens, and is clipped with an ellipsis if it doesn't fit), and its open/closed state can be
+owned by your own state instead of the panel's — pass `open` and `onToggle` (the same contract as
+`createAccordion`, keyed by the dot path such as `'border'` or `'outer.inner'`):
+
+```js
+tweak({
+  data: s.params,
+  keys: { border: { summary: `${s.params.border.width}px` } },  // shown only while closed
+  open: s.folders,                                              // { border: true }
+  onToggle: (path, next, map) => { s.folders = map; },
+});
+```
+
 ---
 
 ## 9. Islands: coexisting with a `<canvas>`

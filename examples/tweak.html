@@ -47,6 +47,7 @@
       showLabel: true,
       label: 'RicDOM',
       border: { width: 2, color: '#1e293b' },
+      extra: { opacity: 100, shadow: false },
     },
   };
 
@@ -99,6 +100,12 @@
                     open: true,
                     keys: { width: { type: 'range', min: 0, max: 10 } },
                   },
+                  // 閉じている間だけヘッダに出る要約 (summary、alpha.23)。開くと消える。
+                  // folder の中身の現在値を畳んだまま見せたいときに使う。
+                  extra: {
+                    label: '詳細',
+                    summary: `${s.params.extra.opacity}% / ${s.params.extra.shadow ? '影あり' : '影なし'}`,
+                  },
                   // data に無い計算値の行 (keys.get、パイロット移行の報告 #1)。面積は
                   // size から逆算するだけの表示専用の値で、s.params には持たない。
                   area: { label: '面積 (概算)', get: () => Math.round(s.params.size * s.params.size) },
@@ -108,7 +115,7 @@
                   U.uiButton({
                     children: ['既定値に戻す'],
                     onclick: () => {
-                      s.params = { size: 120, color: '#4f8ef7', rotation: 0, rounded: 16, mode: 'square', showLabel: true, label: 'RicDOM', border: { width: 2, color: '#1e293b' } };
+                      s.params = { size: 120, color: '#4f8ef7', rotation: 0, rounded: 16, mode: 'square', showLabel: true, label: 'RicDOM', border: { width: 2, color: '#1e293b' }, extra: { opacity: 100, shadow: false } };
                     },
                   }),
                 ],

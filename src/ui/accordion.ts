@@ -168,14 +168,16 @@ export const createAccordion = (options: CreateAccordionOptions = {}): Accordion
               id: panelId(id),
               role: 'region',
               'aria-labelledby': headerId(id),
-              // 閉じたパネルは hidden 属性で a11y ツリーから除外する (§15 追補)。
-              // role="region" 自体は維持したまま a11y ツリーからは消える (hidden の a11y
-              // 上の効果は算出済み display とは独立にブラウザが尊重する)。CSS 側は
-              // `.ric-accordion__body { display: grid; ... }` という author 規則を持つため
-              // UA スタイルシートの `[hidden] { display: none }` には負けず (author が UA に
-              // 優先するカスケード規則)、grid-template-rows のクローズアニメーションは
-              // 従来どおり視覚的に動く。
-              hidden: !isItemOpen,
+              // 閉じたパネルは inert でフォーカス (Tab) と a11y ツリーの両方から除外する
+              // (2.0.0-alpha.23、ギア軽量化デモ報告)。以前は `hidden` 属性を使っていたが、
+              // CSS 側が `.ric-accordion__body { display: grid; ... }` という author 規則を持つ
+              // (grid-template-rows のクローズアニメーション用) ため UA スタイルシートの
+              // `[hidden] { display: none }` に勝ち、hidden は何の効果も持たなかった —
+              // 閉じていても中の input が Tab でフォーカスされ、AX ツリーにも残っていた
+              // (Chromium 140/154 で実測)。inert は描画 (display / 高さ 0 のアニメーション) に
+              // 影響せず、フォーカスと AX だけを除外する。role="region" 自体は維持される。
+              // 中の要素は高さ 0 のレイアウトボックスを持ち続けるが、inert なので操作できない。
+              inert: !isItemOpen,
               children: [{ tag: 'div', class: 'ric-accordion__body-inner', children: Array.isArray(itemChildren) ? itemChildren : [itemChildren ?? null] }],
             },
           ],

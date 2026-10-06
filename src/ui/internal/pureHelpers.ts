@@ -156,6 +156,8 @@ export const UI_ROLE = {
   tweakFolder: 'tweak-folder',
   tweakFolderHeader: 'tweak-folder-header',
   tweakFolderBody: 'tweak-folder-body',
+  /** folder が閉じている間だけヘッダに出る要約 (`keys[k].summary`、2.0.0-alpha.23)。 */
+  tweakFolderSummary: 'tweak-folder-summary',
   /** tweak の leaf row (number/range/checkbox/text/select/radiobutton/color/計算値) の
    *  コンテナ。`data-ricdom-tweak-key` (dot 連結のキー鎖) と対で付与する (§14 追補)。 */
   tweakRow: 'tweak-row',

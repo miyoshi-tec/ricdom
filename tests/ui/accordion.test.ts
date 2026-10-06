@@ -51,7 +51,7 @@ describe('createAccordion: 構造 / ARIA', () => {
     expect(header.getAttribute('aria-controls')).toBe(panel.id);
   });
 
-  it('閉じたパネルは hidden 属性を持ち、開くと外れる (§15 追補: a11y ツリーから除外)', async () => {
+  it('閉じたパネルは inert 属性を持ち、開くと外れる (フォーカス・a11y ツリーから除外)', async () => {
     const app = setupApp();
     let acc: ReturnType<typeof createAccordion>;
     const handle = createApp('#app', {}, () => (acc ? acc({ items: ITEMS }) : null));
@@ -59,19 +59,20 @@ describe('createAccordion: 構造 / ARIA', () => {
     await flush();
 
     const panel = () => app.querySelectorAll('.ric-accordion__body')[0] as HTMLElement;
-    // 初期状態: 両方閉じている → hidden 属性が付く。role="region" は維持される。
-    expect(panel().hidden).toBe(true);
+    // 初期状態: 両方閉じている → inert 属性が付く。role="region" は維持される。
+    expect(panel().hasAttribute('inert')).toBe(true);
+    expect(panel().hasAttribute('hidden')).toBe(false); // alpha.23 から hidden は付けない
     expect(panel().getAttribute('role')).toBe('region');
 
     const header = app.querySelectorAll('.ric-accordion__header')[0] as HTMLElement;
     header.click();
     await flush();
-    expect(panel().hidden).toBe(false);
+    expect(panel().hasAttribute('inert')).toBe(false);
     expect(panel().getAttribute('role')).toBe('region');
 
     header.click();
     await flush();
-    expect(panel().hidden).toBe(true);
+    expect(panel().hasAttribute('inert')).toBe(true);
   });
 
   it('title に VDOM 配列 (アイコン混在) を渡せる', async () => {

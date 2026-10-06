@@ -117,9 +117,9 @@ describe('createTweakPanel: Tier1 (data のみ) — 型ごとの行生成', () =
 
     expect(app.querySelector('.ric-tweak-folder')).not.toBeNull();
     expect(app.querySelector('.ric-tweak-folder__label')!.textContent).toBe('nested');
-    // 初期状態は閉じている (hidden) が、子行自体は DOM 上に存在する
+    // 初期状態は閉じている (inert) が、子行自体は DOM 上に存在する
     const body = app.querySelector('.ric-tweak-folder__body') as HTMLElement;
-    expect(body.hidden).toBe(true);
+    expect(body.hasAttribute('inert')).toBe(true);
   });
 });
 
@@ -333,7 +333,7 @@ describe('createTweakPanel: folder 開閉', () => {
 
     const body = () => app.querySelector('.ric-tweak-folder__body') as HTMLElement;
     expect(body().getAttribute('role')).toBe('region');
-    expect(body().hidden).toBe(true);
+    expect(body().hasAttribute('inert')).toBe(true);
     expect(body().getAttribute('aria-labelledby')).toBe(header.id);
     expect(header.getAttribute('aria-controls')).toBe(body().id);
 
@@ -341,12 +341,12 @@ describe('createTweakPanel: folder 開閉', () => {
     await flush();
     expect(tweak!.isOpen('nested')).toBe(true);
     expect(header.getAttribute('aria-expanded')).toBe('true');
-    expect(body().hidden).toBe(false);
+    expect(body().hasAttribute('inert')).toBe(false);
 
     header.click();
     await flush();
     expect(tweak!.isOpen('nested')).toBe(false);
-    expect(body().hidden).toBe(true);
+    expect(body().hasAttribute('inert')).toBe(true);
   });
 
   it('keys.open で初期展開状態を指定できる', async () => {
@@ -357,7 +357,7 @@ describe('createTweakPanel: folder 開閉', () => {
     tweak = handle.use(createTweakPanel());
     await flush();
     expect(tweak!.isOpen('nested')).toBe(true);
-    expect((app.querySelector('.ric-tweak-folder__body') as HTMLElement).hidden).toBe(false);
+    expect((app.querySelector('.ric-tweak-folder__body') as HTMLElement).hasAttribute('inert')).toBe(false);
   });
 
   it('ネストした folder は path (a.b 形式) で区別される', async () => {
@@ -627,5 +627,206 @@ describe('createTweakPanel: dispose', () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     expect(tweak!({ data })).toBeNull();
     errorSpy.mockRestore();
+  });
+});
+
+describe('createTweakPanel: 閉じた folder 本体は inert (hidden は付かない、2.0.0-alpha.23)', () => {
+  it('閉じている間は inert 属性があり hidden 属性は無い。開くと inert が外れる', async () => {
+    const app = setupApp();
+    let tweak: ReturnType<typeof createTweakPanel>;
+    const data = { nested: { inner: 1 } };
+    const handle = createApp('#app', {}, () => (tweak ? tweak({ data }) : null));
+    tweak = handle.use(createTweakPanel());
+    await flush();
+
+    const body = () => app.querySelector('.ric-tweak-folder__body') as HTMLElement;
+    expect(body().hasAttribute('inert')).toBe(true);
+    expect(body().hasAttribute('hidden')).toBe(false);
+    expect(body().getAttribute('role')).toBe('region');
+
+    (app.querySelector('.ric-tweak-folder__header') as HTMLElement).click();
+    await flush();
+    expect(body().hasAttribute('inert')).toBe(false);
+    expect(body().hasAttribute('hidden')).toBe(false);
+  });
+});
+
+describe('createTweakPanel: folder の summary (閉じている間だけ、alpha.23)', () => {
+  const mount = async (summary: unknown, extra: Record<string, unknown> = {}) => {
+    const app = setupApp();
+    let tweak: ReturnType<typeof createTweakPanel>;
+    const data = { nested: { inner: 1 }, leaf: 5 };
+    const handle = createApp('#app', {}, () =>
+      tweak ? tweak({ data, keys: { nested: { summary: summary as never, ...extra }, leaf: { summary: 'ignored' as never } } }) : null,
+    );
+    tweak = handle.use(createTweakPanel());
+    await flush();
+    return { app, tweak: tweak! };
+  };
+  const summaryEl = (app: HTMLElement) => app.querySelector('.ric-tweak-folder__summary') as HTMLElement | null;
+
+  it('文字列の summary は閉じている間だけ出る (aria-hidden + role)。開くと消え、閉じると戻る', async () => {
+    const { app } = await mount('M2.5 / 24T');
+    const header = app.querySelector('.ric-tweak-folder__header') as HTMLElement;
+
+    const el = summaryEl(app)!;
+    expect(el).not.toBeNull();
+    expect(el.textContent).toBe('M2.5 / 24T');
+    expect(el.getAttribute('aria-hidden')).toBe('true');
+    expect(el.getAttribute('data-ricdom-role')).toBe('tweak-folder-summary');
+    // ヘッダ内の並びは label → summary → arrow
+    const kids = Array.from(header.children).map((c) => c.getAttribute('class') ?? '');
+    expect(kids[0]).toContain('ric-tweak-folder__label');
+    expect(kids[1]).toContain('ric-tweak-folder__summary');
+    expect(kids[2]).toContain('ric-tweak-folder__arrow');
+
+    header.click();
+    await flush();
+    expect(summaryEl(app)).toBeNull();
+
+    header.click();
+    await flush();
+    expect(summaryEl(app)!.textContent).toBe('M2.5 / 24T');
+  });
+
+  it('RicNode の summary も渡せる', async () => {
+    const { app } = await mount({ tag: 'b', class: 'sum-b', children: ['bold'] });
+    const el = summaryEl(app)!;
+    expect(el.querySelector('b.sum-b')!.textContent).toBe('bold');
+  });
+
+  it('keys[k].open: true で最初から開いていれば summary は出ない', async () => {
+    const { app } = await mount('x', { open: true });
+    expect(summaryEl(app)).toBeNull();
+  });
+
+  it('null / undefined / 空文字なら出さない', async () => {
+    for (const v of [null, undefined, '']) {
+      const { app } = await mount(v);
+      expect(summaryEl(app)).toBeNull();
+    }
+  });
+
+  it('leaf 行の summary は無視される (folder 専用)', async () => {
+    const { app } = await mount(undefined);
+    expect(app.querySelector('[data-ricdom-tweak-key="leaf"]')).not.toBeNull();
+    expect(app.querySelector('.ric-tweak-folder__summary')).toBeNull();
+  });
+});
+
+describe('createTweakPanel: folder に data-ricdom-tweak-key (alpha.23)', () => {
+  it('folder コンテナに dot 連結のキー鎖が付く (ネストは a.b)', async () => {
+    const app = setupApp();
+    let tweak: ReturnType<typeof createTweakPanel>;
+    const data = { a: { b: { c: 1 } }, top: 1 };
+    const handle = createApp('#app', {}, () => (tweak ? tweak({ data }) : null));
+    tweak = handle.use(createTweakPanel());
+    await flush();
+
+    const folders = Array.from(app.querySelectorAll('[data-ricdom-role="tweak-folder"]'));
+    expect(folders.map((f) => f.getAttribute('data-ricdom-tweak-key'))).toEqual(['a', 'a.b']);
+    expect(folders[0]!.classList.contains('ric-tweak-folder')).toBe(true);
+    // leaf 行は従来どおり (folder と同じ属性で取れるが role で区別できる)
+    expect(app.querySelector('[data-ricdom-role="tweak-row"][data-ricdom-tweak-key="top"]')).not.toBeNull();
+  });
+});
+
+describe('createTweakPanel: folder の controlled open / onToggle (alpha.23)', () => {
+  const NESTED = () => ({ outer: { inner: { deep: 1 } }, other: { x: 1 } });
+
+  it('controlled: クリックは onToggle(path, next, nextMap) を呼ぶだけで、props が変わるまで表示は変わらない', async () => {
+    const app = setupApp();
+    let tweak: ReturnType<typeof createTweakPanel>;
+    const calls: [string, boolean, Record<string, boolean>][] = [];
+    let open: Record<string, boolean> = { outer: true };
+    const data = NESTED();
+    const handle = createApp('#app', {}, () => (tweak ? tweak({ data, open, onToggle: (p, n, m) => calls.push([p, n, m]) }) : null));
+    tweak = handle.use(createTweakPanel());
+    await flush();
+
+    const header = (path: string) => app.querySelector(`[data-ricdom-tweak-key="${path}"] > .ric-tweak-folder__header`) as HTMLElement;
+    expect(header('outer').getAttribute('aria-expanded')).toBe('true');
+    expect(header('other').getAttribute('aria-expanded')).toBe('false');
+    // 入れ子の inner は open に無いので閉じている (missing key = closed)
+    expect(header('outer.inner').getAttribute('aria-expanded')).toBe('false');
+
+    header('other').click();
+    await flush();
+    expect(calls).toEqual([['other', true, { outer: true, other: true }]]);
+    // 親が open を更新しない限り表示は変わらない
+    expect(header('other').getAttribute('aria-expanded')).toBe('false');
+    expect(tweak!.isOpen('other')).toBe(false);
+
+    // 開いている folder のクリックは next=false
+    header('outer').click();
+    await flush();
+    expect(calls[1]).toEqual(['outer', false, { outer: false }]);
+    expect(header('outer').getAttribute('aria-expanded')).toBe('true');
+
+    // props を差し替えると反映される。isOpen() も controlled の値を返す
+    open = { outer: true, other: true, 'outer.inner': true };
+    handle.renderNow();
+    expect(header('other').getAttribute('aria-expanded')).toBe('true');
+    expect(header('outer.inner').getAttribute('aria-expanded')).toBe('true');
+    expect(tweak!.isOpen('other')).toBe(true);
+    expect(tweak!.isOpen('outer.inner')).toBe(true);
+    expect(tweak!.isOpen('nope')).toBe(false);
+  });
+
+  it('controlled では keys[k].open の初期値は無視される', async () => {
+    const app = setupApp();
+    let tweak: ReturnType<typeof createTweakPanel>;
+    const data = { nested: { inner: 1 } };
+    const handle = createApp('#app', {}, () => (tweak ? tweak({ data, open: {}, keys: { nested: { open: true } } }) : null));
+    tweak = handle.use(createTweakPanel());
+    await flush();
+    expect(tweak!.isOpen('nested')).toBe(false);
+    expect((app.querySelector('.ric-tweak-folder__header') as HTMLElement).getAttribute('aria-expanded')).toBe('false');
+    expect(app.querySelector('.ric-tweak-folder__body')!.hasAttribute('inert')).toBe(true);
+  });
+
+  it('controlled で onToggle 未指定ならクリックしても何も起きない (例外も出ない)', async () => {
+    const app = setupApp();
+    let tweak: ReturnType<typeof createTweakPanel>;
+    const data = { nested: { inner: 1 } };
+    const handle = createApp('#app', {}, () => (tweak ? tweak({ data, open: {} }) : null));
+    tweak = handle.use(createTweakPanel());
+    await flush();
+    const header = app.querySelector('.ric-tweak-folder__header') as HTMLElement;
+    header.click();
+    await flush();
+    expect(header.getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('uncontrolled は従来どおり内部状態で開閉し、onToggle は呼ばれない (createAccordion と同じ)', async () => {
+    const app = setupApp();
+    let tweak: ReturnType<typeof createTweakPanel>;
+    const onToggle = vi.fn();
+    const data = { nested: { inner: 1 } };
+    const handle = createApp('#app', {}, () => (tweak ? tweak({ data, onToggle, keys: { nested: { open: true } } }) : null));
+    tweak = handle.use(createTweakPanel());
+    await flush();
+    const header = app.querySelector('.ric-tweak-folder__header') as HTMLElement;
+    expect(header.getAttribute('aria-expanded')).toBe('true'); // keys.open が seed
+    header.click();
+    await flush();
+    expect(header.getAttribute('aria-expanded')).toBe('false');
+    expect(tweak!.isOpen('nested')).toBe(false);
+    expect(onToggle).not.toHaveBeenCalled();
+  });
+
+  it('controlled から uncontrolled に戻すと内部 openMap (keys.open の seed) に従う', async () => {
+    const app = setupApp();
+    let tweak: ReturnType<typeof createTweakPanel>;
+    let open: Record<string, boolean> | undefined = { nested: false };
+    const data = { nested: { inner: 1 } };
+    const handle = createApp('#app', {}, () => (tweak ? tweak({ data, open, keys: { nested: { open: true } } }) : null));
+    tweak = handle.use(createTweakPanel());
+    await flush();
+    expect(tweak!.isOpen('nested')).toBe(false);
+    open = undefined;
+    handle.renderNow();
+    expect(tweak!.isOpen('nested')).toBe(true);
+    expect((app.querySelector('.ric-tweak-folder__header') as HTMLElement).getAttribute('aria-expanded')).toBe('true');
   });
 });

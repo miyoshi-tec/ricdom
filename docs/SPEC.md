@@ -1547,7 +1547,7 @@ treatment as the rest of this table.
 | `createSplitter(options)` | Two-pane resizable layout. The divider is `role="separator"` + `aria-orientation` + `aria-valuenow`/`aria-valuemin`/`aria-valuemax` (the last omitted entirely when `options.max` is `null`, i.e. no logical upper bound) + `tabIndex: 0`; resizes via mouse drag or arrow keys (10px per keypress, in the direction that grows the side panel). `onResizeEnd(size)` fires once per drag (on `mouseup`) or once per keypress (since keyboard has no separate "end" event). The optional collapse toggle button gets `aria-label: 'Expand' \| 'Collapse'`. `side`/`main` (render props) hold the panel content directly (no `{ ctx }` wrapper, unlike v1); `collapsed`/`onCollapseChange` (props) make it controlled |
 | `createScrollPane(options)` | A scrollable container that auto-follows new content at the `options.follow: 'bottom' \| 'top' \| 'none'` edge (within `options.threshold` px) unless the user has scrolled away from it — no ARIA role of its own (it's a plain `overflow: auto` region, not a live-region announcer). `pane.scrollToBottom()`/`scrollToTop()` force a scroll regardless of the current follow state |
 | `createCollapseBox(options)` | Headless animated show/hide container (`options.direction: 'v' \| 'h' \| 'both'`) with **no trigger of its own** — unlike `createAccordion`, it has no button to hang `aria-expanded` on, so *you* put `aria-expanded={visible}` + `aria-controls={box.idFor(key)}` on your own trigger to satisfy the APG disclosure pattern (`idFor(key)`, key optional, gives the stable `id` the box renders with). Supports multiple concurrent instances distinguished by a `key` prop (sparse list animation). Completion is detected via `transitionend` (not `animationend` — height/width targets are per-instance dynamic values, not expressible as fixed `@keyframes`) with the same 700ms fallback as the rest of §10.3 |
-| `createAccordion(options)` | Each item's header is a real `<button aria-expanded aria-controls>` (so `Enter`/`Space` activation is native, no extra keydown handling needed); its panel is `role="region"` + `aria-labelledby`, and gets the `hidden` attribute while closed (removing it from the accessibility tree — the CSS `grid-template-rows` close animation still runs visually, since an author `display` rule outranks the `[hidden] { display: none }` user-agent default). `options.defaultOpen: Record<id, boolean>` seeds initial state (uncontrolled only); `multi: false` on props makes it single-open (exclusive, closes any other open panel) instead of the default multi-open. Controlled (`open` prop given) or uncontrolled (internal state) — see §10.3.3a |
+| `createAccordion(options)` | Each item's header is a real `<button aria-expanded aria-controls>` (so `Enter`/`Space` activation is native, no extra keydown handling needed); its panel is `role="region"` + `aria-labelledby`, and gets the `inert` attribute while closed (excluding it from keyboard focus and the accessibility tree — the CSS `grid-template-rows` close animation still runs visually, since `inert` does not affect rendering; see §10.3.3b). It does **not** get `hidden` (as of `2.0.0-alpha.23`). `options.defaultOpen: Record<id, boolean>` seeds initial state (uncontrolled only); `multi: false` on props makes it single-open (exclusive, closes any other open panel) instead of the default multi-open. Controlled (`open` prop given) or uncontrolled (internal state) — see §10.3.3a |
 
 ### 10.3.3a FACT: `createAccordion` controlled / uncontrolled (2.0.0-alpha.7)
 
@@ -1585,6 +1585,26 @@ switch, no separate imperative method:
   `createTabs`'s `active` prop (no separate `select()` method either). Keeping exactly one
   external-control mechanism avoids two parallel, occasionally-inconsistent ways to ask "is
   this panel open" from outside the component.
+
+### 10.3.3b FACT: a closed accordion panel / tweak folder body is `inert`, not `hidden` (2.0.0-alpha.23)
+
+Applies to `createAccordion` panels (`.ric-accordion__body`) and `createTweakPanel` folder
+bodies (`.ric-tweak-folder__body`), both `role="region"`. While closed, the body carries the
+`inert` attribute (`inert=""`; removed when open) and **no** `hidden` attribute.
+
+- The body keeps `display: grid` while closed: the close animation is a
+  `grid-template-rows: 1fr → 0fr` transition, so it must stay laid out. Its computed height
+  is `0`, but the controls inside it still have layout boxes (non-zero width/height of their
+  own, clipped by the zero-height `overflow: hidden` inner wrapper). Because the body is
+  `inert`, those controls are excluded from keyboard focus (`Tab` from the closed header
+  moves on to whatever follows the component) and from the accessibility tree.
+- Why not `hidden`: the library's own `display: grid` rule is an author rule and outranks
+  the user-agent `[hidden] { display: none }`, and `hidden` has no accessibility semantics
+  of its own — so through `2.0.0-alpha.22` a closed body was still rendered, its inputs were
+  still reachable with `Tab`, and they were still listed in the accessibility tree (measured by
+  the ギア軽量化デモ pilot in Chromium 140 and 154; earlier versions of this document claimed
+  the opposite). If you select closed bodies in CSS or tests, use `[inert]` (or
+  `aria-expanded="false"` on the header), not `[hidden]`.
 
 ### 10.4 Stateless — text
 
@@ -1637,21 +1657,66 @@ the panel-level `rows` prop, which only ever appends to the very end of the whol
 Use this to put a hand-built row (e.g. a "reset this section" button) inside a particular
 folder rather than at the panel's outer edge.
 
-#### FACT: a folder is a `<button aria-expanded>` + `<div role=region hidden>`, not `<details>` (v1→v2 parity audit #15)
+#### FACT: a folder is a `<button aria-expanded>` + `<div role=region inert>`, not `<details>` (v1→v2 parity audit #15)
 
 v1's `ui_tweak.js` rendered a folder as a native `<details>`/`<summary>` pair. v2 renders
 `tweak-folder-header` as a `<button aria-expanded aria-controls>` and `tweak-folder-body`
-as a `<div role="region" hidden>` (matching the same open/close-state pattern as
-`createAccordion`, §10.3.3). Functionally these are equivalent for click-to-toggle and for
-screen readers, but `<details>` carries one behavior v2's markup doesn't reproduce: a
-browser's in-page find (Ctrl+F) can automatically expand a closed `<details>` to reveal a
-match inside it (browsers that support it treat `<details>` specially for this purpose); a
-plain `hidden` `<div>` is invisible to in-page find no matter what, same as any other
-`[hidden]` content. No consumer has reported this as a problem in practice. Re-examine if a
-consumer requests find-in-page support for closed tweak folders — the fix would be
-`hidden="until-found"` (the modern hidden-content-that-find-can-reveal attribute) rather
-than reverting to `<details>`, since `<details>` doesn't compose with the folder's own
+as a `<div role="region">` that carries `inert` while closed (matching the same
+open/close-state pattern as `createAccordion`, §10.3.3; the `inert` vs `hidden` FACT is in
+§10.3.3b — through `2.0.0-alpha.22` the body carried `hidden`, which had no effect). Functionally
+these are equivalent for click-to-toggle and for screen readers, but `<details>` carries one
+behavior v2's markup doesn't reproduce: a browser's in-page find (Ctrl+F) can automatically
+expand a closed `<details>` to reveal a match inside it (browsers that support it treat
+`<details>` specially for this purpose); a closed folder body is not revealed by in-page find,
+same as any other collapsed content. No consumer has reported this as a problem in practice.
+Re-examine if a consumer requests find-in-page support for closed tweak folders — the fix
+would be `hidden="until-found"` (the modern hidden-content-that-find-can-reveal attribute,
+which would have to replace `inert` for the closed state) rather than reverting to
+`<details>`, since `<details>` doesn't compose with the folder's own
 `aria-expanded`/animation model as cleanly.
+
+#### FACT: `keys[k].summary` — a one-line summary on a closed folder (2.0.0-alpha.23)
+
+A folder-shaped `keys` entry may carry `summary?: string | RicNode`. While the folder is
+**closed**, the header renders it between the label and the chevron:
+`<span class="ric-tweak-folder__summary" data-ricdom-role="tweak-folder-summary" aria-hidden="true">`.
+It is not rendered while the folder is open, nor when `summary` is `null`/`undefined`/`''`;
+on a leaf row (a non-folder `keys` entry) it is ignored. Layout: the label keeps its natural
+width, and the summary takes all the remaining header width left-aligned (`white-space:
+nowrap`, `overflow: hidden`, `text-overflow: ellipsis`), so a long summary is clipped with an
+ellipsis while the label and the chevron stay fully visible. It is `aria-hidden` because it
+duplicates information that is available once the folder is opened — it does not become part of
+the header button's accessible name. The role `tweak-folder-summary` is registered in §11.
+
+#### FACT: controlled `open` / `onToggle` for folders (2.0.0-alpha.23)
+
+`TweakPanelProps` accepts the same two-mode contract as `createAccordion` (§10.3.3a):
+
+- **Uncontrolled** (`open` omitted): folder state lives inside the instance, seeded per folder
+  by `keys[k].open` on first sight (unchanged). `onToggle` is **not** called in this mode.
+- **Controlled** (`open: Record<string, boolean>` given, keyed by the same dot path as
+  `isOpen(path)` — `'outer'`, `'outer.inner'`): a folder is open iff `open[path]` is truthy
+  (a missing key is closed), `keys[k].open` is ignored, and clicking a folder header (or
+  `Enter`/`Space`) mutates nothing internally — it calls
+  `onToggle?.(path, next, nextMap)` with `nextMap = { ...open, [path]: next }`, so
+  `onToggle: (p, n, map) => { s.open = map; }` is a complete handler. As in §10.3.3a,
+  `nextMap` derives from the `open` of the most recent render, not from your live state.
+  With `onToggle` omitted, a click does nothing.
+- `isOpen(path)` returns the effective state in both modes (in controlled mode, the `open`
+  passed to the most recent render).
+
+```js
+tweak({ data: s.params, open: s.folders, onToggle: (path, next, map) => { s.folders = map; } });
+```
+
+#### FACT: every folder carries `data-ricdom-tweak-key` (2.0.0-alpha.23)
+
+The folder container (`div.ric-tweak-folder`, `data-ricdom-role="tweak-folder"`) now carries
+`data-ricdom-tweak-key="<path>"` with the same dot-joined key chain as a leaf row
+(`"outer.inner"` for a folder nested one level deep) — and the same key `open`/`onToggle`
+use. A folder and a leaf row can be told apart by `data-ricdom-role` (`tweak-folder` vs
+`tweak-row`); `[data-ricdom-tweak-key="x"] > .ric-tweak-folder__header` reaches a folder's
+header.
 
 #### FACT: every leaf row carries `data-ricdom-role="tweak-row"` + `data-ricdom-tweak-key`
 
@@ -1683,7 +1748,7 @@ extends to sub-parts of the portal-mounted components, not just their root:
 `splitter-toggle` `collapse-box` `accordion` `accordion-item` `accordion-header`
 `accordion-body` `accordion-title` `tabs` `tabs-bar` `tabs-tab` `tabs-panel` `inline-menu`
 — `tweak-panel` `tweak-title` `tweak-folder` `tweak-folder-header` `tweak-folder-body`
-`tweak-row` (§10.6) — `md-editor` `md-editor-mirror` (§13, `ricdom/md-editor`; the
+`tweak-row` `tweak-folder-summary` (§10.6) — `md-editor` `md-editor-mirror` (§13, `ricdom/md-editor`; the
 `<textarea>` inside it keeps the plain `textarea` role, unchanged).
 
 `popup-overlay` is shared by `createPopup` and `createDropdown` — both use the same

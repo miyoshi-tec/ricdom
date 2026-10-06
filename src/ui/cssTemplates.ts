@@ -1314,7 +1314,15 @@ const TWEAK_CSS = `
   transition: background ${da};
 }
 .ric-tweak-folder__header:hover, .ric-tweak-folder__header--open { background: color-mix(in srgb, ${fg} 6%, transparent); }
-.ric-tweak-folder__label { flex: 1; text-align: left; }
+/* ラベルは自然幅 (収まらなければ従来どおり折り返しで縮む)、要約は flex-basis 0 で残り幅を
+   すべて引き受けて省略記号で切れる — 長い要約でもラベルと矢印は欠けない。要約が無いときは
+   header の space-between が矢印を右端に置く (ラベルの flex:1 を外した分の補い)。 */
+.ric-tweak-folder__label { flex: 0 1 auto; text-align: left; }
+.ric-tweak-folder__summary {
+  flex: 1 1 0; min-width: 0; margin-left: ${g};
+  color: ${fm}; font-weight: 400; font-size: 0.9em;
+  text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 .ric-tweak-folder__arrow { color: ${fm}; margin-left: ${g}; transition: transform ${da}; }
 .ric-tweak-folder__header--open .ric-tweak-folder__arrow { transform: rotate(180deg); }
 /* grid-template-rows のトリックで auto 高さに対してアニメーションする (createAccordion と同じ) */

@@ -5,6 +5,74 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.0.0-alpha.23] — not yet published
+
+Reported by ギア軽量化デモ (14th consumer, `2026-10-06`, against `alpha.22`): one accessibility
+bug in both collapsing components, plus two tweak-panel requests. All three accepted.
+
+### Fixed
+
+- **Closed `createTweakPanel` folder bodies and `createAccordion` panels were still focusable
+  and still in the accessibility tree.** The closed body carried the `hidden` attribute, but the
+  library's own CSS gives it `display: grid` (for the `grid-template-rows: 0fr` close animation),
+  which outranks the user-agent `[hidden] { display: none }` — and `hidden` has no
+  accessibility semantics of its own. So the collapsed body was still rendered (height 0), `Tab`
+  from the closed header landed on the inputs inside it, and its controls were listed in the
+  accessibility tree (measured by the consumer in Chromium 140 and 154; SPEC.md had claimed the
+  opposite). Both components now set **`inert`** on the closed body (`inert=""`, removed when
+  open). `inert` does not affect rendering, so the close animation is unchanged (the body keeps
+  `display: grid`, computed height 0 once settled). The controls inside still have layout boxes —
+  that is expected and documented (SPEC §10.3.3b); they are just unreachable.
+- Tests (red first, `tests/browser/uiTweakPanel.test.ts` / `uiAccordion.test.ts`): with the
+  pre-fix code, `Tab` from a closed header moved focus into the closed body's input instead of the
+  button after the component, and `body.inert` was `false` (confirmed failing, then passing).
+  New cases also cover `inert` flipping on open/close, `display: grid` being preserved while
+  closed, and the height reaching 0 after the transition.
+
+### Added
+
+- **`keys[k].summary?: string | RicNode`** on a folder (`createTweakPanel`): a one-line summary
+  shown in the header **only while the folder is closed**, between the label and the chevron
+  (`<span class="ric-tweak-folder__summary" data-ricdom-role="tweak-folder-summary"
+  aria-hidden="true">`). A long summary is clipped with an ellipsis; the label and chevron stay
+  fully visible (checked at a 240px panel width). Ignored on leaf rows. New role
+  `UI_ROLE.tweakFolderSummary = 'tweak-folder-summary'`.
+- **Controlled `open` / `onToggle` for tweak folders**, the same contract as
+  `createAccordion` (`2.0.0-alpha.7`): `TweakPanelProps.open?: Record<string, boolean>` (keyed by
+  the dot path, as `isOpen(path)`) makes the folder state external — a missing key is closed,
+  `keys[k].open` is ignored — and a header click calls
+  `onToggle(path, next, nextMap)` without touching internal state. Omit `open` and nothing
+  changes (internal state seeded by `keys[k].open`; `onToggle` is not called, as in
+  `createAccordion`). `isOpen(path)` reports the effective state in both modes.
+- **`data-ricdom-tweak-key="<path>"` on the folder container** (`div.ric-tweak-folder`), the same
+  key leaf rows already carry (and the same key `open`/`onToggle` use). Folders keep
+  `data-ricdom-role="tweak-folder"`, so they remain distinguishable from `tweak-row`.
+- `examples/tweak.html` now includes a folder with a `summary` (exercised by `npm run
+  test:examples`).
+
+### Changed
+
+- **A closed accordion panel / tweak folder body no longer has the `hidden` attribute** (it did
+  nothing — see Fixed). Consumers who selected `[hidden]` on `.ric-accordion__body` /
+  `.ric-tweak-folder__body` (CSS or tests) should use `[inert]`, or `aria-expanded="false"` on
+  the header. `.ric-tweak-folder__label` is now `flex: 0 1 auto` (was `flex: 1`) so a summary can
+  take the remaining header width; the chevron is still pushed to the right edge by the header's
+  `space-between`.
+
+### Docs
+
+- SPEC.md: new §10.3.3b (the `inert` FACT, replacing the incorrect `hidden` claims in §10.3.3's
+  accordion row and the §10.6 folder FACT), §10.6 FACTs for `summary`, controlled
+  `open`/`onToggle` and the folder `data-ricdom-tweak-key`, and `tweak-folder-summary` in the §11
+  role list. TUTORIAL.md §8: `summary` and controlled `open`/`onToggle` example.
+
+### Sizes
+
+- Measured with `gzip -9 -c FILE | wc -c`: `dist/ricdom-ui.iife.min.js` 26,237 → 26,674
+  bytes (+437B: controlled `open`/`onToggle`, `summary`, the folder key attribute, and the
+  summary CSS); `dist/ricdom-ui.css` 6,848 → 7,153 bytes (+305B); `dist/ricdom.iife.min.js`
+  unchanged at 4,877B.
+
 ## [2.0.0-alpha.22] — not yet published
 
 Reported by Trend Guard (pilot #2, follow-up report #2, `2026-09-19`, against `alpha.20`):
