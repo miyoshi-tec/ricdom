@@ -97,6 +97,7 @@ const BUTTON_CSS = `
   border-radius: ${r};
   background: ${ct};
   color: ${fg};
+  font-family: inherit;
   font-size: 1em;
   font-weight: 500;
   cursor: pointer;
@@ -186,6 +187,7 @@ const INPUT_CSS = `
   border-radius: ${r};
   background: ${ct};
   color: ${fg};
+  font-family: inherit;
   font-size: 1em;
   outline: none;
   appearance: none;
