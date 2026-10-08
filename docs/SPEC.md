@@ -1306,6 +1306,30 @@ sugar: `bindInput(s, 'name', options)` is exactly
 — `options` is applied *before* the computed `value`/`on*` so it can never accidentally
 override the binding.
 
+### FACT: every control inherits the page's font (`2.0.0-alpha.24`)
+
+`.ric-button`, `.ric-input`, `.ric-textarea` and `.ric-select` all carry
+`font-family: inherit; font-size: 1em`. ricdom-ui never chooses a typeface: set `font-family`
+once on `<body>` (or on the element you `applyTheme`) and every control follows it, the same
+way labels, panels and text do. The `--ric-*` tokens carry colors, radii, shadows, density
+and font *size* — no font family, on purpose.
+
+- **Why this is a FACT and not the browser default**: the user-agent stylesheet gives
+  `<button>`/`<input>`/`<select>`/`<textarea>` their own `font` (Chromium on Windows: Arial
+  13.33px), a leftover of 1990s native widgets that browsers keep for compatibility.
+  normalize.css, modern-normalize, Tailwind's preflight and Bootstrap's reboot all reset it
+  with exactly this rule; native desktop UIs use one typeface for text and controls alike.
+- **Changed in `2.0.0-alpha.24`**: before this release only `.ric-textarea` and `.ric-select`
+  had `font-family: inherit`; `.ric-button` and `.ric-input` were left at the user-agent
+  default (so was v1's RicUI). In an app without a CSS reset, on Windows, that meant the Latin
+  letters and digits in buttons and text inputs rendered in Arial while the select and
+  textarea next to them used the page font (Japanese glyphs mostly looked the same, because
+  Arial has none and the browser fell back to the OS Japanese font — on a non-Japanese OS
+  that fallback can be a Chinese typeface). Apps that already reset `button, input { font-family:
+  inherit }` see no change.
+- **Opting out** is one line of app CSS after `ricdom-ui.css`: `.ric-button { font-family:
+  ...; }` — same single-class specificity, later wins (see the base-layer FACT in §8).
+
 ### 10.2 Stateless — layout
 
 | Component | Notes |

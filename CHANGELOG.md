@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.0.0-alpha.24] — not yet published
+
+Owner decision (`2026-10-08`), found while giving the docs site one typeface: two of the four
+form controls were not following the page font.
+
+### Changed
+
+- **`.ric-button` and `.ric-input` now have `font-family: inherit`**, like `.ric-textarea`
+  and `.ric-select` already did (all four also share `font-size: 1em`). ricdom-ui still never
+  picks a typeface — set `font-family` once on `<body>` and every control follows it. Rationale
+  and the full contract: SPEC §10.1 "FACT: every control inherits the page's font".
+- **Visible change** for apps that do not use a CSS reset (normalize.css, modern-normalize,
+  Tailwind preflight, Bootstrap reboot all already reset this): on Windows, the Latin letters
+  and digits in buttons and text inputs move from the user-agent Arial to the page font, so
+  they match the select/textarea next to them. Japanese text is mostly unaffected (Arial has no
+  CJK glyphs; the browser was already falling back to the OS Japanese font). To keep a distinct
+  control face, add `.ric-button { font-family: ...; }` after `ricdom-ui.css`.
+- Test (red first, `tests/browser/uiControlFont.test.ts`): with the alpha.23 CSS the button's
+  computed `font-family` was `Arial` under a `"Courier New"` parent (confirmed failing, then
+  passing). Also pins `font-size: 1em` for the four controls and that a one-line app rule can
+  still override the face.
+- `ricdom-ui.css` grows by two declarations; the core bundle is untouched.
+
 ## [2.0.0-alpha.23] — not yet published
 
 Reported by ギア軽量化デモ (14th consumer, `2026-10-06`, against `alpha.22`): one accessibility

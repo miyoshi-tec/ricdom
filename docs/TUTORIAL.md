@@ -153,7 +153,8 @@ two-way case. Add the UI package:
 ```
 
 Put the `ricdom-ui.css` `<link>` **before your own stylesheet**. The sheet is a base layer:
-it styles inputs, textareas, buttons and selects too (`.ric-textarea { font-family: inherit }`,
+it styles inputs, textareas, buttons and selects too (every control has
+`font-family: inherit; font-size: 1em`, so they follow your page's font — see SPEC §10.1;
 `.ric-select { width: 100% }`, …) at single-class specificity, so an app rule of the same
 specificity wins only if it comes later. `injectStyles()` appends a `<style>` at the end of
 `<head>`, so if you use it instead of a `<link>`, call it before your own stylesheets load.

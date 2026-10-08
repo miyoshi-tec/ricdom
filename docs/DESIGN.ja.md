@@ -176,6 +176,17 @@ v1 は 5 か月・46 リリース・社内 11 アプリの実戦で API が磨�
 - **追報 4 (alpha.4 取り込み) で第 2 号は完了**: 再現スクリプト 5→5→5→5→5、E2E 10/10、回避策ゼロ。初報 10 + 追報 5 = 15 件が同日中に公式 API で閉じた
 - ~~観察 (対応なし)~~ → **§23 で実バグ (#14) と判明**。DPI 150% の実機で右端密着トリガーの dropdown body の `right` が `innerWidth` を 0.33px 超えた件、統括は「`clampLeft` が右端も収めるので最終位置では起き得ない、実測フェーズの rect を拾ったのでは」と判断したが誤り。consumer が再計測後 (200ms / 600ms) の inline `left` / `offsetWidth` / 本来幅を取り直し、**測った幅そのものが位置依存で過小**になっていることを示した (§23)。教訓: 「式は正しい」で止めず、式に入る実測値の取り方まで疑う
 
+## 43. フォームコントロール 4 部品の書体を `font-family: inherit` に揃える (2026-10-08、2.0.0-alpha.24、ユーザー決定)
+
+(§42 = v2.0.0 リリース計画は develop ブランチにある。本節は main で alpha.24 を閉じるため番号を飛ばした)
+
+- **発見の経緯**: docs サイトの書体を Qiita と同じ OS 標準フォント列に統一する作業 (§42) で、Windows の Chromium が `<button>` / `<input>` を **Arial 13.33px** で描いていることを実測。ricdom-ui の CSS を確認すると、`.ric-textarea` と `.ric-select` は `font-family: inherit`、`.ric-button` と `.ric-input` は **指定なし** (UA 既定のまま)。font-size は 4 部品とも `1em` で周囲に従っていたので、書体だけ 2 部品が漏れていた形。**v1 RicUI も同じ構成** (inherit は 2 箇所のみ) で、§32 のパリティ監査は「v1 と同じ」なので捕捉しない種類の穴
+- **実害の大きさ**: 同じフォームの中でボタンと入力欄の **英数字だけ Arial**、隣の select / textarea はページの書体。日本語は Arial に字形が無く OS の日本語フォントに落ちるため日本語版 Windows ではほぼ同じ見た目 (ページが Noto Sans JP 等を明示している場合は日本語も別書体になる。英語版 OS では中国語フォントに落ちて漢字の字形が変わりうる)。リセット CSS (normalize.css / modern-normalize / Tailwind preflight / Bootstrap reboot) を入れているアプリでは差が出ない。14 consumer から報告はなし
+- **どちらに揃えるか (ユーザーの問い「あるべき姿がわからない」への回答 → `inherit` を推奨、採用)**: ①UA 既定の Arial は 1990 年代のネイティブ部品の名残で、リセット CSS 各種が一律 `inherit` に潰している = Web 側では答えが出ている ②4 部品中 3 項目 (textarea / select の family、全部品の size) が既に「周囲に従う」 ③テーマは色・角丸・影・サイズのトークンだけで **書体はホストページが決める** のが契約 (applyTheme はフォントに触らない)。逆方向はライブラリがフォント列を選ぶか `--ric-font` を新設することになり、アプリから決定権を奪う ④別書体にしたいアプリは `.ric-button { font-family: ... }` 1 行で上書きできる (同特異度・後勝ち、§8 の base layer FACT)
+- **実装 (alpha.24)**: `src/ui/cssTemplates.ts` の BUTTON_CSS / INPUT_CSS に `font-family: inherit;` を 1 行ずつ。コアは不変。契約テスト `tests/browser/uiControlFont.test.ts` (red first: alpha.23 の CSS で button の computed font-family が親の `"Courier New"` ではなく `Arial` = 失敗を確認 → 修正後 3/3 pass)。range / checkbox の `<input>` 自体は字形を描かないので対象外、ラベル側の継承だけ見る。SPEC §10.1 に FACT「every control inherits the page's font」、CHANGELOG に Windows での見た目の変化を明記、TUTORIAL の base layer 説明を更新。browser 173 (+3) / unit 739 pass
+- **教訓**: 「v1 と同じ」はパリティ監査 (§32) の合格条件であって正しさの保証ではない。UA スタイルシートに依存している箇所は jsdom では見えない (fontFamily が常に空文字) ので、実ブラウザの computed style でしか検証できない
+- **環境メモ**: Vitest browser API のポート除外範囲が移動 (51230–51329 も除外に) → スクラッチ設定を 47123 に変更。`netsh interface ipv4 show excludedportrange protocol=tcp` で空きを確認してから選ぶ
+
 ## 41. 14 番目の consumer ギア軽量化デモ (歯車 FEM) からの要望 2 + 不具合 1 = `createTweakPanel` のフォルダ (2026-10-06、2.0.0-alpha.23、ユーザー指示)
 
 - **報告**: tweak パネルのフォルダ 5 つで入力パネルを組み、利用者要望「閉じたフォルダの見出し横に中身の要約」を `[aria-expanded="false"] .ric-tweak-folder__label::after { content: var(--folder-summary) / "" }` で実装 (公開 API に無い部分を文書化フック + CSS 変数で補った = 回り道の自己申告)。その過程で **不具合 (a11y、中): 閉じたフォルダの中の入力に Tab で入れる**。最小ページ + Chromium 140 / Chrome 154 の 2 系で AX ツリーまで観測、対策案 2 つを比較提示 — 報告の精度は Potopeta 級
