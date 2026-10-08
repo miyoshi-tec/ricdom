@@ -41,6 +41,24 @@
   document.documentElement.style.background = FOUC[theme].bg;
   document.documentElement.style.colorScheme = FOUC[theme].scheme;
 
+  // Syntax highlighting: pages that load highlight.js (site/*.html, from cdnjs, before this
+  // script) get its colour sheet here, swapped with the theme's colour scheme so the tokens stay
+  // readable on both light and dark `--ric-code-bg`. uiMdPre / uiCodePre pick up window.hljs by
+  // themselves; pages without it (the samples) are left untouched.
+  var HLJS_STYLES = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/';
+  var hljsLink = null;
+  var setHljsTheme = function (name) {
+    if (!window.hljs) return;
+    if (!hljsLink) {
+      hljsLink = document.createElement('link');
+      hljsLink.rel = 'stylesheet';
+      document.head.appendChild(hljsLink);
+    }
+    var href = HLJS_STYLES + (FOUC[name].scheme === 'dark' ? 'github-dark.min.css' : 'github.min.css');
+    if (hljsLink.getAttribute('href') !== href) hljsLink.setAttribute('href', href);
+  };
+  setHljsTheme(theme);
+
   var I = window.ricdomI18n;
   var U = window.ricdomUI;
   var t = I.t;
@@ -72,6 +90,7 @@
     try { localStorage.setItem(THEME_KEY, next); } catch (e) { /* ignore */ }
     U.applyTheme(document.body, { theme: next });
     document.documentElement.style.colorScheme = FOUC[next].scheme;
+    setHljsTheme(next);
     if (app) app.theme = next; // keeps the nav's <select> in sync when a page switches the theme
     listeners.slice().forEach(function (fn) { fn(next); });
   };
