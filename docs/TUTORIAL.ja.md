@@ -459,7 +459,205 @@ ricdom.createApp('#app', { h: 200, s: 75, l: 75, a: 100 }, (s) => {
 
 この行数でここまでの UI を書ける UI ライブラリは、なかなかない (レアな存在だ) と自負しております。
 
-## 9. API
+## 9. 応用: CSS transition でアコーディオン
+
+ここでは CSS の transition を使って、アコーディオンを作ります。アコーディオンを JavaScript で頑張っている人はよく見かけますが、
+CSS で実装するのはなかなか難しい。一度やってみると分かります。
+
+最大のポイントは `style` の `transition: 'height 0.3s'` と、**開くときにも具体的な高さを入れる**ことです。`auto` では transition が
+発動しないので、1 項目の高さを 28px として計算して入れています。開閉は三項演算子 1 つです。
+
+```js
+style: { overflow: 'hidden', transition: 'height 0.3s', height: `${s.open ? s.items.length * 28 : 0}px` }
+```
+
+```html live
+<div id="app"></div>
+<script>
+ricdom.createApp('#app', { items: ['item-01', 'item-02', 'item-03', 'item-04'], open: false }, (s) => ({
+  tag: 'div', children: [
+    { tag: 'div', style: { cursor: 'pointer', userSelect: 'none' },
+      onclick: () => { s.open = !s.open; },
+      children: [`${s.open ? '▼' : '▶'} Accordion list`] },
+    { tag: 'div',
+      style: { paddingLeft: '15px', overflow: 'hidden', transition: 'height 0.3s', height: `${s.open ? s.items.length * 28 : 0}px` },
+      children: s.items.map((it, i) => ({ tag: 'div', style: { height: '28px' }, children: [`${i + 1}: ${it}`] })) },
+    { tag: 'button', onclick: () => { s.items = [...s.items, `item-0${s.items.length + 1}`]; }, children: ['Append'] },
+  ],
+}));
+</script>
+```
+
+Append を押すと、開いている間は高さが伸びる方向にアニメーションします。`s.items` を `push()` ではなく `[...s.items, 追加]` で
+**差し替えている**ところに注意してください (理由は 15 章の「浅い監視」)。
+
+ちなみに、HTML には `<details>` / `<summary>` という「まさしくアコーディオン」なタグがあります。JAVIS の記事を書いた当時は
+アニメーションできませんでしたが、今は `::details-content` に transition を掛けられるブラウザが増えてきました。ricdom では
+アコーディオンを部品 (`createAccordion`、キーボード操作と a11y つき) として用意しているので、実アプリではそちらを使ってください。
+ここで見せたかったのは「state → style の計算 → CSS が勝手にアニメーションする」という役割分担です。
+
+## 10. 応用: SVG でアニメーション
+
+お待ちかねの SVG です。SVG のタグ (`svg` / `rect` / `circle`) も、HTML のタグとまったく同じ書き方で置けます。
+
+ここでは 200 個の点が枠の中を跳ね回ります。表示は次の 6 行に収まっています。`svg` の中に背景の `rect` があり、その後ろに
+200 個の `circle` が `map()` で展開される、それだけです。
+
+```js
+{ tag: 'svg', width: W + 10, height: H + 10, stroke: '#111', fill: '#ddd', children: [
+  { tag: 'rect', x: 0, y: 0, width: W + 10, height: H + 10 },
+  ...s.points.map((p) => ({ tag: 'circle', cx: p.x + 5, cy: p.y + 5, r: 5, fill: `hsl(${p.hue}, 75%, 75%)` })),
+] }
+```
+
+アニメーションは `setInterval()` で 20fps、点を動かしたあとに `app.points = [...app.points]` と**配列を差し替えて**います。
+ricdom が監視しているのはトップレベルの代入なので、配列の中の点を `p.x += ...` と直接動かしただけでは気づきません。
+動かし終わったら差し替える。これが ricdom の作法です (15 章)。
+
+```html live
+<div id="app"></div>
+<script>
+const W = 333, H = 111;
+const makePoint = () => ({
+  x: Math.random() * W, y: Math.random() * H,
+  vx: Math.random() - 0.5, vy: Math.random() - 0.5,
+  hue: Math.floor(Math.random() * 360),
+});
+const move = (p, speed) => {
+  p.x += p.vx * speed; p.y += p.vy * speed;
+  if (p.x < 0) { p.x = 0; p.vx *= -1; }  if (p.x > W) { p.x = W; p.vx *= -1; }
+  if (p.y < 0) { p.y = 0; p.vy *= -1; }  if (p.y > H) { p.y = H; p.vy *= -1; }
+};
+
+const app = ricdom.createApp('#app', { points: Array.from({ length: 200 }, makePoint), speed: 10 }, (s) => ({
+  tag: 'div',
+  onwheel: (ev) => { s.speed += ev.deltaY <= 0 ? 1 : -1; ev.preventDefault(); },
+  children: [
+    { tag: 'svg', width: W + 10, height: H + 10, stroke: '#111', fill: '#ddd', children: [
+      { tag: 'rect', x: 0, y: 0, width: W + 10, height: H + 10 },
+      ...s.points.map((p) => ({ tag: 'circle', cx: p.x + 5, cy: p.y + 5, r: 5, fill: `hsl(${p.hue}, 75%, 75%)` })),
+    ] },
+    { tag: 'div', children: ['speed: ',
+      { tag: 'input', type: 'range', min: -10, max: 30, value: s.speed, oninput: (ev) => { s.speed = Number(ev.target.value); } },
+      s.speed] },
+  ],
+}));
+
+setInterval(() => {
+  for (const p of app.points) move(p, app.speed);
+  app.points = [...app.points];   // 動かし終わったら差し替える → 次のフレームで描画
+}, 1000 / 20);
+</script>
+```
+
+ポイントは、**表示のタイミングを気にせず、好きなときにデータを更新している**ところです。20fps で代入していますが、
+ricdom は `requestAnimationFrame` で次のフレームにまとめて描画するので、同じフレーム内に代入が何回あっても描画は 1 回です。
+200 個の `circle` も、変わった属性 (`cx` / `cy`) だけが DOM に書き込まれます。
+
+## 11. 応用: canvas と「島」
+
+JAVIS の記事では「canvas は普通に書けるだけで、特に相性がよいわけではない」と謝っていました。ricdom には 1 つだけ、
+canvas のための道具があります。**島 (island)** です。
+
+ricdom は render 関数が返したオブジェクトと DOM を比べて差分を書き込むので、canvas の中身のように「ricdom の外で描かれたもの」を
+ricdom の管理下に置くと、次の render で消されかねません。`island: true` を付けた要素の**中**は、ricdom が一切触りません。
+
+```html live
+<div id="app"></div>
+<script>
+// 描画は ricdom の外で。state を変えたら、その render が終わるのを待って (nextRender) 自分で描く。
+const paint = () => {
+  const cv = app.refs.get('cv');
+  const ctx = cv.getContext('2d');
+  ctx.fillStyle = `rgb(${app.r}, ${app.g}, ${app.b})`;
+  ctx.fillRect(0, 0, cv.width, cv.height);
+  ctx.fillStyle = '#111';
+  ctx.font = '16px sans-serif';
+  ctx.fillText(`rgb(${app.r}, ${app.g}, ${app.b})`, 10, 48);
+};
+const onRange = (k) => (ev) => { app[k] = Number(ev.target.value); app.nextRender().then(paint); };
+
+const app = ricdom.createApp('#app', { r: 120, g: 180, b: 220 }, (s) => ({
+  tag: 'div', children: [
+    { tag: 'canvas', island: true, width: 320, height: 80, ref: 'cv', style: { display: 'block', border: '1px solid #999' } },
+    { tag: 'div', children: ['R: ', { tag: 'input', type: 'range', min: 0, max: 255, value: s.r, oninput: onRange('r') }] },
+    { tag: 'div', children: ['G: ', { tag: 'input', type: 'range', min: 0, max: 255, value: s.g, oninput: onRange('g') }] },
+    { tag: 'div', children: ['B: ', { tag: 'input', type: 'range', min: 0, max: 255, value: s.b, oninput: onRange('b') }] },
+  ],
+}));
+paint();
+</script>
+```
+
+`ref: 'cv'` を付けた要素は `app.refs.get('cv')` で取り出せます。`app.nextRender()` は「予約された描画が終わったら」解決する
+Promise で、代入の直後に呼ぶと、その代入による描画の完了を待てます。canvas の属性 (`width` / `height` / `style`) は ricdom が管理し、
+中の絵は自分で描く。この境界線を `island: true` の 1 語で引けるのが、v1 からの改善点です (v1 は「`ctx` を省略すると島」という
+暗黙の規則で、書き忘れと区別がつきませんでした)。
+
+## 12. Vue と比べてみる
+
+JAVIS の記事では Vue.js と React のサンプルを並べていました。ricdom でも 1 つだけ。Vue のチュートリアルにある ToDo リストです。
+
+```js
+// Vue (template / data / methods の 3 か所に分かれる、21 行)
+template: `<ol><li v-for="(it, idx) in items">{{ it }} <button v-on:click="del(idx)">x</button></li></ol>
+           <input v-model="item" /> <button v-on:click="add()">Add</button>`,
+data: { items: ['aaa', 'bbb', 'ccc'], item: 'Hello' },
+methods: { add() { this.items.push(this.item) }, del(idx) { this.items.splice(idx, 1) } }
+```
+
+```html live
+<div id="app"></div>
+<script>
+ricdom.createApp('#app', { items: ['aaa', 'bbb', 'ccc'], item: 'Hello ricdom' }, (s) => ({
+  tag: 'div', children: [
+    { tag: 'ol', children: s.items.map((it, i) => ({ tag: 'li', children: [
+      it, ' ', { tag: 'button', onclick: () => { s.items = s.items.filter((_, j) => j !== i); }, children: ['x'] },
+    ] })) },
+    { tag: 'input', value: s.item, oninput: (ev) => { s.item = ev.target.value; } },
+    { tag: 'button', onclick: () => { s.items = [...s.items, s.item]; }, children: ['Add'] },
+  ],
+}));
+</script>
+```
+
+Vue の `template` / `data` / `methods` が、ricdom では render 関数 1 つに収まっています。`v-model` や `v-on:click` のような
+拡張属性は無く、`<input>` の `value` と `oninput`、`<button>` の `onclick` という**標準の属性をそのまま**使っています。
+覚えることが「HTML と JavaScript」以外に増えないのが、ricdom が小さくいられる理由です。
+
+(React のサンプルは、class コンポーネントの時代の比較だったので今回は省きました。)
+
+## 13. UI 部品はこうして生まれた
+
+JAVIS の記事の末尾には「ライブラリ化テスト中」として、`ui_range(_d, 'r')` や `ui_hover(...)`、そして
+「data から view を自動生成する `create_ui(_d)`」が載っていました。あれが RicUI の、そして `ricdom/ui` の始まりです。
+
+8 章の HSLA で作った `control()` を思い出してください。**オブジェクトを返す関数**にまとめただけで、部品になりました。
+`ricdom/ui` の 29 部品も、根っこは同じです。
+
+```js
+// ricdom/ui の uiRange は、中身はほぼこれです (実物はテーマの CSS クラスと a11y 属性が付く)
+const uiRange = ({ value, min = 0, max = 100, oninput }) =>
+  ({ tag: 'input', type: 'range', value, min, max, oninput, class: 'ric-range' });
+```
+
+そして「data から UI を自動生成する」は、**`createTweakPanel`** になりました。オブジェクトを渡すと、数値には slider、真偽値には
+checkbox、文字列には入力欄、入れ子のオブジェクトには折りたたみフォルダが自動で生えます。dat.GUI や Tweakpane と同じ発想ですが、
+**ricdom の state をそのまま渡せる**ので、調整した値がそのままアプリに効きます。
+
+```js
+// 9 章のアコーディオンの state をそのまま調整パネルにする (部品なので app.use() で登録する)
+const tweak = app.use(createTweakPanel());
+// render 内: tweak({ data: s, keys: { speed: { min: -10, max: 30 } } })
+```
+
+バリデーションも同じ発想で書けます。「入力が正しくないときはボタンを押せない」は、`disabled: !isValid(s)` を render の中で
+計算するだけです。チェックして、ダメなら alert で叱る UI より、押せる・押せないがリアルタイムに変わる UI の方が、利用者に優しい。
+JAVIS の記事ではこのために SimpleValidator.js という別ライブラリを用意していましたが、ricdom では render 関数の中の式で足ります。
+
+部品の作り方と使い方の詳細は、英語版 [TUTORIAL.md](TUTORIAL.md) の §4〜§8 と、[サンプル](../examples/index.html) の 02 以降へ。
+
+## 14. API
 
 ここで ricdom コアの API を解説します。「1 つ」と言いましたが、正確には **`createApp()` と、その戻り値が持つ 4 つのメソッド**です。
 
@@ -491,12 +689,13 @@ JAVIS.js は `_Hz` (既定 144) で state を**ポーリング**していまし�
 `requestAnimationFrame` で次のフレームにまとめて描画します (同じフレーム内で 100 回代入しても描画は 1 回)。
 ウィンドウが隠れていて rAF が止まる環境 (Electron の最小化など) のために、200ms の setTimeout も併設しています。
 
-## 10. ここまでで触れなかったこと
+## 15. ここまでで触れなかったこと
 
 この文書は JAVIS の記事と同じ範囲 (コア) だけを扱いました。ricdom にはこの先があります。
 
 - **浅い監視と、深い代入の作法**: `s.user.name = 'x'` までは監視されますが、`s.user.address.city = 'y'` は監視されません。
   変えた階層をコピーして差し替えます (`s.user = { ...s.user, address: { ...s.user.address, city: 'y' } }`)。
+  9 章・10 章・12 章で配列を `push()` / `splice()` ではなく `[...s.items, x]` / `filter()` で差し替えていたのはこのためです。
   開発ビルドでは、再描画につながらなかった深い代入を `console.warn` で教えてくれます
 - **`key`**: リストの並べ替えで DOM を使い回すためのキー。兄弟内で一意にします
 - **島 (island)**: `{ tag: 'div', island: true }` と書くと、その中は ricdom が触りません。`<canvas>` や外部ライブラリの置き場です
