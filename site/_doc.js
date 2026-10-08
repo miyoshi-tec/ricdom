@@ -94,7 +94,8 @@
     return (
       '<!doctype html><html><head><meta charset="utf-8">' +
       (usesUi ? '<link rel="stylesheet" href="dist/ricdom-ui.css">' : '') +
-      '<style>html{background:#fff}body{margin:0;padding:12px;font-family:system-ui,sans-serif;color:#111827;font-size:14px}</style>' +
+      '<link rel="stylesheet" href="examples/_fonts.css">' +
+      '<style>html{background:#fff}body{margin:0;padding:12px;color:#111827;font-size:14px}</style>' +
       '<script src="dist/ricdom.iife.js"><\/script>' +
       (usesUi ? '<script src="dist/ricdom-ui.iife.js"><\/script>' : '') +
       '</head><body>' + code + FRAME_SCRIPT + '</body></html>'

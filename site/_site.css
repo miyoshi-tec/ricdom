@@ -1,6 +1,6 @@
 /* Layout for the docs site pages (site/*.html). Colors, radii and borders come from the
    --ric-* tokens only, so every page follows the theme chosen in the shared nav bar. */
-body { font-family: system-ui, sans-serif; }
+/* Fonts come from examples/_fonts.css (linked by every site page). */
 .site-main { max-width: 1100px; margin: 0 auto; padding: 24px 16px 48px; }
 .site-main h1 { font-size: 1.6rem; margin: 0 0 0.5rem; }
 .site-lede { color: var(--ric-color-fg-muted); font-size: 1.05rem; margin: 0 0 1.5rem; }

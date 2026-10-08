@@ -1,0 +1,23 @@
+/* Typography shared by every docs-site page (site/*.html, examples/*.html and the tutorial's
+   live iframes). These are the same OS-font stacks Qiita uses: no web font is downloaded, so
+   the page renders in Segoe UI + BIZ UDPGothic / Meiryo on Windows, in San Francisco +
+   Hiragino on macOS. Only the docs site links this file; ricdom-ui itself leaves the font to
+   the host page (`font-family: inherit` on controls). */
+:root {
+  --site-font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Kaku Gothic ProN",
+    "Hiragino Sans", "Noto Sans JP", "BIZ UDPGothic", Meiryo, sans-serif;
+  --site-font-mono: Consolas, "Liberation Mono", Menlo, Courier, "Hiragino Kaku Gothic ProN",
+    "Hiragino Sans", "Noto Sans JP", "BIZ UDGothic", Meiryo, monospace;
+}
+body { font-family: var(--site-font-sans); }
+/* Code: the Japanese fallbacks keep CJK text in code blocks in a gothic face instead of the
+   browser's default monospace fallback. `body .ric-*` outranks the single-class rules in
+   ricdom-ui.css regardless of stylesheet order. */
+code, pre, kbd, samp,
+body .ric-md-pre__fence, body .ric-md-pre__code, body .ric-code-pre,
+body .ric-range__value, body .ric-color__value, body .ric-tweak-row__json {
+  font-family: var(--site-font-mono);
+}
+/* Form controls do not inherit the page font by default (Chromium on Windows falls back to
+   Arial for <button>). Make them follow the body like the rest of the site. */
+button, input, select, textarea { font-family: inherit; }
