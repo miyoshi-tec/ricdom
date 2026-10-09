@@ -188,6 +188,8 @@ v1 は 5 か月・46 リリース・社内 11 アプリの実戦で API が磨�
 - **見送り**: 上に反転した popup がタイトルバーの最小化・最大化・閉じるに被さる → top layer の性質で、閉じれば戻る。実害小 (SPEC に事実として記載のみ)。Rancha の Temp フォルダで CPU が張り付く件は Rancha 側の不具合
 - **main の旧サンプル `examples/composite.html`** も `uiInlineMenu` を使っていたので `createPopup` + `openAt` に書き換え (develop では番号付きサンプルに置換済みで、このファイルは削除済み)
 - **テスト**: `tests/browser/uiPopupAlpha28.test.ts` 6 件 (全件 red first)。browser 197 / unit 727 (`uiInlineMenu` の 13 件を削除)。コア gzip 4,877B 不変、ui IIFE 27,135B
+- **Rancha の alpha.28 確認 (同日、Rancha 0.1.6)**: 自前実装 3 つ (portal の no-drag 2 行、list / tree の onscroll close、区切り線の打ち消し CSS) を外し、ricdom 側の挙動だけで次を確認。**Electron 32.3.3 / Windows 11 / OS の `SendInput` クリック**で、タイトルバーのドラッグ領域に重なった行メニュー・テーマメニューの項目が押せる (対照: popup を閉じた同じ点は pointerdown 0 件)。CDP で読み込まれた CSS を調べ、portal と app-region を含む規則は ricdom-ui.css の 1 つだけ = **ricdom-ui.css の規則だけで足りる** ことを確認 (alpha.26 から残っていた Electron の未検証事項はこれで解消)。OS のホイールで list / tree をスクロールすると閉じ「…」の aria-expanded も false に戻る、popup の中のホイールは中だけスクロールして閉じない、高さ 240px で `max-height: 167.7px` (中身 247px)・通常サイズでは制限なし、区切り線は `.ric-popup__sep` だけで 1px の線・ArrowDown 11 回で menuitem 10 個を回り区切り線に止まらない。unit 902 / e2e 133 (区切り線の検査 +1) / dev 警告ゼロ。e2e の「list をスクロールすると閉じる」は ricdom の回帰検知として残すとのこと
+- **報告のみ (見送り)**: 高さ 100px のウィンドウでは上下の空きがほぼ同じ (28px / 27px) で、テーマメニューが 1 項目ぶんの窓になる。中のスクロールで全項目に届くので実害なし。再検討の条件: 通常のウィンドウサイズで窓が狭すぎるという報告 (そのときは最小の高さを持たせて、空きの広い側にはみ出させるか検討)。開くアニメ (scale) の途中で `boundingBox()` を測ると区切り線が 0.88px になるのは不具合ではない (Rancha は computed style で検査)
 
 ## 46. 行ごとの「…」メニューの canon を createPopup + openAt(element) に一本化、uiInlineMenu を非推奨 (2026-10-09、2.0.0-alpha.27、ユーザー決定)
 
