@@ -1,11 +1,13 @@
 // docs サイトの i18n 未翻訳チェック (`npm run check:i18n`)。
 //
 // 方針 (examples/_i18n.js の冒頭コメント参照): 英語の文字列そのものがキーで、英語辞書は無い。
-// 日本語の辞書は各ファイルが `ricdomI18n.addDict('ja', { 'English text': '日本語' })` で持つ。
+// 日本語の訳は、1 回しか使わない文字列なら呼び出し箇所に `t('English text', { ja: '日本語' })`、
+// 何度も使う文字列なら各ファイルの `ricdomI18n.addDict('ja', { 'English text': '日本語' })` に置く。
 // このスクリプトは examples/*.html, examples/*.js, site/*.html, site/*.js から
 //   - t('...') / t("...") / t`...` のキー (テンプレートの ${} は {0},{1}… に置換)
+//   - t('...', { ja: '...' }) のその場の訳 (2 番目の引数がオブジェクトリテラルで ja を持つもの)
 //   - addDict('ja', { ... }) のキー
-// を集め、辞書に無いキーを「未翻訳」として表示して exit 1 する。
+// を集め、どちらの訳も無いキーを「未翻訳」として表示して exit 1 する。
 //
 // 正規表現だけで JS を読むと文字列中のバッククォートや正規表現リテラルで壊れるので、
 // 文字列・テンプレート・コメント・正規表現リテラルを読み飛ばす小さなトークナイザを使う。
@@ -145,20 +147,37 @@ const tokenize = (src) => {
   return tokens;
 };
 
+// t('key', { ja: '...' }) の 2 番目の引数 (オブジェクトリテラル) に `ja` のエントリがあるか。
+// k は t の識別子トークンの位置。キーは 'ja' / "ja" / ja のどれでもよく、値は文字列かテンプレート。
+const hasInlineJa = (tokens, k) => {
+  if (tokens[k + 3]?.value !== ',' || tokens[k + 4]?.value !== '{') return false;
+  let depth = 1;
+  for (let m = k + 5; m < tokens.length && depth > 0; m++) {
+    const x = tokens[m];
+    if (x.type === 'p' && (x.value === '{' || x.value === '[' || x.value === '(')) depth++;
+    else if (x.type === 'p' && (x.value === '}' || x.value === ']' || x.value === ')')) depth--;
+    else if (depth === 1 && (x.type === 'str' || x.type === 'id') && x.value === 'ja' && tokens[m + 1]?.value === ':') {
+      const v = tokens[m + 2];
+      return v?.type === 'str' || v?.type === 'tpl';
+    }
+  }
+  return false;
+};
+
 // ── キーの収集 ──
 const collect = (src, lineOf) => {
   const tokens = tokenize(src);
-  const used = []; // { key, line }
+  const used = []; // { key, line, inline }
   const dict = new Set();
   for (let k = 0; k < tokens.length; k++) {
     const tok = tokens[k];
-    // t('...') / t`...` (`.t(` の形も許す)
+    // t('...') / t`...` (`.t(` の形も許す)。t('...', { ja: '...' }) はその場で訳ありとみなす
     if (tok.type === 'id' && tok.value === 't') {
       const next = tokens[k + 1];
       const arg = tokens[k + 2];
-      if (next?.type === 'tpl') used.push({ key: next.value, line: lineOf(next.pos) });
+      if (next?.type === 'tpl') used.push({ key: next.value, line: lineOf(next.pos), inline: false });
       else if (next?.type === 'p' && next.value === '(' && (arg?.type === 'str' || arg?.type === 'tpl')) {
-        used.push({ key: arg.value, line: lineOf(arg.pos) });
+        used.push({ key: arg.value, line: lineOf(arg.pos), inline: hasInlineJa(tokens, k) });
       }
     }
     // addDict('ja', { 'key': 'value', ... })
@@ -223,14 +242,15 @@ const main = async () => {
     }
   }
 
-  const missing = allUsed.filter((u) => !allDict.has(u.key));
+  const missing = allUsed.filter((u) => !u.inline && !allDict.has(u.key));
   if (missing.length > 0) {
-    console.error(`[check:i18n] 日本語訳 (addDict('ja', ...)) の無いキーが ${missing.length} 件あります:`);
+    console.error(`[check:i18n] 日本語訳 (t の 2 番目の引数 { ja } も addDict('ja', ...) も) の無いキーが ${missing.length} 件あります:`);
     for (const u of missing) console.error(`  ${u.file}:${u.line}  ${JSON.stringify(u.key)}`);
     process.exitCode = 1;
     return;
   }
-  console.log(`[check:i18n] OK (${files.length} files, ${new Set(allUsed.map((u) => u.key)).size} keys, ${allDict.size} ja entries)`);
+  const inlineCount = allUsed.filter((u) => u.inline).length;
+  console.log(`[check:i18n] OK (${files.length} files, ${new Set(allUsed.map((u) => u.key)).size} keys, ${allDict.size} ja entries, ${inlineCount} inline)`);
 };
 
 await main();

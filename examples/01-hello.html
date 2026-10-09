@@ -36,12 +36,11 @@
 <script src="../dist/ricdom-ui.iife.min.js"></script>
 <script src="_i18n.js"></script><script src="_samples.js"></script><script src="_nav.js"></script>
 <script>
-  // Site helper: t(text) returns the text in the chosen language; addDict registers the Japanese.
-  // サイトの補助: t(文字列) は選択中の言語の文字列を返し、addDict で日本語を登録します。
-  const { t, addDict, onLangChange } = ricdomI18n;
-  addDict('ja', {
-    'A counter in one createApp call. Click + and -.': 'createApp 1 回で作ったカウンターです。+ と - を押してみてください。',
-  });
+  // Site helper: t(text, { ja: '...' }) returns the text in the chosen language. A string used only
+  // once carries its Japanese right there; strings used in several places go into addDict instead.
+  // サイトの補助: t(文字列, { ja: '…' }) は選択中の言語の文字列を返します。1 回しか使わない文字列は
+  // その場に日本語を書き、何度も使う文字列は addDict にまとめて登録します。
+  const { t, onLangChange } = ricdomI18n;
 
   // createApp(target, state, render): where to draw, the data, and how to draw it.
   // render returns plain objects ({ tag, children, onclick, ... }) that describe the DOM.
@@ -55,7 +54,7 @@
     (s) => ({
       tag: 'div',
       children: [
-        { tag: 'p', children: [t('A counter in one createApp call. Click + and -.')] },
+        { tag: 'p', children: [t('A counter in one createApp call. Click + and -.', { ja: 'createApp 1 回で作ったカウンターです。+ と - を押してみてください。' })] },
         { tag: 'button', onclick: () => { s.count -= 1; }, children: ['-'] },
         { tag: 'output', children: [String(s.count)] },
         { tag: 'button', onclick: () => { s.count += 1; }, children: ['+'] },
