@@ -3,44 +3,59 @@
 <head>
 <meta charset="UTF-8">
 <title>ricdom — 09 Markdown editor (no build step)</title>
+<!-- ricdom-ui.css styles ricdom's UI components, the Markdown editor included (load it before your own CSS). _fonts.css only sets this site's fonts.
+     ricdom-ui.css は ricdom の UI 部品 (Markdown エディタを含む) の見た目です (自分の CSS より先に読み込みます)。_fonts.css はこのサイトのフォント設定だけです。 -->
 <link rel="stylesheet" href="../dist/ricdom-ui.css">
 <link rel="stylesheet" href="_fonts.css">
 <style>
   main { padding: 2rem; max-width: 720px; }
   h1 { font-size: 1.1rem; }
-  /* wrapperClass (2.0.0-alpha.17) lands this class on the wrapper div.ric-md-editor itself, not
-     on the textarea. Sizing the wrapper through `.ric-md-editor` from outside works too, but
-     wrapperClass is the documented way to do it without depending on that internal class name. */
+  /* wrapperClass puts this class on the editor's outer box (not on the textarea), so you can size
+     the editor from your own CSS without relying on the library's internal class names.
+     wrapperClass を渡すと、このクラスがエディタの外側の箱 (textarea ではなく) に付きます。
+     ライブラリ内部のクラス名に頼らずに、自分の CSS でエディタの大きさを決められます。 */
   .example-md-editor { width: 100%; }
   .example-md-editor textarea { min-height: 320px; }
 </style>
 </head>
 <body>
 <!--
-  ricdom/md-editor is an opt-in subpath (not part of ricdom/ui). It ships its own IIFE,
-  dist/ricdom-md-editor.iife.min.js, with the global name `ricdomMdEditor`. The element the page
-  interacts with is still a plain <textarea> (value / oninput / ref all work exactly like
-  uiTextarea): createMdEditor only overlays a colored, aria-hidden <pre> mirror behind it, so the
-  Markdown source reads like a syntax-highlighted file without giving up any native editing
-  behavior (IME, undo, spellcheck, screen readers).
+  09 Markdown editor: ricdom/md-editor, an optional add-on with its own script (global ricdomMdEditor).
+  What you type into is still a plain <textarea>, so value, oninput and ref work exactly as with
+  uiTextarea. The colours come from a hidden copy of the text drawn behind it, so native editing
+  (IME input, undo, spellcheck, screen readers) is untouched.
+  No build step: three scripts (ricdom, ricdom/ui, then ricdom/md-editor) and one stylesheet.
 
-  No build step for consumers (design goal G1): three <script> tags (core -> ui -> md-editor)
-  plus the ui.css <link>; this page opens directly in a browser.
+  09 Markdown エディタ: ricdom/md-editor は、専用の <script> で読み込む追加部品です (グローバル変数 ricdomMdEditor)。
+  文字を打ち込む先はただの <textarea> なので、value・oninput・ref は uiTextarea とまったく同じに使えます。
+  色は、背後に重ねた「見えない写し」が付けています。そのため、日本語入力・元に戻す・スペルチェック・
+  読み上げといったブラウザ本来の編集機能はそのまま働きます。
+  ビルド不要: <script> 3 本 (ricdom → ricdom/ui → ricdom/md-editor) と CSS 1 本で動きます。
 -->
 <main>
   <div id="app"></div>
 </main>
 
+<!-- Optional: highlight.js colours the code in this site's Source view. ricdom does not need it.
+     任意: highlight.js はこのサイトの「ソース」表示を色分けします。ricdom 自体には不要です。 -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
+<!-- ricdom itself: the core, the UI components, then the Markdown editor. They define the globals ricdom, ricdomUI and ricdomMdEditor.
+     ricdom 本体: コア → UI 部品 → Markdown エディタの順に読み込みます。グローバル変数 ricdom・ricdomUI・ricdomMdEditor ができます。 -->
 <script src="../dist/ricdom.iife.min.js"></script>
 <script src="../dist/ricdom-ui.iife.min.js"></script>
 <script src="../dist/ricdom-md-editor.iife.min.js"></script>
+<!-- Docs-site helpers, not part of ricdom: the nav bar (theme, language, previous / next page) and t() for translations.
+     このサイト専用の補助で、ricdom の一部ではありません: ナビバー (テーマ・言語・前後のページ) と翻訳用の t() です。 -->
 <script src="_i18n.js"></script><script src="_samples.js"></script><script src="_nav.js"></script>
 <script>
+  // Short names for the UI components and the Markdown editor.
+  // UI 部品と Markdown エディタを短い名前で呼べるようにします。
   const U = ricdomUI;
   const MD = ricdomMdEditor;
-  const { t, addDict, onLangChange } = ricdomI18n;
 
+  // Site helper: t(text) returns the text in the chosen language; addDict registers the Japanese.
+  // サイトの補助: t(文字列) は選択中の言語の文字列を返し、addDict で日本語を登録します。
+  const { t, addDict, onLangChange } = ricdomI18n;
   addDict('ja', {
     'ricdom/md-editor': 'ricdom/md-editor',
     'The area below is a real <textarea>. Markdown syntax (headings, bold, emphasis, links, fenced code, tables, ...) is colored by an invisible mirror layered behind it.':
@@ -48,6 +63,8 @@
     'Write Markdown…': 'Markdown を書いてください…',
   });
 
+  // The text the editor starts with. It shows most of the syntax that gets coloured.
+  // エディタの最初の中身です。色分けされる構文をひととおり含めています。
   const SAMPLE = [
     '---',
     'title: ricdom/md-editor sample',
@@ -83,6 +100,9 @@
     'Try typing below — the colors update as you type.',
   ].join('\n');
 
+  // The editor keeps state (the hidden copy that follows your typing), so it is registered with
+  // app.use() in `setup` (bottom), before the first render.
+  // エディタは状態 (入力に追従する見えない写し) を持つので、最初の描画の前に `setup` (下) で app.use() を使って登録します。
   let md;
 
   const app = ricdom.createApp(
@@ -96,6 +116,8 @@
             children: [t('The area below is a real <textarea>. Markdown syntax (headings, bold, emphasis, links, fenced code, tables, ...) is colored by an invisible mirror layered behind it.')],
           }),
           U.uiSeparator(),
+          // Used exactly like a textarea: value in, oninput out.
+          // textarea と同じ使い方です: value で渡し、oninput で受け取ります。
           md({
             value: s.body,
             placeholder: t('Write Markdown…'),
@@ -109,7 +131,8 @@
     { setup: (a) => { md = a.use(MD.createMdEditor()); } },
   );
 
-  // Strings read through t() are plain values, so re-render when the language changes.
+  // Site helper: t() returns a plain string, so draw again once when the language changes.
+  // サイトの補助: t() の戻り値はただの文字列なので、言語が変わったら 1 回描き直します。
   onLangChange(() => app.renderNow());
 </script>
 </body>

@@ -3,6 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <title>ricdom — 03 Forms and controls (no build step)</title>
+<!-- ricdom-ui.css styles ricdom's UI components (load it before your own CSS). _fonts.css only sets this site's fonts.
+     ricdom-ui.css は ricdom の UI 部品の見た目です (自分の CSS より先に読み込みます)。_fonts.css はこのサイトのフォント設定だけです。 -->
 <link rel="stylesheet" href="../dist/ricdom-ui.css">
 <link rel="stylesheet" href="_fonts.css">
 <style>
@@ -12,24 +14,34 @@
 </head>
 <body>
 <!--
-  TODO (later wave): this page is split into 02 (basic inputs), 03 (forms) and 04 (layout and
-  text); until then it carries all of them under the number 03.
+  03 Forms and controls: the controls, layout boxes and text components of ricdom/ui on one page.
+  Each one is a plain function that returns an object, so no app.use() registration is needed.
+  No build step: two scripts (ricdom, then ricdom/ui) and one stylesheet.
 
-  No build step for consumers (design goal G1): two IIFE bundles (ricdom -> ricdom/ui) and one
-  CSS <link> show every control, layout and text component. All of them are pure functions, so
-  no app.use() is needed.
+  03 フォームとコントロール: ricdom/ui のコントロール・レイアウト・テキスト部品を 1 ページに並べています。
+  どれも「オブジェクトを返すただの関数」なので、app.use() での登録は要りません。
+  ビルド不要: <script> 2 本 (ricdom → ricdom/ui) と CSS 1 本で動きます。
 -->
 <div id="app"></div>
 
+<!-- Optional: highlight.js colours code (the code block and the JSON below, and this site's Source view). ricdom does not need it.
+     任意: highlight.js はコードを色分けします (下のコードブロックと JSON、このサイトの「ソース」表示)。ricdom 自体には不要です。 -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
+<!-- ricdom itself: the core first, then the UI components. They define the globals ricdom and ricdomUI.
+     ricdom 本体: コア → UI 部品の順に読み込みます。グローバル変数 ricdom と ricdomUI ができます。 -->
 <script src="../dist/ricdom.iife.min.js"></script>
 <script src="../dist/ricdom-ui.iife.min.js"></script>
+<!-- Docs-site helpers, not part of ricdom: the nav bar (theme, language, previous / next page) and t() for translations.
+     このサイト専用の補助で、ricdom の一部ではありません: ナビバー (テーマ・言語・前後のページ) と翻訳用の t() です。 -->
 <script src="_i18n.js"></script><script src="_samples.js"></script><script src="_nav.js"></script>
 <script>
-  // The IIFE builds are exposed as the globals `ricdom` / `ricdomUI` (globalName in tsup.config.ts).
+  // A short name for the UI components.
+  // UI 部品を短い名前で呼べるようにします。
   const U = ricdomUI;
-  const { t, addDict, onLangChange } = ricdomI18n;
 
+  // Site helper: t(text) returns the text in the chosen language; addDict registers the Japanese.
+  // サイトの補助: t(文字列) は選択中の言語の文字列を返し、addDict で日本語を登録します。
+  const { t, addDict, onLangChange } = ricdomI18n;
   addDict('ja', {
     'ricdom — controls': 'ricdom — コントロール一覧',
     'Name': '名前',
@@ -43,7 +55,8 @@
     'Step 2': '手順 2',
   });
 
-  // Icon descriptors are fetched with `npx ricdom-icon <name>` (here: check, trash-2); do not hand-write them.
+  // Icon data (SVG paths) comes from `npx ricdom-icon <name>` (here: check, trash-2). Copy it; do not write it by hand.
+  // アイコンのデータ (SVG のパス) は `npx ricdom-icon <名前>` で取得します (ここでは check と trash-2)。手書きはしません。
   const ICON_CHECK = { p: 'M20 6 9 17l-5-5' };
   const ICON_TRASH = { p: ['M3 6h18', 'M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6', 'M10 11v6', 'M14 11v6', 'M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2'] };
 
@@ -58,8 +71,10 @@
     overlay: 'rgba(37,99,235,0.35)',
   };
 
-  // `s` (the render argument) is the reactive state itself: a Proxy created by createApp.
-  // Writing to the outer `state` object does not re-render; only writes through `s` do.
+  // `s` (the render argument) is the reactive state, a Proxy that createApp makes from `state`.
+  // Writing through `s` redraws the page; writing to the original `state` object does not.
+  // render の引数 `s` はリアクティブな状態で、createApp が `state` から作る Proxy です。
+  // `s` を通して書き込むと再描画されますが、元の `state` オブジェクトに書いても再描画されません。
   const app = ricdom.createApp(
     '#app',
     state,
@@ -70,6 +85,10 @@
           { tag: 'h1', children: [t('ricdom — controls')] },
           U.uiSeparator(),
 
+          // Controls. bindInput(s, 'name') is an input wired both ways to s.name; uiSelect next to it
+          // shows the same wiring written out by hand (value + onchange).
+          // コントロール。bindInput(s, 'name') は s.name と双方向につながった入力欄です。
+          // 隣の uiSelect は、同じつなぎ方を手で書いた形 (value + onchange) です。
           U.uiCol({
             children: [
               { tag: 'h2', children: ['control'] },
@@ -79,10 +98,14 @@
                   U.uiSelect({ value: s.role, options: ['viewer', 'editor', 'admin'], onchange: (e) => (s.role = e.target.value) }),
                 ],
               }),
+              // autoResize grows the textarea with its content, between 2 and 6 rows.
+              // autoResize は内容に合わせて textarea の高さを 2〜6 行の範囲で伸び縮みさせます。
               U.bindTextarea(s, 'memo', { autoResize: { minRows: 2, maxRows: 6 } }),
               U.uiRow({
                 children: [
                   U.bindCheckbox(s, 'agree', { children: [t('I agree to the terms of use')] }),
+                  // An option label can mix an icon and text.
+                  // 選択肢のラベルには、アイコンと文字を混ぜて書けます。
                   U.uiRadiobutton({
                     name: 'locale',
                     value: s.locale,
@@ -97,9 +120,13 @@
               U.uiRow({
                 children: [
                   U.bindRange(s, 'volume', { min: 0, max: 100 }),
+                  // An icon-only button needs `label` so screen readers can name it.
+                  // アイコンだけのボタンには、読み上げ用の名前として `label` を付けます。
                   U.uiButton({ variant: 'ghost', children: [U.uiIcon(ICON_TRASH, { size: 16, label: t('Delete') })] }),
                 ],
               }),
+              // uiColor accepts #rrggbb, or rgba(...) with an extra alpha slider.
+              // uiColor は #rrggbb を受け付け、rgba(...) を渡すと透明度のスライダーも付きます。
               U.uiRow({
                 children: [U.uiColor({ value: s.bg, oninput: (e) => (s.bg = e.target.value) }), U.uiColor({ value: s.overlay, oninput: (e) => (s.overlay = e.target.value) })],
               }),
@@ -108,6 +135,8 @@
 
           U.uiSeparator(),
 
+          // Layout boxes: uiRow (side by side), uiCol (stacked), uiGrid (columns), uiPanel (a framed box).
+          // レイアウト用の箱: uiRow (横並び)・uiCol (縦積み)・uiGrid (段組み)・uiPanel (枠付きの箱)。
           U.uiCol({
             children: [
               { tag: 'h2', children: ['layout'] },
@@ -121,6 +150,8 @@
 
           U.uiSeparator(),
 
+          // Text: uiMdPre draws Markdown; uiCodePre shows an object as JSON and follows the state live.
+          // テキスト: uiMdPre は Markdown を描画し、uiCodePre はオブジェクトを JSON で表示します (状態に追従します)。
           U.uiCol({
             children: [
               { tag: 'h2', children: ['text'] },
@@ -150,6 +181,8 @@
       }),
   );
 
+  // Site helper: t() returns a plain string, so draw again once when the language changes.
+  // サイトの補助: t() の戻り値はただの文字列なので、言語が変わったら 1 回描き直します。
   onLangChange(() => app.renderNow());
 </script>
 </body>

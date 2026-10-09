@@ -3,16 +3,20 @@
 <head>
 <meta charset="UTF-8">
 <title>ricdom — 08 Themes and frosted glass (no build step)</title>
+<!-- ricdom-ui.css styles ricdom's UI components (load it before your own CSS). _fonts.css only sets this site's fonts.
+     ricdom-ui.css は ricdom の UI 部品の見た目です (自分の CSS より先に読み込みます)。_fonts.css はこのサイトのフォント設定だけです。 -->
 <link rel="stylesheet" href="../dist/ricdom-ui.css">
 <link rel="stylesheet" href="_fonts.css">
 <style>
   html, body { min-height: 100%; }
   body { min-height: 100vh; }
-  /* A fake desktop wallpaper made only of CSS gradients and blurred circles (no external
-     asset). In a real Electron transparent window the OS desktop shows through instead (see
-     docs/TUTORIAL.md section 6, "Frosted glass over the desktop (Electron)"). It lets you check
-     with your own eyes that the translucent glass / glass-dark surfaces (dialog, popup, toast,
-     tooltip, dropdown, panel, tweak) really blur what is behind them. */
+  /* A stand-in desktop wallpaper made only of CSS gradients and blurred circles, so you can see
+     that the translucent glass / glass-dark surfaces really blur what is behind them. In an
+     Electron app with a transparent window, the real desktop shows through instead (Tutorial,
+     section 6, "Frosted glass over the desktop").
+     CSS のグラデーションとぼかした円だけで作った「壁紙」の代わりです。glass / glass-dark の半透明の面が、
+     背後をちゃんとぼかしているかを目で確かめるためのものです。透明ウィンドウの Electron アプリでは、
+     代わりに本物のデスクトップが透けて見えます (英語版チュートリアル 6 章「Frosted glass over the desktop」)。 */
   .wallpaper {
     position: fixed;
     inset: 0;
@@ -38,16 +42,17 @@
 </head>
 <body>
 <!--
-  No build step for consumers (design goal G1): two IIFE bundles and one CSS <link> are enough
-  for the glass / glass-dark themes. Floating surfaces (dialog, popup, dropdown, toast, tooltip,
-  panel, tweak panel) get backdrop-filter; controls (input, checkbox, range) deliberately do not
-  (SPEC section 8, FACT).
+  08 Themes and frosted glass: the seven built-in themes, including the translucent glass and glass-dark.
+  Floating surfaces (dialog, popup, dropdown, toast, tooltip, panel, tweak panel) blur what is behind
+  them with backdrop-filter; controls (input, checkbox, range) deliberately do not (Spec, section 8).
+  In your own app, applyTheme(element, { theme }) themes an element and everything inside it.
+  No build step: two scripts (ricdom, then ricdom/ui) and one stylesheet.
 
-  The whole page is themed by the shared nav bar (_nav.js calls applyTheme on <body>). The
-  seven buttons below are this page's own switcher; they go through ricdomNav so they write the
-  same localStorage key as the nav's theme <select> and the two stay in agreement.
-
-  The wallpaper only matters for the glass themes; the page background is still themed.
+  08 テーマとフロストガラス: 組み込みの 7 テーマです。半透明の glass と glass-dark も含みます。
+  浮かぶ面 (ダイアログ・ポップアップ・ドロップダウン・トースト・ツールチップ・パネル・tweak パネル) は
+  backdrop-filter で背後をぼかし、コントロール (入力欄・チェックボックス・スライダー) にはあえて掛けません (仕様 8 章)。
+  自分のアプリでは、applyTheme(要素, { theme }) でその要素と中身全体にテーマを当てます。
+  ビルド不要: <script> 2 本 (ricdom → ricdom/ui) と CSS 1 本で動きます。
 -->
 <div class="wallpaper">
   <div class="wallpaper__blob wallpaper__blob--1"></div>
@@ -57,14 +62,30 @@
 </div>
 <div id="app"></div>
 
+<!-- Optional: highlight.js colours the code in this site's Source view. ricdom does not need it.
+     任意: highlight.js はこのサイトの「ソース」表示を色分けします。ricdom 自体には不要です。 -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
+<!-- ricdom itself: the core first, then the UI components. They define the globals ricdom and ricdomUI.
+     ricdom 本体: コア → UI 部品の順に読み込みます。グローバル変数 ricdom と ricdomUI ができます。 -->
 <script src="../dist/ricdom.iife.min.js"></script>
 <script src="../dist/ricdom-ui.iife.min.js"></script>
+<!-- Docs-site helpers, not part of ricdom: the nav bar (theme, language, previous / next page) and t() for translations.
+     このサイト専用の補助で、ricdom の一部ではありません: ナビバー (テーマ・言語・前後のページ) と翻訳用の t() です。 -->
 <script src="_i18n.js"></script><script src="_samples.js"></script><script src="_nav.js"></script>
 <script>
+  // A short name for the UI components.
+  // UI 部品を短い名前で呼べるようにします。
   const U = ricdomUI;
+
+  // Site helper: t(text) returns the text in the chosen language; addDict registers the Japanese.
+  // サイトの補助: t(文字列) は選択中の言語の文字列を返し、addDict で日本語を登録します。
   const { t, addDict, onLangChange } = ricdomI18n;
-  const nav = ricdomNav; // theme store shared with the nav bar
+
+  // Site helper: on this site the nav bar themes the whole page (it calls applyTheme on <body>).
+  // The seven buttons below switch the theme through the same helper, so they and the nav bar agree.
+  // サイトの補助: このサイトでは、ナビバーがページ全体にテーマを当てています (<body> に applyTheme)。
+  // 下の 7 つのボタンも同じ補助を通して切り替えるので、ボタンとナビバーの表示が食い違いません。
+  const nav = ricdomNav;
 
   addDict('ja', {
     'ricdom — themes and frosted glass': 'ricdom — テーマとフロストガラス',
@@ -103,9 +124,12 @@
     params: { size: 100, color: '#4f8ef7', rounded: 16 },
   };
 
-  // Stateful components are registered in `setup`, before the first render.
+  // Components that keep state are registered with app.use() in `setup` (bottom), before the first render.
+  // 状態を持つ部品は、最初の描画の前に `setup` (下) の中で app.use() を使って登録します。
   let dlg, menu, dd, toast, tip, tweak;
 
+  // One button per built-in theme; the current theme is drawn as the primary button.
+  // 組み込みテーマごとに 1 つずつボタンを並べ、選択中のテーマを primary の見た目にします。
   const themeRow = (s) =>
     U.uiRow({
       children: [
@@ -134,6 +158,8 @@
           themeRow(s),
           U.uiSeparator(),
 
+          // Each floating surface: open them under the glass themes to see the blur.
+          // 浮かぶ面をひととおり並べています。glass 系のテーマで開くと、背後のぼかしが確かめられます。
           { tag: 'h2', children: [t('Floating surfaces (with backdrop-filter)')] },
           {
             tag: 'div',
@@ -166,6 +192,10 @@
           },
           U.uiSeparator(),
 
+          // Controls get a translucent background but no blur: blurring costs rendering time per element,
+          // and a screen can hold many controls but only a few floating surfaces at once.
+          // コントロールは半透明の背景だけで、ぼかしは掛けません。ぼかしは要素ごとに描画の負荷がかかり、
+          // 浮かぶ面は同時に数枚なのに対して、コントロールは 1 画面に大量に並びうるためです。
           { tag: 'h2', children: [t('Controls (no backdrop-filter, only a translucent rgba background)')] },
           U.uiCol({
             children: [
@@ -198,9 +228,13 @@
     },
   );
 
-  // The nav bar owns the theme. When it (or the buttons above) changes it, mirror it into state
-  // so the active button is highlighted.
+  // When the theme changes (from the nav bar or the buttons above), copy it into state so the
+  // matching button is highlighted.
+  // テーマが変わったら (ナビバーからでも上のボタンからでも)、state に写して該当するボタンを強調表示します。
   nav.onThemeChange((name) => { app.theme = name; });
+
+  // Site helper: t() returns a plain string, so draw again once when the language changes.
+  // サイトの補助: t() の戻り値はただの文字列なので、言語が変わったら 1 回描き直します。
   onLangChange(() => app.renderNow());
 </script>
 </body>

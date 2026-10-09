@@ -3,6 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <title>ricdom — 10 Tweak panel (no build step)</title>
+<!-- ricdom-ui.css styles ricdom's UI components (load it before your own CSS). _fonts.css only sets this site's fonts.
+     ricdom-ui.css は ricdom の UI 部品の見た目です (自分の CSS より先に読み込みます)。_fonts.css はこのサイトのフォント設定だけです。 -->
 <link rel="stylesheet" href="../dist/ricdom-ui.css">
 <link rel="stylesheet" href="_fonts.css">
 <style>
@@ -21,20 +23,34 @@
 </head>
 <body>
 <!--
-  No build step for consumers (design goal G1): two IIFE bundles (ricdom -> ricdom/ui) and one
-  CSS <link> show createTweakPanel at all three tiers, with changes applied immediately.
-  Move a number, color or option in the panel and the shape on the right changes on the spot.
+  10 Tweak panel: createTweakPanel builds a parameter panel from a plain data object.
+  Change a number, colour or option in the panel and the shape on the right follows at once.
+  No build step: two scripts (ricdom, then ricdom/ui) and one stylesheet.
+
+  10 tweak パネル: createTweakPanel は、普通のデータのオブジェクトからパラメータ調整パネルを作ります。
+  パネルで数値・色・選択肢を変えると、右の図形がその場で変わります。
+  ビルド不要: <script> 2 本 (ricdom → ricdom/ui) と CSS 1 本で動きます。
 -->
 <div id="app"></div>
 
+<!-- Optional: highlight.js colours the code in this site's Source view. ricdom does not need it.
+     任意: highlight.js はこのサイトの「ソース」表示を色分けします。ricdom 自体には不要です。 -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
+<!-- ricdom itself: the core first, then the UI components. They define the globals ricdom and ricdomUI.
+     ricdom 本体: コア → UI 部品の順に読み込みます。グローバル変数 ricdom と ricdomUI ができます。 -->
 <script src="../dist/ricdom.iife.min.js"></script>
 <script src="../dist/ricdom-ui.iife.min.js"></script>
+<!-- Docs-site helpers, not part of ricdom: the nav bar (theme, language, previous / next page) and t() for translations.
+     このサイト専用の補助で、ricdom の一部ではありません: ナビバー (テーマ・言語・前後のページ) と翻訳用の t() です。 -->
 <script src="_i18n.js"></script><script src="_samples.js"></script><script src="_nav.js"></script>
 <script>
+  // A short name for the UI components.
+  // UI 部品を短い名前で呼べるようにします。
   const U = ricdomUI;
-  const { t, addDict, onLangChange } = ricdomI18n;
 
+  // Site helper: t(text) returns the text in the chosen language; addDict registers the Japanese.
+  // サイトの補助: t(文字列) は選択中の言語の文字列を返し、addDict で日本語を登録します。
+  const { t, addDict, onLangChange } = ricdomI18n;
   addDict('ja', {
     'ricdom — tweak panel': 'ricdom — tweak パネル',
     'Pass only data and the rows are generated from the types (tier 1); override a few with keys (tier 2). Move the panel and the shape on the right changes at once.':
@@ -48,6 +64,8 @@
     'Reset to defaults': '既定値に戻す',
   });
 
+  // The starting values. A function, so "Reset to defaults" can make a fresh copy every time.
+  // 初期値です。「既定値に戻す」で毎回新しい複製を作れるように、関数にしています。
   const defaults = () => ({
     size: 120,
     color: '#4f8ef7',
@@ -60,16 +78,23 @@
     extra: { opacity: 100, shadow: false },
   });
 
-  // `params` is the data handed to createTweakPanel. Tier 1 generates a row from each property's
-  // type (number -> number row, string -> text/color row, boolean -> checkbox row, plain object
-  // -> folder). size / rotation / rounded are overridden to type 'range' by keys (tier 2), and
-  // mode to 'radiobutton'.
+  // `params` is the data handed to the panel. Tier 1 makes one row per property from its type:
+  // number -> number field, string -> text field (or a colour picker for colours),
+  // boolean -> checkbox, plain object -> folder. Tier 2 (`keys` below) changes some of them:
+  // size, rotation and rounded become sliders, and mode becomes radio buttons.
+  // `params` はパネルに渡すデータです。Tier 1 では、プロパティの型から 1 行ずつ自動で作ります:
+  // 数値 → 数値欄、文字列 → テキスト欄 (色なら色の選択)、真偽値 → チェックボックス、オブジェクト → フォルダ。
+  // Tier 2 (下の `keys`) で一部を変えています: size・rotation・rounded はスライダーに、mode はラジオボタンにします。
   const state = { params: defaults() };
 
-  // Stateful components are registered in createApp's 4th argument, `setup`. It runs once right
-  // before the first render, so `tweak` is usable from the first render call.
+  // The panel keeps state (which folders are open), so it is registered with app.use() in `setup`
+  // (createApp's 4th argument), which runs once right before the first render.
+  // パネルは状態 (どのフォルダが開いているか) を持つので、`setup` (createApp の 4 番目の引数) で app.use() を使って登録します。
+  // setup は最初の描画の直前に 1 回だけ実行されます。
   let tweak;
 
+  // The shape on the right, drawn straight from the parameters.
+  // 右側の図形です。パラメータからそのまま描きます。
   const shapeNode = (p) => ({
     tag: 'div',
     class: 'shape',
@@ -109,22 +134,27 @@
                   rotation: { type: 'range', min: 0, max: 360, step: 5 },
                   rounded: { type: 'range', min: 0, max: 60 },
                   mode: { type: 'radiobutton', options: ['square', 'circle'] },
+                  // A folder can be given a label and start open.
+                  // フォルダには見出しを付け、最初から開いておくこともできます。
                   border: {
                     label: t('Border'),
                     open: true,
                     keys: { width: { type: 'range', min: 0, max: 10 } },
                   },
-                  // `summary` shows in the header only while the folder is closed (alpha.23),
-                  // so a collapsed folder can still show its current values.
+                  // `summary` is shown in the folder header only while it is closed, so a collapsed
+                  // folder still shows its current values.
+                  // `summary` はフォルダが閉じている間だけ見出しに表示されます。閉じていても今の値がわかります。
                   extra: {
                     label: t('Details'),
                     summary: `${s.params.extra.opacity}% / ${s.params.extra.shadow ? t('shadow') : t('no shadow')}`,
                   },
-                  // A computed row that is not in `data` (keys.get): the area is derived from
-                  // size, display-only, and never stored in s.params.
+                  // A row that is not in `data`: `get` computes the area from size. It is display-only
+                  // and never stored in s.params.
+                  // `data` に無い行です: `get` が size から面積を計算します。表示するだけで、s.params には保存されません。
                   area: { label: t('Area (approx.)'), get: () => Math.round(s.params.size * s.params.size) },
                 },
-                // Tier 3: append your own row (a reset button) after the generated rows.
+                // Tier 3: your own rows (here a reset button) after the generated ones.
+                // Tier 3: 自動で作られた行の後ろに、自分の行 (ここではリセットボタン) を足せます。
                 rows: [
                   U.uiButton({
                     children: [t('Reset to defaults')],
@@ -142,7 +172,8 @@
     { setup: (a) => { tweak = a.use(U.createTweakPanel()); } },
   );
 
-  // Strings read through t() are plain values, so re-render when the language changes.
+  // Site helper: t() returns a plain string, so draw again once when the language changes.
+  // サイトの補助: t() の戻り値はただの文字列なので、言語が変わったら 1 回描き直します。
   onLangChange(() => app.renderNow());
 </script>
 </body>

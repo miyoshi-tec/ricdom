@@ -3,6 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <title>ricdom — 05 Dialog, popup, toast, tooltip (no build step)</title>
+<!-- ricdom-ui.css styles ricdom's UI components (load it before your own CSS). _fonts.css only sets this site's fonts.
+     ricdom-ui.css は ricdom の UI 部品の見た目です (自分の CSS より先に読み込みます)。_fonts.css はこのサイトのフォント設定だけです。 -->
 <link rel="stylesheet" href="../dist/ricdom-ui.css">
 <link rel="stylesheet" href="_fonts.css">
 <style>
@@ -13,22 +15,36 @@
 </head>
 <body>
 <!--
-  No build step for consumers (design goal G1): two IIFE bundles (ricdom -> ricdom/ui) and one
-  CSS <link> are enough for dialog, popup, toast and tooltip. Open this file in a browser.
+  05 Dialog, popup, toast, tooltip: the components that float above the page.
+  They are drawn in the browser's top layer, so they stay on screen wherever the app is mounted.
+  No build step: two scripts (ricdom, then ricdom/ui) and one stylesheet.
+
+  05 ダイアログ・ポップアップ・トースト・ツールチップ: ページの上に浮かぶ部品です。
+  ブラウザの最前面の層 (top layer) に描かれるので、アプリをどこに置いても画面からはみ出しません。
+  ビルド不要: <script> 2 本 (ricdom → ricdom/ui) と CSS 1 本で動きます。
 -->
 <main>
   <div id="app"></div>
 </main>
 
+<!-- Optional: highlight.js colours the code in this site's Source view. ricdom does not need it.
+     任意: highlight.js はこのサイトの「ソース」表示を色分けします。ricdom 自体には不要です。 -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
+<!-- ricdom itself: the core first, then the UI components. They define the globals ricdom and ricdomUI.
+     ricdom 本体: コア → UI 部品の順に読み込みます。グローバル変数 ricdom と ricdomUI ができます。 -->
 <script src="../dist/ricdom.iife.min.js"></script>
 <script src="../dist/ricdom-ui.iife.min.js"></script>
+<!-- Docs-site helpers, not part of ricdom: the nav bar (theme, language, previous / next page) and t() for translations.
+     このサイト専用の補助で、ricdom の一部ではありません: ナビバー (テーマ・言語・前後のページ) と翻訳用の t() です。 -->
 <script src="_i18n.js"></script><script src="_samples.js"></script><script src="_nav.js"></script>
 <script>
-  // The IIFE builds are exposed as the globals `ricdom` / `ricdomUI` (globalName in tsup.config.ts).
+  // A short name for the UI components.
+  // UI 部品を短い名前で呼べるようにします。
   const U = ricdomUI;
-  const { t, addDict, onLangChange } = ricdomI18n;
 
+  // Site helper: t(text) returns the text in the chosen language; addDict registers the Japanese.
+  // サイトの補助: t(文字列) は選択中の言語の文字列を返し、addDict で日本語を登録します。
+  const { t, addDict, onLangChange } = ricdomI18n;
   addDict('ja', {
     'Dialog, popup, toast, tooltip': 'ダイアログ・ポップアップ・トースト・ツールチップ',
     '{0} clicks': '{0} 回クリック',
@@ -46,9 +62,11 @@
     'Type here (focus must survive re-renders)': 'ここに入力 (再描画しても入力中の状態が保たれます)',
   });
 
-  // Stateful components (dialog, popup, toast, tooltip) are registered with app.use() (design
-  // section 3.4). `setup` runs once, right before the first render, so the render function can
-  // call them from its very first run.
+  // These components keep their own state (open or closed, the queue of toasts), so each one is
+  // registered once with app.use(). They are assigned in `setup` at the bottom, which runs once
+  // right before the first render, so render can call them from its very first run.
+  // これらの部品は自分の状態 (開いているか、トーストの待ち行列) を持つので、app.use() で 1 回だけ登録します。
+  // 登録は下の `setup` で行います。setup は最初の描画の直前に 1 回だけ実行されるので、render は初回から呼び出せます。
   let dlg, menu, toast, tip;
 
   const app = ricdom.createApp(
@@ -58,11 +76,15 @@
       tag: 'div',
       children: [
         { tag: 'h1', children: [t('Dialog, popup, toast, tooltip')] },
+        // Site helper: the tagged-template form of t() puts a value into the translated text.
+        // サイトの補助: t をタグ付きテンプレートで使うと、訳文の中に値を差し込めます。
         { tag: 'p', children: [t`${s.count} clicks`] },
         {
           tag: 'div',
           class: 'row',
           children: [
+            // With triggerChildren the dialog draws its own "open" button; dlg.close() closes it from code.
+            // triggerChildren を渡すと、ダイアログが自分の「開く」ボタンを描きます。dlg.close() でコードから閉じます。
             dlg({
               triggerChildren: [t('Open dialog')],
               title: t('Confirm'),
@@ -79,6 +101,8 @@
                 }),
               ],
             }),
+            // A popup menu: `trigger` is the button's content, `children` are the menu items.
+            // ポップアップメニュー: `trigger` はボタンの中身、`children` はメニューの項目です。
             menu({
               trigger: [t('Menu ▾')],
               children: [
@@ -86,6 +110,8 @@
                 U.uiButton({ children: [t('Delete')], onclick: () => toast.show(t('Deleted'), { type: 'error' }) }),
               ],
             }),
+            // A tooltip wraps the element it describes and shows `content` on hover or focus.
+            // ツールチップは説明したい要素を包み、ホバーやフォーカスで `content` を表示します。
             tip({
               content: t('Tip: this button adds one to the count'),
               children: [U.uiButton({ children: ['+1'], onclick: () => { s.count += 1; } })],
@@ -95,7 +121,9 @@
         U.uiInput({
           placeholder: t('Type here (focus must survive re-renders)'),
           oninput: () => {
-            s.count = s.count; // a no-op write: typing must not be disturbed by re-renders
+            // Every keystroke writes state and redraws the page; the text field keeps its focus and caret anyway.
+            // 1 文字ごとに状態へ書き込んで再描画しますが、入力欄のフォーカスとカーソル位置は保たれます。
+            s.count = s.count;
           },
         }),
       ],
@@ -110,7 +138,8 @@
     },
   );
 
-  // Strings read through t() are plain values, so re-render when the language changes.
+  // Site helper: t() returns a plain string, so draw again once when the language changes.
+  // サイトの補助: t() の戻り値はただの文字列なので、言語が変わったら 1 回描き直します。
   onLangChange(() => app.renderNow());
 </script>
 </body>
