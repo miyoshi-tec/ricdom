@@ -176,6 +176,16 @@ v1 は 5 か月・46 リリース・社内 11 アプリの実戦で API が磨�
 - **追報 4 (alpha.4 取り込み) で第 2 号は完了**: 再現スクリプト 5→5→5→5→5、E2E 10/10、回避策ゼロ。初報 10 + 追報 5 = 15 件が同日中に公式 API で閉じた
 - ~~観察 (対応なし)~~ → **§23 で実バグ (#14) と判明**。DPI 150% の実機で右端密着トリガーの dropdown body の `right` が `innerWidth` を 0.33px 超えた件、統括は「`clampLeft` が右端も収めるので最終位置では起き得ない、実測フェーズの rect を拾ったのでは」と判断したが誤り。consumer が再計測後 (200ms / 600ms) の inline `left` / `offsetWidth` / 本来幅を取り直し、**測った幅そのものが位置依存で過小**になっていることを示した (§23)。教訓: 「式は正しい」で止めず、式に入る実測値の取り方まで疑う
 
+## 44. `width: 100%` の部品が親からはみ出す = box-sizing 未宣言 (2026-10-09、2.0.0-alpha.25、オーナー報告)
+
+- **報告**: 03-forms サンプルで textarea が枠の右端をはみ出している (スクリーンショット)。「ui の問題かどうかの切り分けも」
+- **切り分け = ricdom-ui のバグ (サンプル側ではない)**: 03-forms の CSS は見出しの font-size だけ。実測で `.ric-textarea` は `content-box`、親 `.ric-col` の content 幅 720px に対して外形 749.3px (+29.3px = 左右 padding 12px×2 + border 1px×2 + α)。`.ric-input` も `content-box` だが flex 行 (`.ric-row`) の中で縮むので見えていなかった。`.ric-select` / `.ric-button` は UA 既定が `border-box` なので無事。CSS 全体を走査 (`width: 100%` かつ padding/border ありで box-sizing 未宣言) すると 7 規則が該当: input / textarea / select / popup__item / accordion__header / tweak-folder__header (+ 同列に扱う button)
+- **根因 = v1→v2 の移植漏れ**: v1 RicUI は `.ric-page { box-sizing: border-box } .ric-page *, *::before, *::after { box-sizing: inherit }` の全称リセットで全部品を border-box にしていた。v2 は `.ric-page` を廃止して「ライブラリが作っていない要素には触らない」方針にしたが、個々の規則に box-sizing を書き足していなかった。§32 のパリティ監査は「部品ごとの規則」を比べたので、**全称セレクタが暗黙に与えていた性質** は表に出なかった (§34 の「コード上に文字として無い暗黙挙動」と同型、§43 の font と同じく UA 既定依存)
+- **修正 (alpha.25)**: 7 規則の先頭に `box-sizing: border-box;`。全称リセットは持ち込まない (ホストページの要素に影響するため)。select / button は UA 既定の明示化のみで見た目不変
+- **連鎖で見つかった潜在バグ**: `uiTextarea` の `autoResize` が `scrollHeight` (= 中身 + padding) をそのまま `style.height` に書いていた。content-box では上下 padding 分 (light で 16px) 高すぎ、アプリが border-box リセットを持っていると border 分 (2px) 見切れる。computed `box-sizing` を見て換算するよう修正 (border-box: +border、content-box: −padding)。md-editor のミラーは元から box-sizing 非依存 (clientWidth + border を border-box で) なので無修正、コメントの「既定 content-box」だけ更新
+- **テスト**: `tests/browser/uiControlBoxSizing.test.ts` 4 件 (red first: alpha.24 では input/textarea が content-box、アプリの `button { box-sizing: content-box }` で `.ric-button` が崩れる、autoResize 3 行が 97px ≠ 81px)。最初の版はテーマ未適用で padding/border が 0 になり autoResize のケースが偽の緑だった → `applyTheme` を当てて「padding > 0, border > 0」を前提アサーションに追加。教訓: **`var(--ric-*)` で書かれた寸法はテーマ無しでは 0 になる。レイアウトの契約テストは必ずテーマを当て、前提が成立していることも assert する**
+- SPEC §10.1 に FACT「controls that stretch to width: 100% are border-box」、CHANGELOG に可視変更 (ブロック配置の input/textarea が padding + 2px 細くなる = 収まる、autoResize の下の余白が消える)
+
 ## 43. フォームコントロール 4 部品の書体を `font-family: inherit` に揃える (2026-10-08、2.0.0-alpha.24、ユーザー決定)
 
 (§42 = v2.0.0 リリース計画は develop ブランチにある。本節は main で alpha.24 を閉じるため番号を飛ばした)

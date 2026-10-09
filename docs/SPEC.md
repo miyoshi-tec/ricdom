@@ -1330,6 +1330,33 @@ and font *size* — no font family, on purpose.
 - **Opting out** is one line of app CSS after `ricdom-ui.css`: `.ric-button { font-family:
   ...; }` — same single-class specificity, later wins (see the base-layer FACT in §8).
 
+### FACT: controls that stretch to `width: 100%` are `border-box` (`2.0.0-alpha.25`)
+
+`.ric-input`, `.ric-textarea`, `.ric-select`, `.ric-button`, `.ric-popup__item`,
+`.ric-accordion__header` and `.ric-tweak-folder__header` declare `box-sizing: border-box`.
+A full-width control's outer box is exactly its container's content width: padding and the
+1px border sit *inside* the 100%, never outside it.
+
+- **ricdom-ui does not ship a universal reset.** v1 had `.ric-page *, *::before, *::after
+  { box-sizing: inherit }` under a `border-box` page; v2 never styles elements it did not
+  create, so each rule states its own `box-sizing` instead. Your own elements keep whatever
+  your CSS (or the browser) gives them.
+- **Changed in `2.0.0-alpha.25`**: before this release none of these rules declared
+  `box-sizing`, so they took the user-agent default — `content-box` for `<input>` and
+  `<textarea>`, `border-box` for `<select>` and `<button>`. A block-level `uiTextarea` (or a
+  `uiInput` outside a shrinking flex row) was therefore `100% + padding + border` wide and
+  overflowed its container (light theme: 29px in the `03-forms` sample). Apps with their own
+  `*, *::before, *::after { box-sizing: border-box }` reset see no change in width.
+- **`uiTextarea` `autoResize` reads the computed `box-sizing`** and converts its target
+  height (rows × line-height + vertical padding) into the right `style.height` for either
+  model, so the outer height is always rows × line-height + padding + border. Before
+  `2.0.0-alpha.25` it wrote the padding-box height as-is: `content-box` textareas grew by
+  their vertical padding (an empty band under the last line; 16px in the light theme), and
+  apps that had reset textareas to `border-box` clipped the last line by the border width.
+- Setting `.ric-textarea { box-sizing: content-box }` after `ricdom-ui.css` is supported
+  (both `autoResize` and `ricdom/md-editor`'s mirror measure rather than assume), but the
+  control then overflows a `width: 100%` slot again.
+
 ### 10.2 Stateless — layout
 
 | Component | Notes |

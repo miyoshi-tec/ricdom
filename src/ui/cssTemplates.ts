@@ -87,6 +87,7 @@ const da = `${dur} ${eas}`;
 
 const BUTTON_CSS = `
 .ric-button {
+  box-sizing: border-box;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -179,6 +180,7 @@ const BUTTON_CSS = `
 
 const INPUT_CSS = `
 .ric-input {
+  box-sizing: border-box;
   display: block;
   width: 100%;
   height: ${ch};
@@ -310,6 +312,7 @@ const POPUP_CSS = `
 .ric-popup__body--out.ric-popup__body--above { animation: ric-popup-out ${da} forwards; }
 
 .ric-popup__item {
+  box-sizing: border-box;
   display: flex !important;
   align-items: center;
   gap: ${g};
@@ -480,6 +483,7 @@ const SCROLLBAR_CSS = `
 
 const TEXTAREA_CSS = `
 .ric-textarea {
+  box-sizing: border-box;
   display: block;
   width: 100%;
   padding: ${py} ${px};
@@ -559,6 +563,7 @@ const SELECT_CSS = `
   appearance: base-select;
 }
 .ric-select {
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   width: 100%;
@@ -1065,6 +1070,7 @@ const ACCORDION_CSS = `
   border-top: ${b1};
 }
 .ric-accordion__header {
+  box-sizing: border-box;
   display: flex; align-items: center; justify-content: space-between;
   width: 100%; padding: ${py} ${px};
   background: ${bg};
@@ -1307,6 +1313,7 @@ const TWEAK_CSS = `
   border-top: ${b1};
 }
 .ric-tweak-folder__header {
+  box-sizing: border-box;
   display: flex; align-items: center; justify-content: space-between;
   width: 100%; padding: ${g} ${gm};
   background: ${bg};
@@ -1362,7 +1369,7 @@ const TWEAK_CSS = `
 //
 // `.ric-md-editor__mirror` の `box-sizing: border-box` は mdEditor.ts の applyLayout() が
 // 同じ値をインラインで強制するが、script 実行前の一瞬の保険として CSS 側にも静的に書く —
-// textarea 自身の box-sizing (既定 content-box) に関わらず、ミラーは常に border-box 前提で
+// textarea 自身の box-sizing (alpha.25 から既定 border-box、アプリが content-box に戻すこともある) に関わらず、ミラーは常に border-box 前提で
 // width/height を計算する (統括の独立検証で発見した実装の穴、2026-09-17)。
 // `.ric-md-editor` の `display: flex; flex-direction: column`（alpha.17、alpha.16 では
 // `display: block` だった）: textarea は通常の flow では「行内要素のベースライン直下の

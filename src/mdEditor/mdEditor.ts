@@ -66,8 +66,9 @@ export interface MdEditorInstance extends Component<MdEditorProps> {}
 // 尊重される)。
 //
 // **`boxSizing` は意図的にこの一覧から除外する** (統括の独立検証で発見した実装の穴、
-// 2026-09-17)。textarea の box-sizing (既定 `content-box` — `.ric-textarea` の CSS は
-// border-box を指定していない) をそのままミラーにコピーすると、`content-box` の場合に
+// 2026-09-17)。textarea の box-sizing (当時の既定は `content-box` — `.ric-textarea` の CSS が
+// border-box を宣言したのは 2.0.0-alpha.25、アプリが content-box に戻すこともできる) をそのまま
+// ミラーにコピーすると、`content-box` の場合に
 // `mirror.style.width = clientWidth + 横 border` という宣言値がそのまま「文字の収まる幅」
 // として使われてしまい、padding 分だけ textarea の実際の content 幅より広くなって
 // 折返しがずれる (実測: textarea content 233px に対しミラー content 262px、scrollHeight
@@ -208,7 +209,7 @@ export const createMdEditor = (options: { maxHighlightLength?: number } = {}): M
     mirror.style.borderStyle = 'solid';
     mirror.style.borderColor = 'transparent';
     // ミラー自身は常に border-box に固定する (COPIED_LAYOUT_PROPS のコメント参照 —
-    // textarea の box-sizing (既定 content-box) をそのままコピーしていたのがバグだった)。
+    // textarea の box-sizing (alpha.24 以前の既定 content-box) をそのままコピーしていたのがバグだった)。
     mirror.style.boxSizing = 'border-box';
     // 内寸 (スクロールバー幅を除く) を使い、textarea 側の縦スクロールバー分だけ折返し幅が
     // 広くならないようにする (仕様: textarea.clientWidth + 横 border 幅)。ミラーを

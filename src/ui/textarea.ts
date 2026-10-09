@@ -40,6 +40,14 @@ export interface UiTextareaProps {
 
 // DOM 要素に対して自動リサイズを適用する。render の oninput ハンドラ内から呼ばれる。
 // line-height / padding を computed style から取得して scrollHeight と min/max 行数でクランプする。
+//
+// 高さの単位に注意: scrollHeight と minH / maxH は「中身 + 上下 padding」(= padding box) の高さ。
+// style.height に書く値は box-sizing で意味が変わるので、最後に換算する:
+//   border-box (.ric-textarea の既定、2.0.0-alpha.25〜) → padding box + 上下 border
+//   content-box (アプリが上書きした場合)                  → padding box − 上下 padding
+// alpha.24 以前は padding box の値をそのまま書いていたため、content-box では上下 padding 分
+// 余白が増え (light テーマで 16px)、アプリが border-box にリセットしていると border 分 (2px)
+// 見切れていた (設計書 §44、tests/browser/uiControlBoxSizing.test.ts)。
 const applyAutoResize = (el: HTMLTextAreaElement | null, autoResize: UiTextareaAutoResize | undefined): void => {
   if (!el || !autoResize) return;
   if (typeof window === 'undefined') return; // SSR / Node 単体環境では getComputedStyle が無い
@@ -48,10 +56,12 @@ const applyAutoResize = (el: HTMLTextAreaElement | null, autoResize: UiTextareaA
   const cs = window.getComputedStyle(el);
   const lineH = parseFloat(cs.lineHeight) || 22;
   const pad = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
+  const border = (parseFloat(cs.borderTopWidth) || 0) + (parseFloat(cs.borderBottomWidth) || 0);
   const minH = minRows * lineH + pad;
   const maxH = maxRows != null ? maxRows * lineH + pad : Infinity;
-  const newH = Math.min(Math.max(el.scrollHeight, minH), maxH);
-  el.style.height = `${newH}px`;
+  const paddingBoxH = Math.min(Math.max(el.scrollHeight, minH), maxH);
+  const cssH = cs.boxSizing === 'border-box' ? paddingBoxH + border : paddingBoxH - pad;
+  el.style.height = `${cssH}px`;
   el.style.overflowY = el.scrollHeight > maxH ? 'auto' : 'hidden';
 };
 
