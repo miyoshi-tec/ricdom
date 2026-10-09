@@ -111,6 +111,11 @@ const scheduleParentPositionCheck = (): void => {
 /**
  * trigger 要素の近くに absolute 配置する軽量ポップオーバー。状態は呼び出し側が持つ (`app.use()` 不要)。
  *   uiInlineMenu({ open: s.menuFor === row.id, children: [...] }) // 親要素に position:relative が必要
+ *
+ * @deprecated 2.0.0-alpha.27。行ごとの「…」メニューは `createPopup()` を 1 つ登録し、`trigger` を
+ * 省略して `menu.openAt(buttonElement)` で開く (上下の自動反転・top layer・矢印キー・外側クリックで
+ * 閉じる、がすべて付く。SPEC §10.3.1f)。uiInlineMenu は開く向きが `anchor` 固定で、画面の下端に近い行
+ * では下に開いて切れる。利用中の consumer (Rancha) の移行完了後に削除する。実行時の警告は出さない。
  */
 export const uiInlineMenu = ({ open = false, anchor = 'br', children = [], style, class: extraClass, onClose }: UiInlineMenuProps): RicNode => {
   if (!open) return null;

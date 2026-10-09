@@ -5,6 +5,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.0.0-alpha.27] — not yet published
+
+Owner decision (`2026-10-09`): a "⋯" menu on every row should be built one way only.
+Found on the docs site, where a row menu at the bottom of the page opened downward and was cut
+off.
+
+### Added
+
+- **`createPopup` without `trigger`.** Omitting `trigger` renders nothing (the call returns
+  `null`) and makes the popup an `openAt()`-only menu. Previously `trigger` was required, so an
+  `openAt` menu had to render a dummy trigger button and discard it.
+- **`popup.openAt(element)`.** Opens the menu anchored to an element exactly like a
+  trigger-opened popup: below its bottom edge, or above its top edge when it does not fit (the
+  point form `openAt({ x, y })` placed an upward menu over the button). Calling it again with
+  the same element closes the menu; calling it with another element moves the menu there in one
+  click; focus returns to the element on `Escape` or item selection. The point forms are
+  unchanged. Together these make one `createPopup()` the canonical "⋯ on every row" menu, with
+  flip, top layer, arrow keys and light dismiss included — SPEC §10.3.1f.
+
+### Deprecated
+
+- **`uiInlineMenu`.** It is placed with `position: absolute` in a fixed `anchor` direction, so it
+  is cut off on rows near the bottom of the screen, and it duplicates what `createPopup` +
+  `openAt(element)` now does properly. It stays exported, with no runtime warning, until its
+  remaining consumer has migrated; it will then be removed.
+
+### Changed (internal)
+
+- The trigger click and `openAt(element)` share one "open anchored to an element" path in
+  `popup.ts` instead of the placement code living inside the trigger's `onclick`.
+- Tests (red first, `tests/browser/uiPopupRowMenu.test.ts`, 6 cases, plus one unit case): no
+  trigger renders nothing; `openAt(element)` opens under the top row's button and flips above the
+  bottom row's button without covering it; the same button closes it and focus returns; another
+  row's button switches the menu in one click; the point form is unchanged.
+
 ## [2.0.0-alpha.26] — not yet published
 
 Reported by the owner (`2026-10-09`): on the docs site, the "Source" dialog opened from the nav

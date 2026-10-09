@@ -204,3 +204,24 @@ describe('createPopup: openAt の入力検証', () => {
     expect(app.querySelector('[role="menu"]')).not.toBeNull();
   });
 });
+
+describe('createPopup: trigger 省略 = openAt 専用 (2.0.0-alpha.27)', () => {
+  it('trigger を渡さないと null を返し、openAt(element) で本体が portal に現れる', async () => {
+    const app = setupApp();
+    let menu: ReturnType<typeof createPopup>;
+    let returned: unknown = 'not-called';
+    const handle = createApp('#app', {}, () => {
+      returned = menu ? menu({ children: [{ tag: 'button', children: ['A'] }] }) : null;
+      return { tag: 'button', id: 'more', children: ['⋯'] };
+    });
+    menu = handle.use(createPopup());
+    handle.renderNow();
+    expect(returned).toBeNull();
+    expect(app.querySelector('[data-ricdom-role="popup-trigger"]')).toBeNull();
+
+    menu!.openAt(app.querySelector('#more')!);
+    await flush(50);
+    expect(app.querySelector('[role="menu"]')).not.toBeNull();
+    expect(menu!.isOpen()).toBe(true);
+  });
+});

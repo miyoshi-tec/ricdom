@@ -676,7 +676,7 @@ up" surfaces immediately in the console instead of failing silently.
 ### Stateless components are plain functions
 
 Anything without internal state — `uiButton`, `uiInput`, layout (`uiCol`/`uiRow`/`uiGrid`/
-`uiPanel`), `uiText`, `uiIcon`, markdown/code display, `uiInlineMenu`, `bind*` — is just a
+`uiPanel`), `uiText`, `uiIcon`, markdown/code display, `uiInlineMenu` (deprecated, §10.3.1f), `bind*` — is just a
 function `(props) => RicNode`. There is nothing to register and no `Host`; call it directly
 in your render tree.
 
@@ -1417,7 +1417,7 @@ completes even without `ricdom-ui.css` present, it just skips the animation.
 | Component | ARIA / a11y contract |
 |---|---|
 | `createDialog()` | Modal. `role="dialog"` + `aria-modal="true"` + `aria-labelledby`/`aria-describedby`. Opening moves focus to body → footer → close-button → root, in that priority order (visible-element–filtered, `[autofocus]` wins over all of it — §10.3.1c); `Tab`/`Shift+Tab` are trapped inside (plain DOM order, unaffected by the above); `Escape` closes and returns focus to the triggering element; every sibling of the portal is set `inert` while open. Three usage modes: uncontrolled + auto trigger (`triggerChildren` given → call returns a trigger `RicNode`), uncontrolled + your own trigger (`triggerChildren` omitted → call `dlg.open()`/`dlg.close()`), or controlled (`open`/`onClose(reason)` where `reason` is `'overlay' \| 'close-button' \| 'escape' \| 'api'`). `returnFocus` (§10.3.1) controls where focus goes on close. `triggerVariant?: UiButtonVariant` styles the auto trigger built from `triggerChildren` (default `'primary'`, same as v1's `trigger_variant`; pass `'default'` for a plain button — `2.0.0-alpha.14`, restored from v1 after the parity audit) |
-| `createPopup()` | `role="menu"` dropdown. Trigger gets `aria-haspopup="menu"` + `aria-expanded`; every menu child is auto-wrapped with `role="menuitem"`, its `class` merged (not replaced) with `.ric-popup__item`. `ArrowUp`/`ArrowDown`/`Home`/`End` move focus among items; `Escape` closes and restores focus to the trigger. Activating a menuitem (click; for a `<button>` item, `Enter`/`Space` fire a native click) closes the menu and returns focus to the trigger too (APG menu button pattern) — set `closeOnSelect: false` to opt out (checkbox-style menus); a `disabled: true`/`aria-disabled="true"` item, or one whose `role` was overridden away from `'menuitem'` (e.g. a separator), never triggers this regardless of `closeOnSelect` (§10.3.1d). `openAt({x,y} \| MouseEvent)` opens at an arbitrary point instead of a trigger button — the same close-on-select behavior applies to menus opened this way. `trigger` accepts a `RicNode`/`RicNode[]` (used as-is) or a `{ icon?, label?, ghost?, size?, class?, style? }` object (§10.3.1a). Menu-open state is exclusive with `createDropdown` within the same app (opening one closes any other open popup/dropdown) |
+| `createPopup()` | `role="menu"` dropdown. Trigger gets `aria-haspopup="menu"` + `aria-expanded`; every menu child is auto-wrapped with `role="menuitem"`, its `class` merged (not replaced) with `.ric-popup__item`. `ArrowUp`/`ArrowDown`/`Home`/`End` move focus among items; `Escape` closes and restores focus to the trigger. Activating a menuitem (click; for a `<button>` item, `Enter`/`Space` fire a native click) closes the menu and returns focus to the trigger too (APG menu button pattern) — set `closeOnSelect: false` to opt out (checkbox-style menus); a `disabled: true`/`aria-disabled="true"` item, or one whose `role` was overridden away from `'menuitem'` (e.g. a separator), never triggers this regardless of `closeOnSelect` (§10.3.1d). `openAt({x,y} \| MouseEvent)` opens at an arbitrary point instead of a trigger button — the same close-on-select behavior applies to menus opened this way. `trigger` accepts a `RicNode`/`RicNode[]` (used as-is) or a `{ icon?, label?, ghost?, size?, class?, style? }` object (§10.3.1a); omitting `trigger` renders nothing (an `openAt`-only menu), and `openAt(element)` opens anchored to that element like a trigger — the canon for a "⋯" menu on every row (§10.3.1f, `2.0.0-alpha.27`). Menu-open state is exclusive with `createDropdown` within the same app (opening one closes any other open popup/dropdown) |
 | `createToast()` | `toast.show(msg, { type, duration })` queues a notification; `type: 'error'` renders `role="alert"`/`aria-live="assertive"`, everything else `role="status"`/`aria-live="polite"`. `duration: 0` disables auto-dismiss (manual close only). Never steals focus |
 | `createTooltip()` | `aria-describedby` links trigger ↔ popup; shown on hover or focus, dismissed on blur/mouseleave/`Escape`. `dir: 'auto' \| 'top' \| 'bottom' \| 'right' \| 'left'`, `'auto'` picks a direction that fits the viewport |
 | `createDropdown()` | Generic popover (not a menu): trigger gets `aria-haspopup="dialog"` + `aria-expanded`; body content's semantics are entirely up to you. `label`+`chevron` mode or `icon` mode for the trigger. Shares position-flip logic and the exclusive-open registry with `createPopup` |
@@ -1592,10 +1592,49 @@ behavior rather than a modal backdrop.
   mechanisms never both fire for the same click, so a second click on the trigger closes
   exactly once and still restores focus to it (via `closeAndRestoreFocus()`).
 - Applies identically to a popup opened via `openAt()` with no trigger button ever clicked —
-  every `pointerdown` outside the rendered body then counts as "outside" (§10.3.1a).
+  every `pointerdown` outside the rendered body then counts as "outside" (§10.3.1a). The one
+  exception is the element passed to `openAt(element)` (§10.3.1f), which is treated like a
+  trigger: `openAt` itself does the toggle.
 - `createDialog`'s own `.ric-dialog__overlay` is unaffected by this — it stays a modal
   backdrop (`pointer-events: auto`, closes on click, `reason: 'overlay'`) by design; a dialog
   is not meant to let clicks fall through to whatever is behind it.
+
+### 10.3.1f Canon: a "⋯" menu on every row is one `createPopup()` opened with `openAt(element)` (`2.0.0-alpha.27`)
+
+A list whose rows each carry a "⋯" button does not register one popup per row. Register one
+`createPopup()`, call it in render **without `trigger`** (it then renders nothing and returns
+`null`), keep "which row" in state, and open it from the row's button:
+
+```js
+let menu; // app.use(createPopup()) in setup
+// in render:
+menu({ children: [uiButton({ children: ['Rename'], onclick: () => rename(s.menuRow) })] }),
+...rows.map((row) => uiButton({
+  'aria-haspopup': 'menu',
+  onclick: (e) => { s.menuRow = row.id; menu.openAt(e.currentTarget); },
+  children: ['⋯'],
+})),
+```
+
+- `openAt(element)` places the menu exactly like a trigger-opened popup: under the element's
+  bottom edge, or above its top edge when it does not fit below (it never covers the button),
+  aligned to the element horizontally and clamped into the viewport. The point forms,
+  `openAt({ x, y })` / `openAt(mouseEvent)`, are unchanged and remain the right choice for a
+  right-click context menu.
+- Calling `openAt` with the element the menu is already open on closes it (the toggle a
+  trigger button has). Calling it with another element moves the menu there in the same
+  click, even while the previous one is still animating closed. Focus returns to that element
+  when the menu closes via `Escape` or by choosing an item.
+- Because it is a regular popup, the menu also gets the top layer (§7), arrow-key navigation,
+  light dismiss (no document listener of your own) and the exclusive "one popup open at a
+  time" rule. Set `aria-haspopup="menu"` (and `aria-expanded` if you track it) on the row
+  buttons yourself — they are your elements.
+- **`uiInlineMenu` is deprecated** for this use. It positions itself with `position: absolute`
+  inside its parent in the fixed `anchor` direction, so on rows near the bottom of the screen it
+  opens downward and is cut off (an app had to measure and flip it by hand). It stays exported
+  until its remaining consumer has migrated, then it is removed (re-examine: when that migration
+  report arrives). It emits no runtime warning, so apps that test for "no dev warnings" keep
+  passing in the meantime.
 
 ### 10.3.2 Stateful — `createFocusWhen`
 
