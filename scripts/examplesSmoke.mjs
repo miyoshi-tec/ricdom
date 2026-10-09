@@ -148,10 +148,36 @@ const checkExample = async (browser, baseUrl, file, isSample) => {
 
       // Source ボタン: ページ自身の HTML がダイアログに出る
       await nav.getByRole('button', { name: 'Source' }).click();
-      await page.waitForTimeout(250);
+      // highlight.js は初回クリック時に cdnjs から読むので、ハイライト済みの <code> が出るまで待つ
+      await page.locator('[data-ricdom-role="dialog"] code.hljs').first().waitFor({ timeout: 10000 }).catch(() => {});
+      await page.waitForTimeout(250); // 開くアニメーションが落ち着くのを待つ
       const pre = page.locator('[data-ricdom-role="dialog"] pre');
       const sourceLength = (await pre.count()) > 0 ? (await pre.first().textContent())?.length ?? 0 : 0;
       if (sourceLength < 200) issues.push(`Source ダイアログにページのソースが出ていない (長さ ${sourceLength})`);
+      // 位置: ダイアログ本体が viewport 内、オーバーレイが viewport 全体を覆う。
+      // 2026-10-09 まではナビバー (backdrop-filter = position:fixed の containing block になる) の中に
+      // 描画され、top:50% がバーの高さ基準で解決されて上半分が画面外に出ていた (オーナー報告)。
+      const geometry = await page.evaluate(() => {
+        const dlg = document.querySelector('[data-ricdom-role="dialog"]');
+        const ovl = document.querySelector('.ric-dialog__overlay');
+        const r = (el) => (el ? el.getBoundingClientRect().toJSON() : null);
+        return {
+          dialog: r(dlg),
+          overlay: r(ovl),
+          vw: innerWidth,
+          vh: innerHeight,
+          tokens: dlg ? dlg.querySelectorAll('[class^="hljs-"]').length : 0,
+        };
+      });
+      const d = geometry.dialog;
+      if (!d || d.top < 0 || d.left < 0 || d.bottom > geometry.vh || d.right > geometry.vw) {
+        issues.push(`Source ダイアログが viewport からはみ出している: ${JSON.stringify(d)} (viewport ${geometry.vw}x${geometry.vh})`);
+      }
+      const o = geometry.overlay;
+      if (!o || o.top > 0 || o.left > 0 || o.width < geometry.vw || o.height < geometry.vh) {
+        issues.push(`Source ダイアログのオーバーレイが viewport 全体を覆っていない: ${JSON.stringify(o)}`);
+      }
+      if (geometry.tokens < 20) issues.push(`Source ダイアログのコードがシンタックスハイライトされていない (トークン ${geometry.tokens})`);
       await page.keyboard.press('Escape');
       await page.waitForTimeout(350);
 

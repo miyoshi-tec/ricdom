@@ -41,10 +41,10 @@
   document.documentElement.style.background = FOUC[theme].bg;
   document.documentElement.style.colorScheme = FOUC[theme].scheme;
 
-  // Syntax highlighting: pages that load highlight.js (site/*.html, from cdnjs, before this
-  // script) get its colour sheet here, swapped with the theme's colour scheme so the tokens stay
-  // readable on both light and dark `--ric-code-bg`. uiMdPre / uiCodePre pick up window.hljs by
-  // themselves; pages without it (the samples) are left untouched.
+  // Syntax highlighting: every site page and sample loads highlight.js from cdnjs before this
+  // script (one download, then the browser cache serves it to every other page). Its colour
+  // sheet is added here and swapped with the theme's colour scheme so the tokens stay readable on
+  // both light and dark `--ric-code-bg`. uiMdPre / uiCodePre pick up window.hljs by themselves.
   var HLJS_STYLES = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/';
   var hljsLink = null;
   var setHljsTheme = function (name) {
@@ -203,13 +203,9 @@
             ? dlg({
                 title: t('Page source'),
                 width: 'min(900px, 94vw)',
-                children: [
-                  {
-                    tag: 'pre',
-                    style: { margin: 0, maxHeight: '60vh', overflow: 'auto', fontSize: '12px', lineHeight: 1.5, whiteSpace: 'pre', tabSize: 2 },
-                    children: [s.source],
-                  },
-                ],
+                // uiCodePre colours the page's HTML with window.hljs (loaded by every page; the
+                // `html` grammar also highlights the inline <script> blocks as JavaScript).
+                children: [U.uiCodePre({ lang: 'html', maxHeight: '60vh', style: { fontSize: '12px', tabSize: 2 }, children: [s.source] })],
                 actions: [U.uiButton({ children: [t('Close')], onclick: function () { dlg.close(); } })],
               })
             : null,
