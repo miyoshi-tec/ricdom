@@ -244,19 +244,22 @@
 
   // A "⋯" menu on every row, with one createPopup for all rows. Called without `trigger`, it draws
   // no button of its own; each row's "⋯" opens it with rowMenu.openAt(button). The menu opens under
-  // the button, or above it when there is no room below, and closes on Escape, on a choice or on a
-  // click elsewhere. Which row it acts on lives in state.menuRow.
+  // the button, or above it when there is no room below, and closes on Escape, on a choice, on a
+  // click elsewhere or when the list or page scrolls. Which row it acts on lives in state.menuRow.
+  // The items have keys: one menu serves every row, and keys keep each action on its own element
+  // when the items differ from row to row.
   // 行ごとの「…」メニューを、全行で 1 つの createPopup でまかないます。trigger を渡さないので自分のボタンは描かず、
   // 各行の「…」から rowMenu.openAt(ボタン) で開きます。ボタンの下に開き、下に余地が無ければ上に開きます。
-  // Escape・項目の選択・外側のクリックで閉じます。どの行に対するメニューかは state.menuRow で持ちます。
+  // Escape・項目の選択・外側のクリック・一覧やページのスクロールで閉じます。どの行に対するメニューかは state.menuRow で持ちます。
+  // 項目には key を付けます。1 つのメニューを全行で使うので、行ごとに項目が変わるときも、操作ごとに別の要素が保たれます。
   const rowMenuDemo = (s) =>
     U.uiCol({
       children: [
         { tag: 'h2', children: ['createPopup + openAt (a "⋯" menu on every row)'] },
         rowMenu({
           children: [
-            U.uiButton({ children: [t('Rename', { ja: '名前を変更' })], onclick: () => { s.lastAction = `${t('Rename', { ja: '名前を変更' })}: ${t(s.menuRow)}`; } }),
-            U.uiButton({ children: [t('Delete', { ja: '削除' })], onclick: () => { s.lastAction = `${t('Delete', { ja: '削除' })}: ${t(s.menuRow)}`; } }),
+            U.uiButton({ key: 'rename', children: [t('Rename', { ja: '名前を変更' })], onclick: () => { s.lastAction = `${t('Rename', { ja: '名前を変更' })}: ${t(s.menuRow)}`; } }),
+            U.uiButton({ key: 'delete', children: [t('Delete', { ja: '削除' })], onclick: () => { s.lastAction = `${t('Delete', { ja: '削除' })}: ${t(s.menuRow)}`; } }),
           ],
         }),
         U.uiCol({
