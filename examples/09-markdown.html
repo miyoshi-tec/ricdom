@@ -53,15 +53,11 @@
   const U = ricdomUI;
   const MD = ricdomMdEditor;
 
-  // Site helper: t(text) returns the text in the chosen language; addDict registers the Japanese.
-  // サイトの補助: t(文字列) は選択中の言語の文字列を返し、addDict で日本語を登録します。
-  const { t, addDict, onLangChange } = ricdomI18n;
-  addDict('ja', {
-    'ricdom/md-editor': 'ricdom/md-editor',
-    'The area below is a real <textarea>. Markdown syntax (headings, bold, emphasis, links, fenced code, tables, ...) is colored by an invisible mirror layered behind it.':
-      '下の欄は本物の <textarea> です。Markdown の構文 (見出し・太字・強調・リンク・コードブロック・表など) は、背後に重ねた見えないミラーが色分けします。',
-    'Write Markdown…': 'Markdown を書いてください…',
-  });
+  // Site helper: t(text, { ja: '...' }) returns the text in the chosen language. Every string on this
+  // page is used once, so its Japanese is written right where it is used.
+  // サイトの補助: t(文字列, { ja: '…' }) は選択中の言語の文字列を返します。このページの文字列は
+  // どれも 1 回しか使わないので、使う場所に日本語を書いています。
+  const { t, onLangChange } = ricdomI18n;
 
   // The text the editor starts with. It shows most of the syntax that gets coloured.
   // エディタの最初の中身です。色分けされる構文をひととおり含めています。
@@ -111,16 +107,19 @@
     (s) =>
       U.uiPanel({
         children: [
-          { tag: 'h1', children: [t('ricdom/md-editor')] },
+          { tag: 'h1', children: [t('ricdom/md-editor', { ja: 'ricdom/md-editor' })] },
           U.uiText({
-            children: [t('The area below is a real <textarea>. Markdown syntax (headings, bold, emphasis, links, fenced code, tables, ...) is colored by an invisible mirror layered behind it.')],
+            children: [t(
+              'The area below is a real <textarea>. Markdown syntax (headings, bold, emphasis, links, fenced code, tables, ...) is colored by an invisible mirror layered behind it.',
+              { ja: '下の欄は本物の <textarea> です。Markdown の構文 (見出し・太字・強調・リンク・コードブロック・表など) は、背後に重ねた見えないミラーが色分けします。' },
+            )],
           }),
           U.uiSeparator(),
           // Used exactly like a textarea: value in, oninput out.
           // textarea と同じ使い方です: value で渡し、oninput で受け取ります。
           md({
             value: s.body,
-            placeholder: t('Write Markdown…'),
+            placeholder: t('Write Markdown…', { ja: 'Markdown を書いてください…' }),
             wrapperClass: 'example-md-editor',
             oninput: (ev) => {
               s.body = ev.target.value;

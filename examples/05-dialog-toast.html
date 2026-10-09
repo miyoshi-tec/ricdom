@@ -42,24 +42,14 @@
   // UI 部品を短い名前で呼べるようにします。
   const U = ricdomUI;
 
-  // Site helper: t(text) returns the text in the chosen language; addDict registers the Japanese.
-  // サイトの補助: t(文字列) は選択中の言語の文字列を返し、addDict で日本語を登録します。
+  // Site helper: t(text, { ja: '...' }) returns the text in the chosen language, with the Japanese
+  // written where the string is used. The one entry in addDict is for the t`...${value}...` form,
+  // which puts a value into the text and is always looked up in the dictionary.
+  // サイトの補助: t(文字列, { ja: '…' }) は選択中の言語の文字列を返します。日本語は使う場所に書きます。
+  // addDict の 1 件は、値を差し込む t`…${値}…` の形のためのもので、この形は常に辞書から訳を引きます。
   const { t, addDict, onLangChange } = ricdomI18n;
   addDict('ja', {
-    'Dialog, popup, toast, tooltip': 'ダイアログ・ポップアップ・トースト・ツールチップ',
     '{0} clicks': '{0} 回クリック',
-    'Open dialog': 'ダイアログを開く',
-    'Confirm': '確認',
-    'Do you really want to run it?': '本当に実行しますか？',
-    'OK': 'OK',
-    'Done': '実行しました',
-    'Menu ▾': 'メニュー ▾',
-    'Duplicate': '複製',
-    'Delete': '削除',
-    'Duplicated': '複製しました',
-    'Deleted': '削除しました',
-    'Tip: this button adds one to the count': 'ヒント: このボタンはカウントを 1 増やします',
-    'Type here (focus must survive re-renders)': 'ここに入力 (再描画しても入力中の状態が保たれます)',
   });
 
   // These components keep their own state (open or closed, the queue of toasts), so each one is
@@ -75,7 +65,7 @@
     (s) => ({
       tag: 'div',
       children: [
-        { tag: 'h1', children: [t('Dialog, popup, toast, tooltip')] },
+        { tag: 'h1', children: [t('Dialog, popup, toast, tooltip', { ja: 'ダイアログ・ポップアップ・トースト・ツールチップ' })] },
         // Site helper: the tagged-template form of t() puts a value into the translated text.
         // サイトの補助: t をタグ付きテンプレートで使うと、訳文の中に値を差し込めます。
         { tag: 'p', children: [t`${s.count} clicks`] },
@@ -86,17 +76,17 @@
             // With triggerChildren the dialog draws its own "open" button; dlg.close() closes it from code.
             // triggerChildren を渡すと、ダイアログが自分の「開く」ボタンを描きます。dlg.close() でコードから閉じます。
             dlg({
-              triggerChildren: [t('Open dialog')],
-              title: t('Confirm'),
-              children: [t('Do you really want to run it?')],
+              triggerChildren: [t('Open dialog', { ja: 'ダイアログを開く' })],
+              title: t('Confirm', { ja: '確認' }),
+              children: [t('Do you really want to run it?', { ja: '本当に実行しますか？' })],
               actions: [
                 U.uiButton({
                   variant: 'primary',
-                  children: [t('OK')],
+                  children: [t('OK', { ja: 'OK' })],
                   onclick: () => {
                     s.count += 1;
                     dlg.close();
-                    toast.show(t('Done'), { type: 'success' });
+                    toast.show(t('Done', { ja: '実行しました' }), { type: 'success' });
                   },
                 }),
               ],
@@ -104,22 +94,22 @@
             // A popup menu: `trigger` is the button's content, `children` are the menu items.
             // ポップアップメニュー: `trigger` はボタンの中身、`children` はメニューの項目です。
             menu({
-              trigger: [t('Menu ▾')],
+              trigger: [t('Menu ▾', { ja: 'メニュー ▾' })],
               children: [
-                U.uiButton({ children: [t('Duplicate')], onclick: () => toast.show(t('Duplicated')) }),
-                U.uiButton({ children: [t('Delete')], onclick: () => toast.show(t('Deleted'), { type: 'error' }) }),
+                U.uiButton({ children: [t('Duplicate', { ja: '複製' })], onclick: () => toast.show(t('Duplicated', { ja: '複製しました' })) }),
+                U.uiButton({ children: [t('Delete', { ja: '削除' })], onclick: () => toast.show(t('Deleted', { ja: '削除しました' }), { type: 'error' }) }),
               ],
             }),
             // A tooltip wraps the element it describes and shows `content` on hover or focus.
             // ツールチップは説明したい要素を包み、ホバーやフォーカスで `content` を表示します。
             tip({
-              content: t('Tip: this button adds one to the count'),
+              content: t('Tip: this button adds one to the count', { ja: 'ヒント: このボタンはカウントを 1 増やします' }),
               children: [U.uiButton({ children: ['+1'], onclick: () => { s.count += 1; } })],
             }),
           ],
         },
         U.uiInput({
-          placeholder: t('Type here (focus must survive re-renders)'),
+          placeholder: t('Type here (focus must survive re-renders)', { ja: 'ここに入力 (再描画しても入力中の状態が保たれます)' }),
           oninput: () => {
             // Every keystroke writes state and redraws the page; the text field keeps its focus and caret anyway.
             // 1 文字ごとに状態へ書き込んで再描画しますが、入力欄のフォーカスとカーソル位置は保たれます。

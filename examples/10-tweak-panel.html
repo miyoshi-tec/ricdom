@@ -48,21 +48,11 @@
   // UI 部品を短い名前で呼べるようにします。
   const U = ricdomUI;
 
-  // Site helper: t(text) returns the text in the chosen language; addDict registers the Japanese.
-  // サイトの補助: t(文字列) は選択中の言語の文字列を返し、addDict で日本語を登録します。
-  const { t, addDict, onLangChange } = ricdomI18n;
-  addDict('ja', {
-    'ricdom — tweak panel': 'ricdom — tweak パネル',
-    'Pass only data and the rows are generated from the types (tier 1); override a few with keys (tier 2). Move the panel and the shape on the right changes at once.':
-      'data だけ渡すと型から行が自動生成され (Tier 1)、keys で一部だけ上書きできる (Tier 2)。パネルを弄ると右の図形がその場で変わる。',
-    'Parameters': 'パラメータ',
-    'Border': '枠線',
-    'Details': '詳細',
-    'shadow': '影あり',
-    'no shadow': '影なし',
-    'Area (approx.)': '面積 (概算)',
-    'Reset to defaults': '既定値に戻す',
-  });
+  // Site helper: t(text, { ja: '...' }) returns the text in the chosen language. Every string on this
+  // page is used once, so its Japanese is written right where it is used.
+  // サイトの補助: t(文字列, { ja: '…' }) は選択中の言語の文字列を返します。このページの文字列は
+  // どれも 1 回しか使わないので、使う場所に日本語を書いています。
+  const { t, onLangChange } = ricdomI18n;
 
   // The starting values. A function, so "Reset to defaults" can make a fresh copy every time.
   // 初期値です。「既定値に戻す」で毎回新しい複製を作れるように、関数にしています。
@@ -117,16 +107,19 @@
       U.uiPanel({
         class: 'app-shell',
         children: [
-          { tag: 'h1', children: [t('ricdom — tweak panel')] },
+          { tag: 'h1', children: [t('ricdom — tweak panel', { ja: 'ricdom — tweak パネル' })] },
           U.uiText({
-            children: [t('Pass only data and the rows are generated from the types (tier 1); override a few with keys (tier 2). Move the panel and the shape on the right changes at once.')],
+            children: [t(
+              'Pass only data and the rows are generated from the types (tier 1); override a few with keys (tier 2). Move the panel and the shape on the right changes at once.',
+              { ja: 'data だけ渡すと型から行が自動生成され (Tier 1)、keys で一部だけ上書きできる (Tier 2)。パネルを弄ると右の図形がその場で変わる。' },
+            )],
           }),
           {
             tag: 'div',
             class: 'demo-row',
             children: [
               tweak({
-                title: t('Parameters'),
+                title: t('Parameters', { ja: 'パラメータ' }),
                 width: 260,
                 data: s.params,
                 keys: {
@@ -137,7 +130,7 @@
                   // A folder can be given a label and start open.
                   // フォルダには見出しを付け、最初から開いておくこともできます。
                   border: {
-                    label: t('Border'),
+                    label: t('Border', { ja: '枠線' }),
                     open: true,
                     keys: { width: { type: 'range', min: 0, max: 10 } },
                   },
@@ -145,19 +138,19 @@
                   // folder still shows its current values.
                   // `summary` はフォルダが閉じている間だけ見出しに表示されます。閉じていても今の値がわかります。
                   extra: {
-                    label: t('Details'),
-                    summary: `${s.params.extra.opacity}% / ${s.params.extra.shadow ? t('shadow') : t('no shadow')}`,
+                    label: t('Details', { ja: '詳細' }),
+                    summary: `${s.params.extra.opacity}% / ${s.params.extra.shadow ? t('shadow', { ja: '影あり' }) : t('no shadow', { ja: '影なし' })}`,
                   },
                   // A row that is not in `data`: `get` computes the area from size. It is display-only
                   // and never stored in s.params.
                   // `data` に無い行です: `get` が size から面積を計算します。表示するだけで、s.params には保存されません。
-                  area: { label: t('Area (approx.)'), get: () => Math.round(s.params.size * s.params.size) },
+                  area: { label: t('Area (approx.)', { ja: '面積 (概算)' }), get: () => Math.round(s.params.size * s.params.size) },
                 },
                 // Tier 3: your own rows (here a reset button) after the generated ones.
                 // Tier 3: 自動で作られた行の後ろに、自分の行 (ここではリセットボタン) を足せます。
                 rows: [
                   U.uiButton({
-                    children: [t('Reset to defaults')],
+                    children: [t('Reset to defaults', { ja: '既定値に戻す' })],
                     onclick: () => {
                       s.params = defaults();
                     },

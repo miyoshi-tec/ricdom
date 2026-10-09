@@ -42,36 +42,15 @@
   // UI 部品を短い名前で呼べるようにします。
   const U = ricdomUI;
 
-  // Site helper: t(text) returns the text in the chosen language; addDict registers the Japanese.
-  // サイトの補助: t(文字列) は選択中の言語の文字列を返し、addDict で日本語を登録します。
+  // Site helper: t(text, { ja: '...' }) returns the text in the chosen language, with the Japanese
+  // written where the string is used. The entries in addDict are strings chosen at run time
+  // (t(row), t(m) below): there is no single place to write their Japanese, so they go in the dictionary.
+  // サイトの補助: t(文字列, { ja: '…' }) は選択中の言語の文字列を返します。日本語は使う場所に書きます。
+  // addDict の分は、実行時に決まる文字列 (下の t(row)・t(m)) です。日本語を書く場所が 1 か所に決まらないので、辞書に登録します。
   const { t, addDict, onLangChange } = ricdomI18n;
   addDict('ja', {
-    'ricdom — splitter, scroll pane and more': 'ricdom — スプリッター・スクロールペインほか',
-    'Side panel': 'サイドパネル',
-    'Main panel (drag the divider, or focus it and use the arrow keys)': 'メインパネル (仕切り線をドラッグ、またはフォーカスして矢印キー)',
-    'Message': 'メッセージ',
-    'Send': '送信',
-    'To the end': '末尾へ',
-    'Hide details': '詳細を隠す',
-    'Show details': '詳細を表示',
-    'The details go here. Opening and closing is animated.': 'ここに詳細な説明文が入ります。開閉はアニメーションします。',
-    'Do I need a build?': 'ビルドは必要ですか？',
-    'No. Two IIFE bundles and one CSS <link> are enough.': 'いいえ。IIFE 2 本と CSS の <link> 1 本だけで動きます。',
-    'How do I register a stateful component?': '状態を持つ部品はどう登録しますか？',
-    'Explicitly, with app.use(createX()).': 'app.use(createX()) で明示的に登録します。',
-    'Profile': 'プロフィール',
-    'Contents of the profile tab': 'プロフィールタブの中身',
-    'Notifications': '通知設定',
-    'Contents of the notifications tab': '通知設定タブの中身',
-    'Billing': '請求',
-    'Contents of the billing tab': '請求タブの中身',
-    'Sort: ': '並び順: ',
-    'Export': 'エクスポート',
-    'Import': 'インポート',
     'Row A': '行 A',
     'Row B': '行 B',
-    'Rename': '名前を変更',
-    'Delete': '削除',
     // The first chat messages are kept as English text and translated when drawn, so a message
     // the user types (which has no entry here) is shown exactly as typed.
     // 最初のチャットメッセージは英語のまま持ち、描画するときに翻訳します。
@@ -117,8 +96,11 @@
             split({
               collapsed: s.sidebarCollapsed,
               onCollapseChange: (v) => { s.sidebarCollapsed = v; },
-              side: [{ tag: 'div', style: { padding: '8px' }, children: [U.uiText({ children: [t('Side panel')] })] }],
-              main: [{ tag: 'div', style: { padding: '8px' }, children: [U.uiText({ children: [t('Main panel (drag the divider, or focus it and use the arrow keys)')] })] }],
+              side: [{ tag: 'div', style: { padding: '8px' }, children: [U.uiText({ children: [t('Side panel', { ja: 'サイドパネル' })] })] }],
+              main: [{ tag: 'div', style: { padding: '8px' }, children: [U.uiText({ children: [t(
+                'Main panel (drag the divider, or focus it and use the arrow keys)',
+                { ja: 'メインパネル (仕切り線をドラッグ、またはフォーカスして矢印キー)' },
+              )] })] }],
             }),
           ],
         },
@@ -139,17 +121,17 @@
         }),
         U.uiRow({
           children: [
-            U.bindInput(s, 'draft', { placeholder: t('Message') }),
+            U.bindInput(s, 'draft', { placeholder: t('Message', { ja: 'メッセージ' }) }),
             U.uiButton({
               variant: 'primary',
-              children: [t('Send')],
+              children: [t('Send', { ja: '送信' })],
               onclick: () => {
                 if (!s.draft) return;
                 s.messages = [...s.messages, s.draft];
                 s.draft = '';
               },
             }),
-            U.uiButton({ variant: 'ghost', children: [t('To the end')], onclick: () => pane.scrollToBottom() }),
+            U.uiButton({ variant: 'ghost', children: [t('To the end', { ja: '末尾へ' })], onclick: () => pane.scrollToBottom() }),
           ],
         }),
       ],
@@ -167,10 +149,13 @@
           id: 'details-toggle',
           'aria-expanded': String(s.detailsOpen),
           'aria-controls': box.idFor(),
-          children: [s.detailsOpen ? t('Hide details') : t('Show details')],
+          children: [s.detailsOpen ? t('Hide details', { ja: '詳細を隠す' }) : t('Show details', { ja: '詳細を表示' })],
           onclick: () => { s.detailsOpen = !s.detailsOpen; },
         }),
-        box({ visible: s.detailsOpen, children: [U.uiPanel({ children: [t('The details go here. Opening and closing is animated.')] })] }),
+        box({ visible: s.detailsOpen, children: [U.uiPanel({ children: [t(
+          'The details go here. Opening and closing is animated.',
+          { ja: 'ここに詳細な説明文が入ります。開閉はアニメーションします。' },
+        )] })] }),
       ],
     });
 
@@ -183,8 +168,16 @@
         { tag: 'h2', children: ['createAccordion'] },
         acc({
           items: [
-            { id: 'q1', title: t('Do I need a build?'), children: [U.uiText({ children: [t('No. Two IIFE bundles and one CSS <link> are enough.')] })] },
-            { id: 'q2', title: t('How do I register a stateful component?'), children: [U.uiText({ children: [t('Explicitly, with app.use(createX()).')] })] },
+            {
+              id: 'q1',
+              title: t('Do I need a build?', { ja: 'ビルドは必要ですか？' }),
+              children: [U.uiText({ children: [t('No. Two IIFE bundles and one CSS <link> are enough.', { ja: 'いいえ。IIFE 2 本と CSS の <link> 1 本だけで動きます。' })] })],
+            },
+            {
+              id: 'q2',
+              title: t('How do I register a stateful component?', { ja: '状態を持つ部品はどう登録しますか？' }),
+              children: [U.uiText({ children: [t('Explicitly, with app.use(createX()).', { ja: 'app.use(createX()) で明示的に登録します。' })] })],
+            },
           ],
           multi: false,
         }),
@@ -199,9 +192,21 @@
         { tag: 'h2', children: ['createTabs (uncontrolled)'] },
         tabs({
           items: [
-            { key: 'a', label: t('Profile'), children: [U.uiText({ children: [t('Contents of the profile tab')] })] },
-            { key: 'b', label: t('Notifications'), children: [U.uiText({ children: [t('Contents of the notifications tab')] })] },
-            { key: 'c', label: t('Billing'), children: [U.uiText({ children: [t('Contents of the billing tab')] })] },
+            {
+              key: 'a',
+              label: t('Profile', { ja: 'プロフィール' }),
+              children: [U.uiText({ children: [t('Contents of the profile tab', { ja: 'プロフィールタブの中身' })] })],
+            },
+            {
+              key: 'b',
+              label: t('Notifications', { ja: '通知設定' }),
+              children: [U.uiText({ children: [t('Contents of the notifications tab', { ja: '通知設定タブの中身' })] })],
+            },
+            {
+              key: 'c',
+              label: t('Billing', { ja: '請求' }),
+              children: [U.uiText({ children: [t('Contents of the billing tab', { ja: '請求タブの中身' })] })],
+            },
           ],
         }),
       ],
@@ -217,7 +222,7 @@
         U.uiRow({
           children: [
             sortDD({
-              label: t('Sort: ') + s.sort,
+              label: t('Sort: ', { ja: '並び順: ' }) + s.sort,
               chevron: true,
               children: ['name', 'date', 'size'].map((v) =>
                 U.uiButton({ variant: v === s.sort ? 'primary' : 'ghost', children: [v], onclick: () => { s.sort = v; sortDD.close(); } }),
@@ -227,8 +232,8 @@
               icon: U.uiIcon(ICON_GEAR, { size: 16 }),
               ghost: true,
               children: [
-                U.uiButton({ variant: 'ghost', children: [t('Export')], onclick: () => actionsDD.close() }),
-                U.uiButton({ variant: 'ghost', children: [t('Import')], onclick: () => actionsDD.close() }),
+                U.uiButton({ variant: 'ghost', children: [t('Export', { ja: 'エクスポート' })], onclick: () => actionsDD.close() }),
+                U.uiButton({ variant: 'ghost', children: [t('Import', { ja: 'インポート' })], onclick: () => actionsDD.close() }),
               ],
             }),
           ],
@@ -265,8 +270,8 @@
                 anchor: 'br',
                 onClose: () => { s.menuForRow = null; },
                 children: [
-                  U.uiButton({ children: [t('Rename')], onclick: () => { s.menuForRow = null; } }),
-                  U.uiButton({ children: [t('Delete')], onclick: () => { s.menuForRow = null; } }),
+                  U.uiButton({ children: [t('Rename', { ja: '名前を変更' })], onclick: () => { s.menuForRow = null; } }),
+                  U.uiButton({ children: [t('Delete', { ja: '削除' })], onclick: () => { s.menuForRow = null; } }),
                 ],
               }),
             ],
@@ -283,7 +288,7 @@
         class: 'app-shell',
         style: { margin: '2rem auto' },
         children: [
-          { tag: 'h1', children: [t('ricdom — splitter, scroll pane and more')] },
+          { tag: 'h1', children: [t('ricdom — splitter, scroll pane and more', { ja: 'ricdom — スプリッター・スクロールペインほか' })] },
           splitterDemo(s),
           U.uiSeparator(),
           scrollPaneDemo(s),

@@ -39,21 +39,11 @@
   // UI 部品を短い名前で呼べるようにします。
   const U = ricdomUI;
 
-  // Site helper: t(text) returns the text in the chosen language; addDict registers the Japanese.
-  // サイトの補助: t(文字列) は選択中の言語の文字列を返し、addDict で日本語を登録します。
-  const { t, addDict, onLangChange } = ricdomI18n;
-  addDict('ja', {
-    'ricdom — controls': 'ricdom — コントロール一覧',
-    'Name': '名前',
-    'I agree to the terms of use': '利用規約に同意する',
-    'Delete': '削除',
-    'Heading': '見出し',
-    '**bold**, *italic*, `code` and a [link](https://example.com)': '**太字**・*斜体*・`code`・[リンク](https://example.com)',
-    'Item A': '項目 A',
-    'Item B': '項目 B',
-    'Step 1': '手順 1',
-    'Step 2': '手順 2',
-  });
+  // Site helper: t(text, { ja: '...' }) returns the text in the chosen language. Every string on this
+  // page is used once, so its Japanese is written right where it is used.
+  // サイトの補助: t(文字列, { ja: '…' }) は選択中の言語の文字列を返します。このページの文字列は
+  // どれも 1 回しか使わないので、使う場所に日本語を書いています。
+  const { t, onLangChange } = ricdomI18n;
 
   // Icon data (SVG paths) comes from `npx ricdom-icon <name>` (here: check, trash-2). Copy it; do not write it by hand.
   // アイコンのデータ (SVG のパス) は `npx ricdom-icon <名前>` で取得します (ここでは check と trash-2)。手書きはしません。
@@ -82,7 +72,7 @@
       U.uiPanel({
         style: { maxWidth: '720px', margin: '2rem auto' },
         children: [
-          { tag: 'h1', children: [t('ricdom — controls')] },
+          { tag: 'h1', children: [t('ricdom — controls', { ja: 'ricdom — コントロール一覧' })] },
           U.uiSeparator(),
 
           // Controls. bindInput(s, 'name') is an input wired both ways to s.name; uiSelect next to it
@@ -94,7 +84,7 @@
               { tag: 'h2', children: ['control'] },
               U.uiRow({
                 children: [
-                  U.bindInput(s, 'name', { placeholder: t('Name') }),
+                  U.bindInput(s, 'name', { placeholder: t('Name', { ja: '名前' }) }),
                   U.uiSelect({ value: s.role, options: ['viewer', 'editor', 'admin'], onchange: (e) => (s.role = e.target.value) }),
                 ],
               }),
@@ -103,7 +93,7 @@
               U.bindTextarea(s, 'memo', { autoResize: { minRows: 2, maxRows: 6 } }),
               U.uiRow({
                 children: [
-                  U.bindCheckbox(s, 'agree', { children: [t('I agree to the terms of use')] }),
+                  U.bindCheckbox(s, 'agree', { children: [t('I agree to the terms of use', { ja: '利用規約に同意する' })] }),
                   // An option label can mix an icon and text.
                   // 選択肢のラベルには、アイコンと文字を混ぜて書けます。
                   U.uiRadiobutton({
@@ -122,7 +112,7 @@
                   U.bindRange(s, 'volume', { min: 0, max: 100 }),
                   // An icon-only button needs `label` so screen readers can name it.
                   // アイコンだけのボタンには、読み上げ用の名前として `label` を付けます。
-                  U.uiButton({ variant: 'ghost', children: [U.uiIcon(ICON_TRASH, { size: 16, label: t('Delete') })] }),
+                  U.uiButton({ variant: 'ghost', children: [U.uiIcon(ICON_TRASH, { size: 16, label: t('Delete', { ja: '削除' }) })] }),
                 ],
               }),
               // uiColor accepts #rrggbb, or rgba(...) with an extra alpha slider.
@@ -158,15 +148,15 @@
               U.uiMdPre({
                 children: [
                   [
-                    '# ' + t('Heading'),
+                    '# ' + t('Heading', { ja: '見出し' }),
                     '',
-                    t('**bold**, *italic*, `code` and a [link](https://example.com)'),
+                    t('**bold**, *italic*, `code` and a [link](https://example.com)', { ja: '**太字**・*斜体*・`code`・[リンク](https://example.com)' }),
                     '',
-                    '- ' + t('Item A'),
-                    '- ' + t('Item B'),
+                    '- ' + t('Item A', { ja: '項目 A' }),
+                    '- ' + t('Item B', { ja: '項目 B' }),
                     '',
-                    '1. ' + t('Step 1'),
-                    '2. ' + t('Step 2'),
+                    '1. ' + t('Step 1', { ja: '手順 1' }),
+                    '2. ' + t('Step 2', { ja: '手順 2' }),
                     '',
                     '```js',
                     "console.log('hello');",

@@ -77,44 +77,17 @@
   // UI 部品を短い名前で呼べるようにします。
   const U = ricdomUI;
 
-  // Site helper: t(text) returns the text in the chosen language; addDict registers the Japanese.
-  // サイトの補助: t(文字列) は選択中の言語の文字列を返し、addDict で日本語を登録します。
-  const { t, addDict, onLangChange } = ricdomI18n;
+  // Site helper: t(text, { ja: '...' }) returns the text in the chosen language. Every string on this
+  // page is used once, so its Japanese is written right where it is used.
+  // サイトの補助: t(文字列, { ja: '…' }) は選択中の言語の文字列を返します。このページの文字列は
+  // どれも 1 回しか使わないので、使う場所に日本語を書いています。
+  const { t, onLangChange } = ricdomI18n;
 
   // Site helper: on this site the nav bar themes the whole page (it calls applyTheme on <body>).
   // The seven buttons below switch the theme through the same helper, so they and the nav bar agree.
   // サイトの補助: このサイトでは、ナビバーがページ全体にテーマを当てています (<body> に applyTheme)。
   // 下の 7 つのボタンも同じ補助を通して切り替えるので、ボタンとナビバーの表示が食い違いません。
   const nav = ricdomNav;
-
-  addDict('ja', {
-    'ricdom — themes and frosted glass': 'ricdom — テーマとフロストガラス',
-    'Frosted glass (Windows 11 Acrylic / iOS translucency) style theme. Check that the wallpaper behind this panel looks blurred.':
-      'フロストガラス (Windows 11 Acrylic / iOS 半透明) 風テーマ。このパネル越しに背景の壁紙がぼけて見えることを確認してください。',
-    'Theme:': 'テーマ:',
-    'Floating surfaces (with backdrop-filter)': 'フローティング面 (backdrop-filter あり)',
-    'Open dialog': 'ダイアログを開く',
-    'Confirm': '確認',
-    'The body of this dialog is frosted glass too.': 'このダイアログの本文の背景もフロストガラスです。',
-    'Popup menu ▾': 'ポップアップメニュー ▾',
-    'Item A': '項目 A',
-    'Item B': '項目 B',
-    'Selected item A': '項目 A を選択',
-    'Selected item B': '項目 B を選択',
-    'Dropdown: ': 'ドロップダウン: ',
-    'Show a toast': 'トーストを出す',
-    'Saved': '保存しました',
-    'Hover for a tooltip': 'ツールチップをホバー',
-    'The tooltip is frosted glass too': 'ツールチップもフロストガラスです',
-    'Controls (no backdrop-filter, only a translucent rgba background)': 'コントロール (backdrop-filter は掛けない、半透明の rgba 背景のみ)',
-    'Name': '名前',
-    'Notify me': '通知を受け取る',
-    'Tweak panel': 'tweak パネル',
-    'Parameters': 'パラメータ',
-    'Legibility check': '可読性の確認',
-    'Normal text on a translucent surface must stay clearly readable. The quick brown fox jumps over the lazy dog. 0123456789.':
-      '半透明の面に乗った通常の文字も、はっきり読めることを確認してください。 The quick brown fox jumps over the lazy dog. 0123456789.',
-  });
 
   const state = {
     theme: nav.getTheme(),
@@ -133,7 +106,7 @@
   const themeRow = (s) =>
     U.uiRow({
       children: [
-        U.uiText({ variant: 'label', children: [t('Theme:')] }),
+        U.uiText({ variant: 'label', children: [t('Theme:', { ja: 'テーマ:' })] }),
         ...nav.THEMES.map((name) =>
           U.uiButton({
             variant: name === s.theme ? 'primary' : 'default',
@@ -151,42 +124,45 @@
       U.uiPanel({
         style: { maxWidth: '760px', margin: '2rem auto' },
         children: [
-          { tag: 'h1', children: [t('ricdom — themes and frosted glass')] },
+          { tag: 'h1', children: [t('ricdom — themes and frosted glass', { ja: 'ricdom — テーマとフロストガラス' })] },
           U.uiText({
-            children: [t('Frosted glass (Windows 11 Acrylic / iOS translucency) style theme. Check that the wallpaper behind this panel looks blurred.')],
+            children: [t(
+              'Frosted glass (Windows 11 Acrylic / iOS translucency) style theme. Check that the wallpaper behind this panel looks blurred.',
+              { ja: 'フロストガラス (Windows 11 Acrylic / iOS 半透明) 風テーマ。このパネル越しに背景の壁紙がぼけて見えることを確認してください。' },
+            )],
           }),
           themeRow(s),
           U.uiSeparator(),
 
           // Each floating surface: open them under the glass themes to see the blur.
           // 浮かぶ面をひととおり並べています。glass 系のテーマで開くと、背後のぼかしが確かめられます。
-          { tag: 'h2', children: [t('Floating surfaces (with backdrop-filter)')] },
+          { tag: 'h2', children: [t('Floating surfaces (with backdrop-filter)', { ja: 'フローティング面 (backdrop-filter あり)' })] },
           {
             tag: 'div',
             class: 'row',
             children: [
               dlg({
-                triggerChildren: [t('Open dialog')],
-                title: t('Confirm'),
-                children: [t('The body of this dialog is frosted glass too.')],
+                triggerChildren: [t('Open dialog', { ja: 'ダイアログを開く' })],
+                title: t('Confirm', { ja: '確認' }),
+                children: [t('The body of this dialog is frosted glass too.', { ja: 'このダイアログの本文の背景もフロストガラスです。' })],
                 actions: [U.uiButton({ variant: 'primary', children: ['OK'], onclick: () => dlg.close() })],
               }),
               menu({
-                trigger: [t('Popup menu ▾')],
+                trigger: [t('Popup menu ▾', { ja: 'ポップアップメニュー ▾' })],
                 children: [
-                  U.uiButton({ children: [t('Item A')], onclick: () => toast.show(t('Selected item A')) }),
-                  U.uiButton({ children: [t('Item B')], onclick: () => toast.show(t('Selected item B')) }),
+                  U.uiButton({ children: [t('Item A', { ja: '項目 A' })], onclick: () => toast.show(t('Selected item A', { ja: '項目 A を選択' })) }),
+                  U.uiButton({ children: [t('Item B', { ja: '項目 B' })], onclick: () => toast.show(t('Selected item B', { ja: '項目 B を選択' })) }),
                 ],
               }),
               dd({
-                label: t('Dropdown: ') + s.name,
+                label: t('Dropdown: ', { ja: 'ドロップダウン: ' }) + s.name,
                 chevron: true,
                 children: ['name', 'date', 'size'].map((v) => U.uiButton({ children: [v], onclick: () => dd.close() })),
               }),
-              U.uiButton({ children: [t('Show a toast')], onclick: () => toast.show(t('Saved'), { type: 'success' }) }),
+              U.uiButton({ children: [t('Show a toast', { ja: 'トーストを出す' })], onclick: () => toast.show(t('Saved', { ja: '保存しました' }), { type: 'success' }) }),
               tip({
-                content: t('The tooltip is frosted glass too'),
-                children: [U.uiButton({ children: [t('Hover for a tooltip')] })],
+                content: t('The tooltip is frosted glass too', { ja: 'ツールチップもフロストガラスです' }),
+                children: [U.uiButton({ children: [t('Hover for a tooltip', { ja: 'ツールチップをホバー' })] })],
               }),
             ],
           },
@@ -196,23 +172,29 @@
           // and a screen can hold many controls but only a few floating surfaces at once.
           // コントロールは半透明の背景だけで、ぼかしは掛けません。ぼかしは要素ごとに描画の負荷がかかり、
           // 浮かぶ面は同時に数枚なのに対して、コントロールは 1 画面に大量に並びうるためです。
-          { tag: 'h2', children: [t('Controls (no backdrop-filter, only a translucent rgba background)')] },
+          { tag: 'h2', children: [t(
+            'Controls (no backdrop-filter, only a translucent rgba background)',
+            { ja: 'コントロール (backdrop-filter は掛けない、半透明の rgba 背景のみ)' },
+          )] },
           U.uiCol({
             children: [
-              U.bindInput(s, 'name', { placeholder: t('Name') }),
-              U.bindCheckbox(s, 'subscribe', { children: [t('Notify me')] }),
+              U.bindInput(s, 'name', { placeholder: t('Name', { ja: '名前' }) }),
+              U.bindCheckbox(s, 'subscribe', { children: [t('Notify me', { ja: '通知を受け取る' })] }),
               U.bindRange(s, 'volume', { min: 0, max: 100 }),
             ],
           }),
           U.uiSeparator(),
 
-          { tag: 'h2', children: [t('Tweak panel')] },
-          tweak({ title: t('Parameters'), data: s.params }),
+          { tag: 'h2', children: [t('Tweak panel', { ja: 'tweak パネル' })] },
+          tweak({ title: t('Parameters', { ja: 'パラメータ' }), data: s.params }),
           U.uiSeparator(),
 
-          { tag: 'h2', children: [t('Legibility check')] },
+          { tag: 'h2', children: [t('Legibility check', { ja: '可読性の確認' })] },
           U.uiText({
-            children: [t('Normal text on a translucent surface must stay clearly readable. The quick brown fox jumps over the lazy dog. 0123456789.')],
+            children: [t(
+              'Normal text on a translucent surface must stay clearly readable. The quick brown fox jumps over the lazy dog. 0123456789.',
+              { ja: '半透明の面に乗った通常の文字も、はっきり読めることを確認してください。 The quick brown fox jumps over the lazy dog. 0123456789.' },
+            )],
           }),
         ],
       }),
