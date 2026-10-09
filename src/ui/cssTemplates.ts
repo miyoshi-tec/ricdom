@@ -62,7 +62,7 @@ const sbt = 'var(--ric-scrollbar-thumb)'; // スクロールバーつまみ色 (
 // 引き続き明示、他は両方とも 'none')。
 const bl = 'var(--ric-popup-blur, var(--ric-surface-blur, none))';
 const ps = 'var(--ric-panel-shadow, var(--ric-shadow))';
-// フローティング面 (dialog/toast/tooltip/dropdown/tweak/inline-menu) の backdrop-filter
+// フローティング面 (dialog/toast/tooltip/dropdown/tweak) の backdrop-filter
 // (2.0.0-alpha.18)。popup/panel だけは上の `bl` (--ric-popup-blur 優先) を使う — 理由は
 // bl 自身のコメント参照。入力・ボタン・textarea・table・select には掛けない
 // (backdrop-filter はコストが要素数に比例するため、常に大量に存在しうるコントロール類には
@@ -416,6 +416,14 @@ const TOOLTIP_CSS = `
 // する)。`:where()` で詳細度 0 にしてあるので consumer の規則が常に勝つ (UA 規則には
 // オリジンの差で必ず勝つ)。上の `:empty { display: none }` は popover が開いたままでも効く
 // (空の間は描画しない)。
+//
+// Electron のドラッグ領域 (2.0.0-alpha.28、Rancha の実機報告): 枠なしウィンドウのタイトルバー
+// (`-webkit-app-region: drag`) に重なった浮遊面は、OS がクリックをドラッグとして吸うため押せない。
+// `-webkit-app-region` は継承されず (Electron 32 で computed 値を確認)、portal は 0×0 の箱なので、
+// 旧 SPEC §7 が勧めていた「portal 自身に no-drag」は 1px も効かなかった。浮遊面はどこに出ても押せる
+// のがあるべき姿なので、ricdom-ui.css が portal の子孫すべてに no-drag を付ける。Electron 以外の
+// ブラウザでは効果を持たない (Chromium は PWA の window-controls-overlay でのみ解釈)。`:where()` で
+// 詳細度 0 なので、アプリ側で上書きできる。
 const PORTAL_CSS = `
 [data-ricdom-role="portal"]:empty {
   display: none;
@@ -431,6 +439,9 @@ const PORTAL_CSS = `
   overflow: visible;
   background: transparent;
   color: inherit;
+}
+:where([data-ricdom-role="portal"]) * {
+  -webkit-app-region: no-drag;
 }`;
 
 // ── 状態を持たない部品とレイアウト (設計書 §4/§13) ─────────────
@@ -1224,26 +1235,6 @@ const DROPDOWN_CSS = `
   -webkit-backdrop-filter: ${sbf};
 }`;
 
-// portal を持たない軽量ポップオーバー (createPopup/createDropdown と違い overlay も
-// アニメーションも持たない、v1 継承)。
-const INLINE_MENU_CSS = `
-.ric-inline-menu {
-  background: ${ct};
-  border: ${b1};
-  border-radius: ${r};
-  padding: 4px;
-  box-shadow: ${sh};
-  backdrop-filter: ${sbf};
-  -webkit-backdrop-filter: ${sbf};
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.ric-inline-menu .ric-button {
-  justify-content: flex-start;
-  text-align: left;
-}`;
-
 // ── ric-tweak (パラメータ調整パネル) ──
 // v1 (ric_ui/css_templates.js の ric-tweak/ric-tweak-row/ric-tweak-folder) の移植。
 // folder は v1 のネイティブ <details> (::before の三角形 + rotate) を廃止し、
@@ -1503,7 +1494,6 @@ export const buildStylesheet = (): string =>
     ACCORDION_CSS,
     TABS_CSS,
     DROPDOWN_CSS,
-    INLINE_MENU_CSS,
     TWEAK_CSS,
     MD_EDITOR_CSS,
   ].join('\n');

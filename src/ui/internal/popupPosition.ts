@@ -21,6 +21,8 @@ export interface Pos {
   left?: number;
   right?: number;
   minWidth?: number;
+  /** 上下どちらにも入りきらないときの高さ制限 (2.0.0-alpha.28)。指定時は中をスクロールさせる */
+  maxHeight?: number;
 }
 
 /** Pos (px 数値) を inline style 用の文字列 object に変換する。 */
@@ -31,7 +33,46 @@ export const posToStyle = (pos: Pos): Record<string, string> => {
   if (pos.left !== undefined) style.left = `${pos.left}px`;
   if (pos.right !== undefined) style.right = `${pos.right}px`;
   if (pos.minWidth !== undefined) style.minWidth = `${pos.minWidth}px`;
+  if (pos.maxHeight !== undefined) {
+    style.maxHeight = `${pos.maxHeight}px`;
+    style.overflowY = 'auto';
+  }
   return style;
+};
+
+/**
+ * スクロールで閉じるべきか (2.0.0-alpha.28、popup / dropdown で共有)。
+ *
+ * 浮遊面は開いた瞬間の位置に `position: fixed` で留まるので、基準要素 (トリガーや openAt の要素) が
+ * スクロールで動くと、見た目は別の要素に付いているのに中身は元の対象を指す。Rancha の報告では、一覧の
+ * 「…」メニューを開いたままホイールでスクロールすると別の行に付いて見え、「ごみ箱へ」で見た目と違う
+ * ファイルが消えうる状態だった (wheel は pointerdown ではないので light dismiss も効かない)。
+ *
+ * 判定 (document の capture で受けた scroll イベントの target について):
+ *   - 本体の中のスクロール (項目が多く高さを制限したとき) → 閉じない
+ *   - ページ全体のスクロール (document / html / body) → 閉じる
+ *   - 基準要素があり、その祖先 (= 基準要素を含む領域) のスクロール → 閉じる
+ *   - それ以外 → 閉じない。基準要素の無い openAt({x,y}) (右クリックメニュー等) は、無関係な領域
+ *     (末尾に追従するログ欄など) が動くたびに閉じないよう、ページのスクロールだけで閉じる
+ */
+export const shouldCloseOnScroll = (target: EventTarget | null, anchor: Element | null, body: Element | null): boolean => {
+  if (!target || typeof document === 'undefined') return false;
+  if (body && target instanceof Node && body.contains(target)) return false;
+  if (target === document || target === document.documentElement || target === document.body) return true;
+  if (!anchor) return false;
+  return target instanceof Node && target.contains(anchor);
+};
+
+/**
+ * 実測した高さが、選んだ向きの空きに入りきらないときの高さ制限 (2.0.0-alpha.28、Rancha の報告:
+ * 高さ 100px のウィンドウでテーマメニューを開くと、上に反転した本体が画面の上にはみ出して 7 項目中
+ * 6 項目が押せなかった)。below は `edge` (本体の上端) から viewport 下端まで、above は viewport 上端から
+ * `edge` (本体の下端) までを、`margin` を残して使う。入りきるなら undefined (= 制限しない)。
+ * 向きの選択 (computeFlipDir) は空きの広い側を選ぶので、ここで制限されるのは「どちらにも入らない」ときだけ。
+ */
+export const fitHeight = (dir: 'below' | 'above', edge: number, measuredH: number, margin = 8): number | undefined => {
+  const available = dir === 'below' ? window.innerHeight - edge - margin : edge - margin;
+  return measuredH > available ? Math.max(available, 0) : undefined;
 };
 
 /**

@@ -105,9 +105,6 @@ export type { TabsProps, TabsInstance, TabItem, TabsVariant } from './tabs.js';
 export { createDropdown } from './dropdown.js';
 export type { DropdownProps, DropdownInstance } from './dropdown.js';
 
-export { uiInlineMenu } from './inlineMenu.js';
-export type { UiInlineMenuProps, UiInlineMenuAnchor } from './inlineMenu.js';
-
 export { createFocusWhen } from './focusWhen.js';
 export type { FocusWhenInstance } from './focusWhen.js';
 

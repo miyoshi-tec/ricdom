@@ -24,7 +24,7 @@ import type { ClassValue } from '../../types.js';
 //
 // 対策もコアと同じ: ビルド時定数 `__RICDOM_DEV__` (declare は src/env.d.ts、tsup.config.ts
 // の ui IIFE 2 本が true/false を焼き込む) をトップレベル定数 `bakedDevMode` として一度だけ
-// 確定させ、呼び出し側 (focusWhen.ts / inlineMenu.ts / theme.ts) は `isDevMode()` を
+// 確定させ、呼び出し側 (focusWhen.ts / theme.ts。2.0.0-alpha.28 で削除した inlineMenu.ts も同じだった) は `isDevMode()` を
 // 直接呼ばず、必ず定数を **左** に置いた `bakedDevMode ?? isDevMode()` の形で参照する。
 // esbuild は関数呼び出しをまたいだ定数伝播を行わない (isDevMode() の中身をどれだけ
 // 定数化しても、呼び出し式が条件に残る限り warn コードは物理的に残る) が、`??`/`&&` の
@@ -145,7 +145,6 @@ export const UI_ROLE = {
   tabsPanel: 'tabs-panel',
   dropdown: 'dropdown',
   dropdownTrigger: 'dropdown-trigger',
-  inlineMenu: 'inline-menu',
   // ── パラメータ調整パネル ──
   tweakPanel: 'tweak-panel',
   /** パネル全体のタイトル (`.ric-tweak__title`、2.0.0-alpha.8、#2 の役割棚卸しで追加。

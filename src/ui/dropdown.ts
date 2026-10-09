@@ -28,7 +28,7 @@
 import type { RicNode } from '../types.js';
 import { ANIMATION_FALLBACK_MS, type AttachGuard, type Component, createAttachGuard, type Host } from './internal/component.js';
 import { UI_ROLE } from './internal/pureHelpers.js';
-import { computeAnchoredLeft, computeFlipDir, measuringLeft, type Pos, posToStyle } from './internal/popupPosition.js';
+import { computeAnchoredLeft, computeFlipDir, fitHeight, measuringLeft, type Pos, posToStyle, shouldCloseOnScroll } from './internal/popupPosition.js';
 import { closeOthers, registerExclusive, unregisterExclusive } from './internal/exclusiveRegistry.js';
 import { uiIcon } from './icon.js';
 
@@ -133,14 +133,23 @@ export const createDropdown = (): DropdownInstance => {
     doClose(); // 外側クリックはフォーカス復帰しない (Esc は closeAndRestoreFocus のまま)
   };
 
+  // トリガーを含む領域 (またはページ) のスクロールで閉じる (alpha.28、popupPosition.ts の
+  // shouldCloseOnScroll 参照)。scroll はバブリングしないので document の capture で受ける。
+  const handleScroll = (ev: Event): void => {
+    if (!isOpen || isClosing) return;
+    if (shouldCloseOnScroll(ev.target, getTriggerEl(), getBodyEl())) doClose();
+  };
+
   const bindLightDismissIfNeeded = (): void => {
     if (typeof document === 'undefined') return;
     if (isOpen && !lightDismissBound) {
       document.addEventListener('pointerdown', handleOutsidePointerDown, true);
+      document.addEventListener('scroll', handleScroll, { capture: true, passive: true });
       lightDismissBound = true;
     }
     if (!isOpen && lightDismissBound) {
       document.removeEventListener('pointerdown', handleOutsidePointerDown, true);
+      document.removeEventListener('scroll', handleScroll, true);
       lightDismissBound = false;
     }
   };
@@ -149,11 +158,14 @@ export const createDropdown = (): DropdownInstance => {
   // `measuringLeft()` で本体を viewport マージン位置に仮置きし、実測を横幅制約なしで
   // 行う (popupPosition.ts の `measuringLeft` コメント参照)。実測後は従来どおり
   // `computeAnchoredLeft` で最終位置を決める。
-  const computePos = (rect: DOMRect, chosenDir: 'below' | 'above', isLabel: boolean, measuredWidth: number | undefined): Pos => ({
+  // measuredH (実測後のみ) を渡すと、上下どちらにも入りきらないときに maxHeight で画面内に収める
+  // (alpha.28、popup.ts と同じ fitHeight を共有)。
+  const computePos = (rect: DOMRect, chosenDir: 'below' | 'above', isLabel: boolean, measuredWidth: number | undefined, measuredH?: number): Pos => ({
     top: chosenDir === 'below' ? rect.bottom + 4 : undefined,
     bottom: chosenDir === 'above' ? window.innerHeight - rect.top + 4 : undefined,
     left: measuredWidth === undefined ? measuringLeft() : computeAnchoredLeft(rect, measuredWidth),
     ...(isLabel ? { minWidth: rect.width } : {}),
+    maxHeight: measuredH === undefined ? undefined : fitHeight(chosenDir, chosenDir === 'below' ? rect.bottom + 4 : rect.top - 4, measuredH),
   });
 
   const inst = ((props: DropdownProps): RicNode => {
@@ -220,7 +232,7 @@ export const createDropdown = (): DropdownInstance => {
           const measuredH = body.offsetHeight;
           const newDir = computeFlipDir(rect, measuredH);
           dir = newDir;
-          pos = computePos(rect, newDir, isLabel, measuredW);
+          pos = computePos(rect, newDir, isLabel, measuredW, measuredH);
           isMeasuring = false;
           guard.host?.notify();
         });
@@ -258,6 +270,7 @@ export const createDropdown = (): DropdownInstance => {
     }
     if (lightDismissBound && typeof document !== 'undefined') {
       document.removeEventListener('pointerdown', handleOutsidePointerDown, true);
+      document.removeEventListener('scroll', handleScroll, true);
       lightDismissBound = false;
     }
     if (guard.host) unregisterExclusive(guard.host.app, exclusiveSelf);

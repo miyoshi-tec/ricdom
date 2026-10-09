@@ -176,6 +176,19 @@ v1 は 5 か月・46 リリース・社内 11 アプリの実戦で API が磨�
 - **追報 4 (alpha.4 取り込み) で第 2 号は完了**: 再現スクリプト 5→5→5→5→5、E2E 10/10、回避策ゼロ。初報 10 + 追報 5 = 15 件が同日中に公式 API で閉じた
 - ~~観察 (対応なし)~~ → **§23 で実バグ (#14) と判明**。DPI 150% の実機で右端密着トリガーの dropdown body の `right` が `innerWidth` を 0.33px 超えた件、統括は「`clampLeft` が右端も収めるので最終位置では起き得ない、実測フェーズの rect を拾ったのでは」と判断したが誤り。consumer が再計測後 (200ms / 600ms) の inline `left` / `offsetWidth` / 本来幅を取り直し、**測った幅そのものが位置依存で過小**になっていることを示した (§23)。教訓: 「式は正しい」で止めず、式に入る実測値の取り方まで疑う
 
+## 47. Rancha の移行報告 → uiInlineMenu 削除 + popup/dropdown の 5 件 (2026-10-09、2.0.0-alpha.28)
+
+- **報告の要点**: Rancha は `ui_inline_menu` 3 箇所 (一覧・ツリーの行、テーマメニュー) をすべて `createPopup` + `openAt` に移し、`_pick_menu_anchor`・`watch_outside_click`・document click リスナー・`.list-row { position: relative }` を削除。unit 902 / e2e 132 pass、dev 警告ゼロ。`uiInlineMenu` を消してよいと明言 → §46 の再検討条件を満たしたので **削除**
+- **Electron の実機検証 (alpha.26 の未検証事項)**: SPEC §7 の「portal に no-drag の 1 行」は **効かない**。`-webkit-app-region` は継承されず (popup 本体・項目の computed は none)、alpha.26 から portal は 0×0 の箱なので面積ゼロ。OS の `SendInput` クリックで portal だけ = pointerdown 0 件、`portal *` まで付けると効く。CDP の `Input.dispatchMouseEvent` は OS のヒットテストを通らないので常に効いて見える (検証に使えない)。**SPEC の旧 FACT「inherited independently of the box model」は誤り** (v1 から引き継いだ記述を検証せずに書いていた)。→ 浮遊面はどこでも押せるのがあるべき姿なので、利用側の 1 行ではなく **ricdom-ui.css が portal の子孫すべてに no-drag** (`:where()` で詳細度 0)。Electron 以外では効果なし
+- **スクロールで閉じる**: `position: fixed` のまま基準要素だけが動き、別の行に付いて見えるのに中身は元の行 = 「ごみ箱へ」で別のファイルが消えうる (Rancha は onscroll で close を自前実装)。→ ページ、または基準要素を含む要素の scroll (document の capture) で閉じる。本体内のスクロールでは閉じない。点で開いた `openAt({x,y})` は基準要素が無いのでページのスクロールだけ (自動追従するログ欄などで閉じないため)。判定は `popupPosition.ts` の `shouldCloseOnScroll` に 1 つ、popup / dropdown で共有。「追従する」案は採らない (開いたまま対象が画面外へ流れる場合の扱いが増える、ネイティブのメニューも閉じる)
+- **上下どちらにも入らない**: 高さ 100px のウィンドウで上に反転したテーマメニューが画面外へ。→ `fitHeight` で選んだ側の空き (余白 8px) に `max-height` + `overflow-y: auto`。実測 render は制限なしで測ってから制限する
+- **区切り線**: `wrapMenuItem` が全子に popup-item role・tabIndex・`.ric-popup__item` を付けていた → 矢印キーが止まり、項目の枠・ホバー色が乗る。→ `menuitem`/`menuitemcheckbox`/`menuitemradio` 以外の role は素通し (ライブラリの `.ric-popup__sep` がそのまま効く)
+- **trigger オブジェクトに title / aria-label**: アイコンだけのトリガーに名前を付けられず、Rancha は自前ボタン + openAt にした。→ 予約外キーを素通し (§10.5 と同じく先に展開、契約属性が勝つ)
+- **key の注意**: 1 つの popup を全行で使い回すと項目 DOM が位置で再利用され、閉じアニメ中に掴んだ要素への click が別の操作 (launcher 起動) に当たった。ライブラリでは防げない (consumer の children の同一性は consumer しか知らない) ので SPEC §10.3.1f に「行で中身が変わるなら key」を明記、コード例にも key
+- **見送り**: 上に反転した popup がタイトルバーの最小化・最大化・閉じるに被さる → top layer の性質で、閉じれば戻る。実害小 (SPEC に事実として記載のみ)。Rancha の Temp フォルダで CPU が張り付く件は Rancha 側の不具合
+- **main の旧サンプル `examples/composite.html`** も `uiInlineMenu` を使っていたので `createPopup` + `openAt` に書き換え (develop では番号付きサンプルに置換済みで、このファイルは削除済み)
+- **テスト**: `tests/browser/uiPopupAlpha28.test.ts` 6 件 (全件 red first)。browser 197 / unit 727 (`uiInlineMenu` の 13 件を削除)。コア gzip 4,877B 不変、ui IIFE 27,135B
+
 ## 46. 行ごとの「…」メニューの canon を createPopup + openAt(element) に一本化、uiInlineMenu を非推奨 (2026-10-09、2.0.0-alpha.27、ユーザー決定)
 
 - **発端**: docs サイト 06 の行メニュー (`uiInlineMenu`) が最下部の行で下に開いて切れる (オーナー報告)。`uiInlineMenu` は親の中に `position: absolute` で置くだけで、向きは `anchor` 固定 = 画面端を見ない。統括は最初「ライブラリで自動反転 (alpha.27 案)」を提案 → ユーザー「createDropdown は自動で上に出る、使っていないのか」→ 行メニュー用の正規手段 `createPopup().openAt` が既にあることを説明

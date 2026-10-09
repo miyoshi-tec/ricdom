@@ -676,7 +676,7 @@ up" surfaces immediately in the console instead of failing silently.
 ### Stateless components are plain functions
 
 Anything without internal state — `uiButton`, `uiInput`, layout (`uiCol`/`uiRow`/`uiGrid`/
-`uiPanel`), `uiText`, `uiIcon`, markdown/code display, `uiInlineMenu` (deprecated, §10.3.1f), `bind*` — is just a
+`uiPanel`), `uiText`, `uiIcon`, markdown/code display, `bind*` — is just a
 function `(props) => RicNode`. There is nothing to register and no `Host`; call it directly
 in your render tree.
 
@@ -754,21 +754,29 @@ Multiple independent `createApp()` calls each get (or are given) their own porta
 is no global/shared portal registry and no cross-app portal stacking order to reason
 about.
 
-### FACT: Electron — portal elements need `-webkit-app-region: no-drag`
+### FACT: Electron — floating surfaces stay clickable over a draggable title bar (`2.0.0-alpha.28`)
 
-If your app's title bar (or any ancestor of the portal element) has
-`-webkit-app-region: drag` set (the standard way to make an Electron custom title bar
-draggable), that region also swallows clicks on anything rendered inside it — including a
-dialog/popup/toast/tooltip mounted into ricdom's portal, if the portal happens to sit under
-that draggable area. `-webkit-app-region` is not a normal CSS property that stops at
-`position: fixed`/`z-index` stacking contexts the way you'd expect; it is inherited
-independently of the box model. Add this one rule to your own stylesheet (not something
-`ricdom-ui.css` sets on your behalf — it's Electron-specific and irrelevant to every other
-target):
+In a frameless Electron window, the title bar's `-webkit-app-region: drag` area belongs to the
+OS: a click there is taken as a window drag before the page sees it, even when a dialog, popup,
+toast or tooltip is drawn on top of it. `ricdom-ui.css` therefore gives **every element inside
+the auto portal** `-webkit-app-region: no-drag` (a zero-specificity `:where()` rule, so your CSS
+can override it). Floating surfaces over the title bar take clicks with no app CSS at all. The
+property means nothing outside Electron (and PWA window-controls-overlay windows).
 
-```css
-[data-ricdom-role="portal"] { -webkit-app-region: no-drag; }
-```
+- **Changed in `2.0.0-alpha.28`.** Earlier versions of this FACT told you to add
+  `[data-ricdom-role="portal"] { -webkit-app-region: no-drag; }` and claimed the property was
+  "inherited independently of the box model". Both were wrong: `-webkit-app-region` is **not
+  inherited** (the popup body and its items computed `none` under a `no-drag` portal), and since
+  `2.0.0-alpha.26` the portal is a 0×0 box, so `no-drag` on the portal itself removed nothing
+  from the drag area. Measured by Rancha in Electron 32 on Windows 11 with OS-level clicks
+  (`SendInput`): with the portal-only rule, a popup item over the title bar received no
+  `pointerdown`; with `no-drag` on the portal's descendants, it worked. If you added the old
+  one-line rule, it is harmless and can be removed.
+- **Test with OS clicks, not CDP.** `Input.dispatchMouseEvent` (Playwright/CDP) injects events
+  straight into the renderer and bypasses the OS hit test that implements drag regions, so a
+  CDP-driven test passes with or without `no-drag`.
+- A popup that flips upward over the title bar also covers the window's minimize / maximize /
+  close buttons while it is open; they work again once it closes.
 
 ### FACT: Electron — hidden windows throttle both `requestAnimationFrame` and the `setTimeout` backstop (2.0.0-alpha.9)
 
@@ -876,7 +884,7 @@ themes set it to the literal string `'none'` so the token is always present (`ex
 round-trips it regardless of theme). `ricdom-ui.css` applies
 `backdrop-filter: var(--ric-surface-blur, none)` (plus the `-webkit-` prefix) to every
 **floating** surface: `.ric-dialog`, `.ric-toast__item`, `.ric-tooltip__popup`,
-`.ric-dropdown__body`, the tweak panel root (`.ric-tweak`), and `.ric-inline-menu`.
+`.ric-dropdown__body`, and the tweak panel root (`.ric-tweak`).
 `.ric-popup__body` and `.ric-panel` instead resolve through the existing `--ric-popup-blur`
 token, whose CSS fallback chain is now `var(--ric-popup-blur, var(--ric-surface-blur,
 none))` — `glass`/`glass-dark` set `--ric-popup-blur` to the same literal value as
@@ -974,8 +982,8 @@ The FACT above means `--ric-color-bg` overriding to `'transparent'` only clears 
 paint (`[data-ricdom-theme]`). Every floating or container surface in `ricdom-ui.css` is
 designed to keep its own opacity regardless of what the page background is set to, by
 reading a dedicated surface token instead: `.ric-dialog`/`.ric-toast__item` read
-`var(--ric-popup-bg, var(--ric-color-bg))`, `.ric-popup__body`/`.ric-dropdown__body`/
-`.ric-inline-menu` read `--ric-color-control`, `.ric-tooltip__popup` reads
+`var(--ric-popup-bg, var(--ric-color-bg))`, `.ric-popup__body`/`.ric-dropdown__body`
+read `--ric-color-control`, `.ric-tooltip__popup` reads
 `--ric-tooltip-bg`, and — new in `2.0.0-alpha.20` — `.ric-panel`/the tweak panel
 (`.ric-tweak`) read `var(--ric-panel-bg, var(--ric-color-bg))`. `--ric-panel-bg` is a new
 public token, present on all seven bundled palettes (`exportTheme`/`exportSettings` round-trip
@@ -1160,8 +1168,8 @@ indication anything was wrong. **The fallback behavior itself is unchanged** —
 adds a warning; a typo'd `applyTheme` call still renders with the same default it always
 did. Passing a `ThemeVars` object (your own CSS-variable map) or omitting the option
 entirely never warns, in either case, since neither represents a mistyped name. Like
-`createFocusWhen`'s "ref not found" warning and `uiInlineMenu`'s "parent has no position"
-warning, this is dev-build only. "Dev build" for `ricdom/ui` follows the same
+`createFocusWhen`'s "ref not found" warning,
+this is dev-build only. "Dev build" for `ricdom/ui` follows the same
 per-distribution-format rule as the core (§3, "Dev-mode warning for untracked deep
 assignment"): `dist/ricdom-ui.iife.min.js` has `__RICDOM_DEV__` inlined to `false` and
 all three warnings are removed by dead-code elimination (2.0.0-alpha.10 — before that, the
@@ -1539,6 +1547,13 @@ to match `PopupTriggerObject.label` in 2.0.0-alpha.12 (reported by the tenth pil
 could). Implementation is unchanged either way: `Array.isArray(label) ? label : [label]`
 becomes the label `<span>`'s `children`.
 
+Any other key on the object form — `title`, `aria-label`, `id`, `data-*` — is passed through
+to the trigger `<button>` (`2.0.0-alpha.28`; before, an icon-only trigger could carry neither a
+tooltip nor an accessible name, and an app kept its own button and opened the menu with
+`openAt` instead). Like the §10.5 rest-spread contract, these are applied first, so the
+component's own `class`, `data-ricdom-role`, `aria-haspopup`, `aria-expanded` and `onclick`
+always win.
+
 ### 10.3.1b FACT: `createTabs` panel-less mode
 
 If no `TabItem` in `items` has a `children` field, `createTabs` renders only the tab list
@@ -1564,6 +1579,14 @@ original `onclick` first, then closes.
   `'menuitem'` (e.g. a `role: 'separator'` divider you pass as one of `children`).
 - Applies identically regardless of how the menu was opened — from the trigger button or
   via `openAt()`.
+- **A child whose `role` is not an item role is not an item at all** (`2.0.0-alpha.28`). Children
+  are menu items when their `role` is omitted (it becomes `'menuitem'`) or is `'menuitem'`,
+  `'menuitemcheckbox'` or `'menuitemradio'`. Any other `role` — a divider
+  `{ tag: 'div', role: 'separator', class: 'ric-popup__sep' }`, a `'group'`, `'none'` — is passed
+  through untouched: no `data-ricdom-role="popup-item"`, no `tabIndex`, no `.ric-popup__item`.
+  Arrow keys / Home / End therefore skip it, and it keeps its own look. Before this release
+  every child got those three, so focus stopped on dividers and dividers picked up the item
+  border and hover color (an app reported overriding them by hand).
 
 ### 10.3.1e FACT: `createPopup`/`createDropdown` light dismiss (2.0.0-alpha.12)
 
@@ -1608,7 +1631,7 @@ A list whose rows each carry a "⋯" button does not register one popup per row.
 ```js
 let menu; // app.use(createPopup()) in setup
 // in render:
-menu({ children: [uiButton({ children: ['Rename'], onclick: () => rename(s.menuRow) })] }),
+menu({ children: [uiButton({ key: 'rename', children: ['Rename'], onclick: () => rename(s.menuRow) })] }),
 ...rows.map((row) => uiButton({
   'aria-haspopup': 'menu',
   onclick: (e) => { s.menuRow = row.id; menu.openAt(e.currentTarget); },
@@ -1629,12 +1652,39 @@ menu({ children: [uiButton({ children: ['Rename'], onclick: () => rename(s.menuR
   light dismiss (no document listener of your own) and the exclusive "one popup open at a
   time" rule. Set `aria-haspopup="menu"` (and `aria-expanded` if you track it) on the row
   buttons yourself — they are your elements.
-- **`uiInlineMenu` is deprecated** for this use. It positions itself with `position: absolute`
-  inside its parent in the fixed `anchor` direction, so on rows near the bottom of the screen it
-  opens downward and is cut off (an app had to measure and flip it by hand). It stays exported
-  until its remaining consumer has migrated, then it is removed (re-examine: when that migration
-  report arrives). It emits no runtime warning, so apps that test for "no dev warnings" keep
-  passing in the meantime.
+- **Give the items `key`s when the content depends on the row.** One popup serves every row,
+  so when it reopens on a different row, its item list is diffed against the previous row's.
+  Without keys, items are matched by position: the DOM node that was "Cut" becomes "Chrome".
+  A click already in flight on the closing menu (an end-to-end test that grabbed the element a
+  moment earlier) then lands on the wrong action. `key: 'act:cut'`, `key: 'launch:chrome'`, …
+  keep each action on its own node.
+- **It closes when the row scrolls.** The menu stays where it was opened (`position: fixed`),
+  so if the list scrolled under it, it would sit next to another row while still acting on the
+  first one — "Move to trash" on the wrong file. Since `2.0.0-alpha.28` any scroll of an element
+  that contains the anchor element, or of the page, closes it (§10.3.1g).
+- **`uiInlineMenu` was removed in `2.0.0-alpha.28`.** It positioned itself with
+  `position: absolute` inside its parent in a fixed `anchor` direction, so on rows near the bottom
+  of the screen or of a scroll container it opened downward and was cut off. It was deprecated in
+  `2.0.0-alpha.27`; its one consumer (Rancha) migrated to this canon and reported it could delete
+  its own direction measuring, outside-click listener and `position: relative` rows.
+
+### 10.3.1g FACT: popups and dropdowns close on scroll, and shrink to fit (`2.0.0-alpha.28`)
+
+Both stay at the spot where they opened (`position: fixed`), so two situations used to leave
+them in the wrong place:
+
+- **Scroll.** A `scroll` of the page (document), or of any element that contains the element the
+  menu was placed against (its trigger, or the element passed to `openAt(element)`), closes the
+  menu. Scrolling inside the menu itself (see below) does not. A menu opened at a point with
+  `openAt({ x, y })` has no anchor element and closes only when the page scrolls, so an
+  unrelated region that scrolls by itself (a log pane following its end) does not close a
+  context menu. A wheel scroll is not a `pointerdown`, which is why light dismiss (§10.3.1e) did
+  not cover this.
+- **Too tall for either side.** The menu opens below its anchor, or above when there is more room
+  above (§10.3.1). When the measured height fits neither, the body gets a `max-height` that keeps
+  it 8px inside the viewport on the chosen side and scrolls internally (`overflow-y: auto`), so
+  every item stays reachable. Before `2.0.0-alpha.28` it overflowed the viewport (in a 100px-tall
+  window, 6 of 7 items of an upward theme menu were above the top edge).
 
 ### 10.3.2 Stateful — `createFocusWhen`
 
@@ -1878,7 +1928,7 @@ extends to sub-parts of the portal-mounted components, not just their root:
 `toast-close` `tooltip` `tooltip-trigger` `dropdown` `dropdown-trigger` —
 `scroll-pane` `splitter` `splitter-side` `splitter-main` `splitter-divider`
 `splitter-toggle` `collapse-box` `accordion` `accordion-item` `accordion-header`
-`accordion-body` `accordion-title` `tabs` `tabs-bar` `tabs-tab` `tabs-panel` `inline-menu`
+`accordion-body` `accordion-title` `tabs` `tabs-bar` `tabs-tab` `tabs-panel`
 — `tweak-panel` `tweak-title` `tweak-folder` `tweak-folder-header` `tweak-folder-body`
 `tweak-row` `tweak-folder-summary` (§10.6) — `md-editor` `md-editor-mirror` (§13, `ricdom/md-editor`; the
 `<textarea>` inside it keeps the plain `textarea` role, unchanged).
