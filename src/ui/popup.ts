@@ -44,8 +44,10 @@ export interface PopupTriggerObject {
 
 export interface PopupProps {
   /** トリガーボタンの中身。`RicNode`/`RicNode[]` (中身をそのまま詰める) か、
-   *  見た目を指定する `PopupTriggerObject` のどちらか。 */
-  trigger: RicNode | RicNode[] | PopupTriggerObject;
+   *  見た目を指定する `PopupTriggerObject` のどちらか。
+   *  省略すると何も描かず (戻り値 null)、`openAt()` 専用のメニューになる — 行ごとの「…」
+   *  メニューを 1 インスタンスで賄う使い方 (2.0.0-alpha.27、SPEC §10.3.1f)。 */
+  trigger?: RicNode | RicNode[] | PopupTriggerObject;
   /** メニュー項目 (各要素に role="menuitem" が自動付与される) */
   children?: RicNode[];
   /**
@@ -75,8 +77,14 @@ export interface PopupPoint {
 export interface PopupInstance extends Component<PopupProps> {
   close(): void;
   isOpen(): boolean;
-  /** 任意の座標に開く (trigger ボタンを使わないケース用、v1 v0.4.3 継承) */
-  openAt(point: PopupPoint): void;
+  /**
+   * trigger ボタンを使わずに開く。
+   * - `openAt({ x, y })` / `openAt(mouseEvent)`: その点に開く (右クリックのコンテキストメニュー等、v1 v0.4.3 継承)
+   * - `openAt(element)`: その要素の下端の直下 (入らなければ上端の直上) に、トリガーから開くときと
+   *   同じ規則で開く。行ごとの「…」ボタンを渡す使い方 (2.0.0-alpha.27)。同じ要素で開いている
+   *   ときに再度呼ぶと閉じ、別の要素なら 1 回でそちらへ開き直す。閉じたらその要素へフォーカスを戻す
+   */
+  openAt(point: PopupPoint | Element): void;
 }
 
 let nextPopupId = 0;
@@ -149,6 +157,10 @@ export const createPopup = (): PopupInstance => {
   let menuChildrenLast: RicNode[] = [];
   let closeOnSelectLast = true;
   let restoreFocusEl: HTMLElement | null = null;
+  // openAt(element) で開いたときの基準要素 (2.0.0-alpha.27)。light dismiss がこの要素上の
+  // pointerdown を「外側」と見なさないために使う — 見なすと、同じ「…」をもう一度押したとき
+  // pointerdown で閉じ → click で開き直す、になり閉じられない。閉じ終わったら null に戻す。
+  let anchorEl: HTMLElement | null = null;
 
   const getBodyEl = (): HTMLElement | null => (typeof document === 'undefined' ? null : document.querySelector(`[data-ricdom-popup-id="${bodyMarker}"]`));
   // light dismiss (#A、2.0.0-alpha.12) が「トリガー上のクリックか」を判定するための参照。
@@ -173,6 +185,7 @@ export const createPopup = (): PopupInstance => {
     if (!isClosing) return;
     isOpen = false;
     isClosing = false;
+    anchorEl = null;
     guard.host?.notify();
   };
 
@@ -242,6 +255,7 @@ export const createPopup = (): PopupInstance => {
     if (body && body.contains(target)) return; // 本体内クリックでは閉じない
     const triggerEl = getTriggerEl();
     if (triggerEl && triggerEl.contains(target)) return; // トリガー上は既存の toggle に任せる (二重に閉じない)
+    if (anchorEl && anchorEl.contains(target)) return; // openAt(element) の基準要素も同じ (openAt 側が toggle する)
     doClose(); // 外側クリックはフォーカス復帰しない (Esc/項目活性化は closeAndRestoreFocus のまま)
   };
 
@@ -286,6 +300,34 @@ export const createPopup = (): PopupInstance => {
     if (canMeasure) requestAnimationFrame(remeasure);
   };
 
+  // 要素 (トリガーボタン、または openAt(element) の基準要素) の矩形を基準に開く。下端の直下に
+  // 入らなければ上端の直上に反転し、横は要素に揃えて viewport 内に収める。トリガー経路と
+  // openAt(element) 経路で共有する (2.0.0-alpha.27 に切り出し、以前はトリガーの onclick 内にあった)。
+  const openFromElement = (el: HTMLElement): void => {
+    restoreFocusEl = el;
+    const rect = el.getBoundingClientRect();
+    const initialDir = computeFlipDir(rect, 160);
+    beginMeasuredOpen(initialDir, computePos(rect, initialDir), () => {
+      if (!isOpen || isClosing) {
+        isMeasuring = false;
+        return;
+      }
+      const body = getBodyEl();
+      if (!body) {
+        isMeasuring = false;
+        guard.host?.notify();
+        return;
+      }
+      const measuredW = body.offsetWidth;
+      const measuredH = body.offsetHeight;
+      const newDir = computeFlipDir(rect, measuredH);
+      dir = newDir;
+      pos = computePos(rect, newDir, measuredW);
+      isMeasuring = false;
+      guard.host?.notify();
+    });
+  };
+
   const inst = ((props: PopupProps): RicNode => {
     const host = guard.ensure();
     if (!host) return null;
@@ -294,6 +336,10 @@ export const createPopup = (): PopupInstance => {
     closeOnSelectLast = props.closeOnSelect ?? true;
     bindKeydownIfNeeded();
     bindLightDismissIfNeeded();
+
+    // trigger 省略 = openAt() 専用 (2.0.0-alpha.27)。メニューの中身 (children / closeOnSelect) は
+    // 上で記録済みなので、トリガーボタンを描かずに終える。
+    if (props.trigger === undefined) return null;
 
     // object 形トリガー (2.0.0-alpha.2、PopupTriggerObject) は icon/label を
     // uiButton 相当の見た目 (.ric-button + --ghost + --sm/--lg) に組み立てる。
@@ -324,29 +370,8 @@ export const createPopup = (): PopupInstance => {
           closeAndRestoreFocus();
           return;
         }
-        const triggerEl = ev.currentTarget as HTMLElement;
-        restoreFocusEl = triggerEl;
-        const rect = triggerEl.getBoundingClientRect();
-        const initialDir = computeFlipDir(rect, 160);
-        beginMeasuredOpen(initialDir, computePos(rect, initialDir), () => {
-          if (!isOpen || isClosing) {
-            isMeasuring = false;
-            return;
-          }
-          const body = getBodyEl();
-          if (!body) {
-            isMeasuring = false;
-            guard.host?.notify();
-            return;
-          }
-          const measuredW = body.offsetWidth;
-          const measuredH = body.offsetHeight;
-          const newDir = computeFlipDir(rect, measuredH);
-          dir = newDir;
-          pos = computePos(rect, newDir, measuredW);
-          isMeasuring = false;
-          guard.host?.notify();
-        });
+        anchorEl = null; // トリガー経路は getTriggerEl() が light dismiss の例外を担う
+        openFromElement(ev.currentTarget as HTMLElement);
       },
       children: triggerChildrenLast,
     } as unknown as RicNode;
@@ -392,19 +417,35 @@ export const createPopup = (): PopupInstance => {
   inst.close = (): void => doClose();
   inst.isOpen = (): boolean => isOpen;
 
-  inst.openAt = (point: PopupPoint): void => {
-    if (isClosing) return;
-    if (!point || typeof point !== 'object') {
-      console.error('RicDOM UI: createPopup().openAt には { x, y } または { clientX, clientY } を持つオブジェクトを渡してください。');
+  inst.openAt = (point: PopupPoint | Element): void => {
+    // 要素の形 (2.0.0-alpha.27): 行ごとの「…」ボタン等を基準に、トリガーと同じ規則で開く。
+    // 閉じアニメーション中でも受け付ける — 別の行の「…」を押すと、pointerdown の light dismiss で
+    // 閉じ始めた直後にこの click が来るため、ここで弾くと 2 回押さないと開かない。
+    if (typeof Element !== 'undefined' && point instanceof Element) {
+      const el = point as HTMLElement;
+      if (isOpen && !isClosing && anchorEl === el) {
+        closeAndRestoreFocus(); // 同じ要素でもう一度 = 閉じる (トリガーの toggle と同じ)
+        return;
+      }
+      anchorEl = el;
+      openFromElement(el);
       return;
     }
-    const x = point.x ?? point.clientX;
-    const y = point.y ?? point.clientY;
+    if (isClosing) return;
+    if (!point || typeof point !== 'object') {
+      console.error('RicDOM UI: createPopup().openAt には要素、または { x, y } / { clientX, clientY } を持つオブジェクトを渡してください。');
+      return;
+    }
+    // ここに来るのは点の形だけ (要素は上で return 済み。`typeof Element` の確認を挟むので TS は絞り込めない)
+    const p = point as PopupPoint;
+    const x = p.x ?? p.clientX;
+    const y = p.y ?? p.clientY;
     if (typeof x !== 'number' || typeof y !== 'number' || Number.isNaN(x) || Number.isNaN(y)) {
       console.error('RicDOM UI: createPopup().openAt: x/y (または clientX/clientY) が数値ではありません。');
       return;
     }
-    restoreFocusEl = point.target instanceof HTMLElement ? point.target : (typeof document !== 'undefined' ? (document.activeElement as HTMLElement | null) : null);
+    anchorEl = null; // 点の形は基準要素を持たない (前回の openAt(element) の値を残さない)
+    restoreFocusEl = p.target instanceof HTMLElement ? p.target : (typeof document !== 'undefined' ? (document.activeElement as HTMLElement | null) : null);
     const initialDir = computeFlipDirAt(y, 160);
     beginMeasuredOpen(initialDir, computePosAt(x, y, initialDir, undefined), () => {
       if (!isOpen || isClosing) {
