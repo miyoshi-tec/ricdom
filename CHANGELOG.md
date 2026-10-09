@@ -5,6 +5,56 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.0.0-alpha.28] — not yet published
+
+From Rancha's migration report (`2026-10-09`): it moved every "⋯" menu to `createPopup` +
+`openAt(element)`, verified the result in Electron, and listed what still went wrong.
+
+### Removed
+
+- **`uiInlineMenu`** (and its `UiInlineMenuProps`/`UiInlineMenuAnchor` types, `.ric-inline-menu`
+  CSS and the `inline-menu` role). Deprecated in alpha.27; its only consumer has migrated. Use one
+  `createPopup()` without `trigger`, opened with `openAt(element)` — SPEC §10.3.1f.
+
+### Fixed
+
+- **Floating surfaces over an Electron title bar could not be clicked.** The SPEC told apps to put
+  `-webkit-app-region: no-drag` on the portal, but the property is not inherited and the portal
+  has been a 0×0 box since alpha.26, so the rule removed nothing from the drag area (Electron 32,
+  Windows 11, OS-level clicks: zero `pointerdown`). `ricdom-ui.css` now sets `no-drag` on every
+  element inside the portal (zero specificity). The old one-line app rule is harmless and can go.
+  SPEC §7 FACT rewritten.
+- **An open popup or dropdown no longer drifts away from its row on scroll.** It stayed at its
+  `position: fixed` spot while the list scrolled underneath, so a row menu could sit next to
+  another row while still acting on the first ("Move to trash" on the wrong file). It now closes
+  when the page, or any element containing its trigger / `openAt` element, scrolls. Scrolling
+  inside the menu does not close it; a point-opened `openAt({ x, y })` menu closes only on page
+  scroll. SPEC §10.3.1g.
+- **A menu too tall for either side is kept on screen.** It used to overflow the viewport (in a
+  100px-tall window, 6 of 7 items of an upward menu were unreachable). It now gets a `max-height`
+  8px inside the viewport on the chosen side and scrolls internally. Popup and dropdown.
+- **Dividers are no longer menu items.** Children whose `role` is not `menuitem`/
+  `menuitemcheckbox`/`menuitemradio` (e.g. `role: 'separator'` with `.ric-popup__sep`) are passed
+  through untouched: arrow keys skip them and they no longer get the item border and hover color.
+
+### Added
+
+- **`createPopup` trigger object passes extra attributes through** (`title`, `aria-label`, `id`,
+  `data-*`, …) to the trigger button, applied before the component's own `class`, role,
+  `aria-haspopup`, `aria-expanded` and `onclick`, which always win. An icon-only trigger can now
+  carry a tooltip and an accessible name.
+- SPEC §10.3.1f: give row-menu items `key`s when the content depends on the row — one popup
+  serves all rows, and without keys the DOM node of "Cut" is reused for "Chrome" when the menu
+  reopens elsewhere.
+
+### Tests
+
+- `tests/browser/uiPopupAlpha28.test.ts`, 6 cases, all red first: `no-drag` computed on the popup
+  body and items (`none` before), scroll of the container closes an `openAt(element)` menu, page
+  scroll closes a dropdown while its own internal scroll does not, a 60-item menu fits the
+  viewport and scrolls, a separator is skipped by `ArrowDown` and carries no item attributes, and
+  the trigger object passes `title`/`aria-label`/`data-*` without overriding `aria-haspopup`.
+
 ## [2.0.0-alpha.27] — not yet published
 
 Owner decision (`2026-10-09`): a "⋯" menu on every row should be built one way only.

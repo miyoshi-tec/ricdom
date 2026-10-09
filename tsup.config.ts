@@ -120,7 +120,7 @@ export default defineConfig([
   },
   {
     // ricdom/ui サブパスの ESM/CJS + 型宣言。コアと同じく consumer 側の bundler が
-    // 自分の NODE_ENV で置換する (ui 側の dev-only warn = focusWhen / inlineMenu / theme も
+    // 自分の NODE_ENV で置換する (ui 側の dev-only warn = focusWhen / theme も
     // src/ui/internal/pureHelpers.ts の isDevMode 経由で同じ NODE_ENV を見る)。
     entry: { ui: 'src/ui/index.ts' },
     format: ['esm', 'cjs'],
@@ -136,7 +136,7 @@ export default defineConfig([
     // `__RICDOM_DEV__` は src/ui/internal/pureHelpers.ts の独自 isDevMode / bakedDevMode
     // (コアの src/reactivity.ts と同じ規則の複製、ui はコアに実行時依存が無いため) が
     // 見る。コア修正時は define だけ先に置いてあり ui 側の判定が未対応だったが、
-    // 同じ 2.0.0-alpha.10 内で focusWhen / inlineMenu / theme の dev-only warn も
+    // 同じ 2.0.0-alpha.10 内で focusWhen / theme の dev-only warn も
     // この define で DCE されるようになった。
     entry: { 'ricdom-ui': 'src/ui/index.ts' },
     format: ['iife'],
@@ -158,7 +158,7 @@ export default defineConfig([
   {
     // dev 版 ui IIFE (`dist/ricdom-ui.iife.js`)。上のコア dev IIFE と同じ理由
     // (2.0.0-alpha.10、統括決定): `__RICDOM_DEV__: 'true'` で ui 側の dev-only warn
-    // (focusWhen / inlineMenu / theme) が `process` の無いブラウザでも無条件に有効になる。
+    // (focusWhen / theme) が `process` の無いブラウザでも無条件に有効になる。
     entry: { 'ricdom-ui': 'src/ui/index.ts' },
     format: ['iife'],
     globalName: 'ricdomUI',

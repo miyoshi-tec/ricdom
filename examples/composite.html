@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>RicDOM 2 — composite (splitter / scrollPane / collapseBox / accordion / tabs / dropdown / inlineMenu、no build step)</title>
+<title>RicDOM 2 — composite (splitter / scrollPane / collapseBox / accordion / tabs / dropdown / 行メニュー、no build step)</title>
 <link rel="stylesheet" href="../dist/ricdom-ui.css">
 <style>
   body { font-family: system-ui, sans-serif; margin: 0; }
@@ -15,8 +15,8 @@
 <body>
 <!--
   利用側はビルド不要 (設計書 G1)。IIFE 2 本 (ricdom → ricdom/ui) + CSS <link> だけで
-  状態を持つ部品群 (splitter/scrollPane/collapseBox/accordion/tabs/dropdown) と
-  純粋関数部品 (inlineMenu) が一覧できることの証明 (設計書 §7)。
+  状態を持つ部品群 (splitter/scrollPane/collapseBox/accordion/tabs/dropdown) と、
+  行ごとの「…」メニュー (createPopup 1 つを openAt で開く) が一覧できることの証明 (設計書 §7)。
   npm install も webpack/vite の設定も不要 — このファイルをブラウザで開くだけで動く。
 -->
 <div id="app"></div>
@@ -39,13 +39,13 @@
     detailsOpen: false,
     // dropdown
     sort: 'name',
-    // inlineMenu
-    menuForRow: null,
+    // 行の「…」メニュー (どの行に対するメニューか)
+    menuRow: null,
   };
 
   // 状態を持つ部品はモジュールスコープの変数に保持し、render の外・createApp 直後に use() する
   // (設計書 §3.4)。render 内では毎回呼ぶだけ。
-  let split, pane, box, acc, tabs, sortDD, actionsDD;
+  let split, pane, box, acc, tabs, sortDD, actionsDD, rowMenu;
 
   const themeRow = (s) =>
     U.uiRow({
@@ -171,32 +171,36 @@
       ],
     });
 
-  const inlineMenuDemo = (s) =>
+  // 行ごとの「…」メニュー: 全行で createPopup を 1 つだけ使う (SPEC §10.3.1f)。trigger を渡さないので
+  // 自分のボタンは描かず、各行の「…」から rowMenu.openAt(ボタン) で開く。下に入らなければ上に開き、
+  // Escape・項目の選択・外側のクリック・行を含む領域のスクロールで閉じる。どの行かは s.menuRow で持つ。
+  const rowMenuDemo = (s) =>
     U.uiCol({
       children: [
-        { tag: 'h2', children: ['uiInlineMenu (純粋関数、portal なし)'] },
+        { tag: 'h2', children: ['createPopup + openAt (行ごとの「…」メニュー)'] },
+        rowMenu
+          ? rowMenu({
+              children: [
+                U.uiButton({ children: ['名前を変更'], onclick: () => console.log('rename', s.menuRow) }),
+                U.uiButton({ children: ['削除'], onclick: () => console.log('delete', s.menuRow) }),
+              ],
+            })
+          : null,
         U.uiCol({
           children: ['行 A', '行 B'].map((row) => ({
             tag: 'div',
-            style: { position: 'relative', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 8px', border: '1px solid var(--ric-color-border)', borderRadius: 'var(--ric-radius)' },
+            style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 8px', border: '1px solid var(--ric-color-border)', borderRadius: 'var(--ric-radius)' },
             children: [
               row,
               U.uiButton({
                 variant: 'ghost',
+                'aria-haspopup': 'menu',
+                'aria-label': '行の操作',
                 children: ['⋯'],
                 onclick: (e) => {
-                  e.stopPropagation();
-                  s.menuForRow = s.menuForRow === row ? null : row;
+                  s.menuRow = row;
+                  rowMenu.openAt(e.currentTarget);
                 },
-              }),
-              U.uiInlineMenu({
-                open: s.menuForRow === row,
-                anchor: 'br',
-                onClose: () => { s.menuForRow = null; },
-                children: [
-                  U.uiButton({ children: ['名前を変更'], onclick: () => { s.menuForRow = null; } }),
-                  U.uiButton({ children: ['削除'], onclick: () => { s.menuForRow = null; } }),
-                ],
               }),
             ],
           })),
@@ -236,7 +240,7 @@
           U.uiSeparator(),
           dropdownDemo(s),
           U.uiSeparator(),
-          inlineMenuDemo(s),
+          rowMenuDemo(s),
         ],
       }),
   );
@@ -248,11 +252,7 @@
   tabs = app.use(U.createTabs());
   sortDD = app.use(U.createDropdown());
   actionsDD = app.use(U.createDropdown());
-
-  // 外クリックで inlineMenu を閉じる (v1 継承の運用: ライブラリは持たず呼び出し側で 1 つ書く)
-  document.addEventListener('click', () => {
-    if (state.menuForRow !== null) app.menuForRow = null;
-  });
+  rowMenu = app.use(U.createPopup());
 
   U.applyTheme(document.getElementById('app'), { theme: state.theme });
   const originalRender = app.render;

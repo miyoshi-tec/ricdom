@@ -24,7 +24,7 @@
 import type { ClassValue, RicNode, StyleValue } from '../types.js';
 import { ANIMATION_FALLBACK_MS, type AttachGuard, type Component, createAttachGuard, type Host } from './internal/component.js';
 import { UI_ROLE, mergeClass } from './internal/pureHelpers.js';
-import { clampLeft, computeAnchoredLeft, computeFlipDir, computeFlipDirAt, measuringLeft, type Pos, posToStyle } from './internal/popupPosition.js';
+import { clampLeft, computeAnchoredLeft, computeFlipDir, computeFlipDirAt, fitHeight, measuringLeft, type Pos, posToStyle, shouldCloseOnScroll } from './internal/popupPosition.js';
 import { closeOthers, registerExclusive, unregisterExclusive } from './internal/exclusiveRegistry.js';
 
 /**
@@ -40,6 +40,11 @@ export interface PopupTriggerObject {
   size?: 'sm' | 'md' | 'lg';
   class?: ClassValue;
   style?: StyleValue;
+  /** ツールチップ。アイコンだけのトリガーでは `aria-label` と合わせて付ける (2.0.0-alpha.28) */
+  title?: string;
+  /** その他の属性 (aria-label, data-*, id 等) はボタンへ素通しする (2.0.0-alpha.28)。
+   *  class・data-ricdom-role・aria-haspopup・aria-expanded・onclick は契約側が優先 */
+  [key: string]: unknown;
 }
 
 export interface PopupProps {
@@ -102,10 +107,17 @@ interface WrapMenuItemOptions {
 // ケースを拾う。
 const isMenuItemDisabled = (el: Record<string, unknown>): boolean => el.disabled === true || el['aria-disabled'] === 'true';
 
+// メニューの項目として扱う role (矢印キーの移動先になり、項目の装飾が付く)。
+const MENU_ITEM_ROLES = new Set(['menuitem', 'menuitemcheckbox', 'menuitemradio']);
+
 const wrapMenuItem = (node: RicNode, opts: WrapMenuItemOptions): RicNode => {
   if (node === null || typeof node !== 'object' || Array.isArray(node)) return node;
   const el = node as unknown as Record<string, unknown>;
   const role = (el.role as string | undefined) ?? 'menuitem';
+  // 項目ではない子 (区切り線の role="separator"、role="group"/"none" 等) は何も付けずに素通しする
+  // (2.0.0-alpha.28、Rancha の報告)。以前は popup-item の role・tabIndex・.ric-popup__item を一律に
+  // 付けていたため、矢印キーで区切り線にフォーカスが止まり、区切り線に項目の枠線・ホバー色が乗っていた。
+  if (!MENU_ITEM_ROLES.has(role)) return node;
   // menuitem の活性化 (click) で閉じる (#10、APG menu button パターン)。項目の onclick を
   // 先に呼んでから閉じる — consumer の onclick が `ev.stopPropagation()` していても
   // (ドキュメント全体の Esc/外側クリック監視をバイパスする意図であっても) 確実に閉じる
@@ -161,6 +173,9 @@ export const createPopup = (): PopupInstance => {
   // pointerdown を「外側」と見なさないために使う — 見なすと、同じ「…」をもう一度押したとき
   // pointerdown で閉じ → click で開き直す、になり閉じられない。閉じ終わったら null に戻す。
   let anchorEl: HTMLElement | null = null;
+  // 本体をどの要素の矩形に合わせて置いたか (トリガー、または openAt(element) の要素)。点の形の openAt
+  // では null。スクロールで閉じる判定 (handleScroll) が「その要素を含む領域が動いたか」を見るのに使う (alpha.28)。
+  let placedFrom: HTMLElement | null = null;
 
   const getBodyEl = (): HTMLElement | null => (typeof document === 'undefined' ? null : document.querySelector(`[data-ricdom-popup-id="${bodyMarker}"]`));
   // light dismiss (#A、2.0.0-alpha.12) が「トリガー上のクリックか」を判定するための参照。
@@ -259,14 +274,24 @@ export const createPopup = (): PopupInstance => {
     doClose(); // 外側クリックはフォーカス復帰しない (Esc/項目活性化は closeAndRestoreFocus のまま)
   };
 
+  // 基準要素を含む領域 (またはページ) のスクロールで閉じる (alpha.28、popupPosition.ts の
+  // shouldCloseOnScroll 参照)。基準要素は placedFrom (トリガー or openAt の要素)。openAt({x,y}) で
+  // 開いた場合は null で、ページのスクロールだけで閉じる。
+  const handleScroll = (ev: Event): void => {
+    if (!isOpen || isClosing) return;
+    if (shouldCloseOnScroll(ev.target, placedFrom, getBodyEl())) doClose();
+  };
+
   const bindLightDismissIfNeeded = (): void => {
     if (typeof document === 'undefined') return;
     if (isOpen && !lightDismissBound) {
       document.addEventListener('pointerdown', handleOutsidePointerDown, true);
+      document.addEventListener('scroll', handleScroll, { capture: true, passive: true });
       lightDismissBound = true;
     }
     if (!isOpen && lightDismissBound) {
       document.removeEventListener('pointerdown', handleOutsidePointerDown, true);
+      document.removeEventListener('scroll', handleScroll, true);
       lightDismissBound = false;
     }
   };
@@ -276,16 +301,19 @@ export const createPopup = (): PopupInstance => {
   // 行う (popupPosition.ts の `measuringLeft` コメント参照)。実測後は従来どおり
   // `computeAnchoredLeft`/`clampLeft` で最終位置を決める。トリガー経路・openAt 経路の
   // 両方で同じ関数を使う (dropdown とも共有)。
-  const computePos = (rect: DOMRect, chosenDir: 'below' | 'above', measuredWidth?: number): Pos => ({
+  // measuredH (実測後のみ) を渡すと、上下どちらにも入りきらないときに maxHeight で画面内に収める (alpha.28)。
+  const computePos = (rect: DOMRect, chosenDir: 'below' | 'above', measuredWidth?: number, measuredH?: number): Pos => ({
     top: chosenDir === 'below' ? rect.bottom + 4 : undefined,
     bottom: chosenDir === 'above' ? window.innerHeight - rect.top + 4 : undefined,
     left: measuredWidth === undefined ? measuringLeft() : computeAnchoredLeft(rect, measuredWidth),
+    maxHeight: measuredH === undefined ? undefined : fitHeight(chosenDir, chosenDir === 'below' ? rect.bottom + 4 : rect.top - 4, measuredH),
   });
 
-  const computePosAt = (x: number, y: number, chosenDir: 'below' | 'above', measuredWidth: number | undefined): Pos => ({
+  const computePosAt = (x: number, y: number, chosenDir: 'below' | 'above', measuredWidth: number | undefined, measuredH?: number): Pos => ({
     top: chosenDir === 'below' ? y + 4 : undefined,
     bottom: chosenDir === 'above' ? window.innerHeight - y + 4 : undefined,
     left: measuredWidth === undefined ? measuringLeft() : clampLeft(x, measuredWidth),
+    maxHeight: measuredH === undefined ? undefined : fitHeight(chosenDir, chosenDir === 'below' ? y + 4 : y - 4, measuredH),
   });
 
   const beginMeasuredOpen = (initialDir: 'below' | 'above', initialPos: Pos, remeasure: () => void): void => {
@@ -305,6 +333,7 @@ export const createPopup = (): PopupInstance => {
   // openAt(element) 経路で共有する (2.0.0-alpha.27 に切り出し、以前はトリガーの onclick 内にあった)。
   const openFromElement = (el: HTMLElement): void => {
     restoreFocusEl = el;
+    placedFrom = el;
     const rect = el.getBoundingClientRect();
     const initialDir = computeFlipDir(rect, 160);
     beginMeasuredOpen(initialDir, computePos(rect, initialDir), () => {
@@ -322,7 +351,7 @@ export const createPopup = (): PopupInstance => {
       const measuredH = body.offsetHeight;
       const newDir = computeFlipDir(rect, measuredH);
       dir = newDir;
-      pos = computePos(rect, newDir, measuredW);
+      pos = computePos(rect, newDir, measuredW, measuredH);
       isMeasuring = false;
       guard.host?.notify();
     });
@@ -351,8 +380,18 @@ export const createPopup = (): PopupInstance => {
     const triggerBaseClass = triggerObj
       ? mergeClass(['ric-button', triggerObj.ghost ? 'ric-button--ghost' : '', triggerObj.size && triggerObj.size !== 'md' ? `ric-button--${triggerObj.size}` : ''].filter(Boolean).join(' '), triggerObj.class)
       : 'ric-button';
+    // オブジェクト形の予約外のキー (title, aria-label, data-*, id 等) はボタンへ素通しする
+    // (2.0.0-alpha.28、Rancha の報告: アイコンだけのトリガーにツールチップもアクセシブルネームも
+    // 付けられなかった)。§10.5 の rest-spread 契約と同じく先に展開し、後に書く class・role・
+    // aria-haspopup・aria-expanded・onclick 等の契約の属性は上書きさせない。
+    let triggerRest: Record<string, unknown> = {};
+    if (triggerObj) {
+      const { icon: _icon, label: _label, ghost: _ghost, size: _size, class: _class, style: _style, ...rest } = triggerObj;
+      triggerRest = rest;
+    }
 
     return {
+      ...triggerRest,
       tag: 'button',
       class: `${triggerBaseClass}${isOpen ? ' ric-popup__trigger--open' : ''}`,
       ...(triggerObj?.style ? { style: triggerObj.style } : {}),
@@ -408,6 +447,7 @@ export const createPopup = (): PopupInstance => {
     }
     if (lightDismissBound && typeof document !== 'undefined') {
       document.removeEventListener('pointerdown', handleOutsidePointerDown, true);
+      document.removeEventListener('scroll', handleScroll, true);
       lightDismissBound = false;
     }
     if (guard.host) unregisterExclusive(guard.host.app, exclusiveSelf);
@@ -445,6 +485,7 @@ export const createPopup = (): PopupInstance => {
       return;
     }
     anchorEl = null; // 点の形は基準要素を持たない (前回の openAt(element) の値を残さない)
+    placedFrom = null;
     restoreFocusEl = p.target instanceof HTMLElement ? p.target : (typeof document !== 'undefined' ? (document.activeElement as HTMLElement | null) : null);
     const initialDir = computeFlipDirAt(y, 160);
     beginMeasuredOpen(initialDir, computePosAt(x, y, initialDir, undefined), () => {
@@ -462,7 +503,7 @@ export const createPopup = (): PopupInstance => {
       const measuredH = body.offsetHeight;
       const newDir = computeFlipDirAt(y, measuredH);
       dir = newDir;
-      pos = computePosAt(x, y, newDir, measuredW);
+      pos = computePosAt(x, y, newDir, measuredW, measuredH);
       isMeasuring = false;
       guard.host?.notify();
     });

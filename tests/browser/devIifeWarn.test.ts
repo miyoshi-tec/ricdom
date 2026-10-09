@@ -185,7 +185,7 @@ describe('実ブラウザ (process 未定義): 配列経由の深い代入は de
 
 // ricdom/ui 側の複製 (src/ui/internal/pureHelpers.ts の isDevMode/bakedDevMode) も
 // コアと同じ穴を抱えていたため、同じ規則で修正した (2.0.0-alpha.10)。focusWhen/
-// inlineMenu/theme の 3 箇所のうち、`applyTheme` (無効な theme/density/fontSize 名で
+// theme (当時は inlineMenu も) のうち、`applyTheme` (無効な theme/density/fontSize 名で
 // warn、src/ui/theme.ts の warnIfInvalidName) が最も単純に呼べるので代表としてテストする。
 interface RicdomUiGlobal {
   applyTheme: (el: Element, opts: { density?: string }) => void;

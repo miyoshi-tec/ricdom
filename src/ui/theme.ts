@@ -15,7 +15,7 @@
 //     タイポ (例 `density: 'md'` — 正しくは comfortable/compact/tight) を黙って既定値に
 //     落としており、consumer が誤設定に気づかないまま動いていた実例がある。挙動 (既定値
 //     フォールバック) 自体は変えず、気づけるようにするだけ (`src/ui/focusWhen.ts` /
-//     `src/ui/inlineMenu.ts` と同じ dev-only warn の慣例に揃える — `ricdom/ui` はコアへの
+//     `src/ui/focusWhen.ts` と同じ dev-only warn の慣例に揃える — `ricdom/ui` はコアへの
 //     実行時依存ゼロなので、コアの `isDevMode` を import せず `internal/pureHelpers.ts` に
 //     複製されたものを使う)。
 
@@ -225,7 +225,7 @@ const COLOR_VARS_AQUA: ThemeVars = {
 // 持たせているのはプレーンなブラウザでも単体で様になるようにするため (consumer は
 // Electron 側で `--ric-color-bg: transparent` に上書きする、docs/TUTORIAL.md §6 参照)。
 // 新設トークン `--ric-surface-blur` はフローティング面 (dialog/popup/dropdown/toast/
-// tooltip/panel/tweak/inline-menu) にかける backdrop-filter の実体 (cssTemplates.ts)。
+// tooltip/panel/tweak) にかける backdrop-filter の実体 (cssTemplates.ts)。
 // **`--ric-popup-blur` にも同じ値を "リテラルで" 重複代入する** (var() 経由にしない) —
 // exportTheme はインラインスタイルの生値をそのまま読み出すだけなので、var() 参照だと
 // ラウンドトリップ後に別要素へ当てたときに `--ric-surface-blur` 側が無いと解決できない
@@ -368,7 +368,7 @@ const FONT_SIZE_NAMES: readonly FontSizeName[] = ['sm', 'md', 'lg'];
 
 /**
  * 無効な theme/density/fontSize の文字列値を検知して console.warn する
- * (2.0.0-alpha.7、dev ビルドのみ — focusWhen/inlineMenu と同じ慣例)。object (ThemeVars)
+ * (2.0.0-alpha.7、dev ビルドのみ — focusWhen と同じ慣例)。object (ThemeVars)
  * や既知の名前、`undefined` (= 省略。既定値を使う正常系) は対象外。
  */
 const warnIfInvalidName = <T extends string>(kind: string, value: T | ThemeVars | undefined, validNames: readonly T[], fallbackLabel: string): void => {
