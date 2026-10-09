@@ -35,8 +35,8 @@ window.RICDOM_SAMPLES = [
     file: '06-splitter-scroll-pane.html',
     title: { en: 'Splitter, scroll pane and more', ja: 'スプリッター・スクロールペインほか' },
     blurb: {
-      en: 'Splitter, scroll pane, collapse box, accordion, tabs, dropdown and inline menu.',
-      ja: 'スプリッター、スクロールペイン、折りたたみ、アコーディオン、タブ、ドロップダウン、インラインメニュー。',
+      en: 'Splitter, scroll pane, collapse box, accordion, tabs, dropdown and a "⋯" menu on every row.',
+      ja: 'スプリッター、スクロールペイン、折りたたみ、アコーディオン、タブ、ドロップダウン、行ごとの「…」メニュー。',
     },
   },
   {

@@ -16,13 +16,13 @@
 <body>
 <!--
   06 Splitter, scroll pane and more: components for building the screen layout of an app.
-  splitter, scrollPane, collapseBox, accordion, tabs and dropdown keep state and are registered
-  with app.use(); inlineMenu is a plain function.
+  splitter, scrollPane, collapseBox, accordion, tabs, dropdown and the popup behind the row menus
+  keep state, so each is registered with app.use().
   No build step: two scripts (ricdom, then ricdom/ui) and one stylesheet.
 
   06 スプリッター・スクロールペインほか: アプリの画面の骨組みを作る部品です。
-  splitter・scrollPane・collapseBox・accordion・tabs・dropdown は状態を持つので app.use() で登録し、
-  inlineMenu はただの関数として使います。
+  splitter・scrollPane・collapseBox・accordion・tabs・dropdown と、行メニューに使う popup は状態を持つので、
+  それぞれ app.use() で登録します。
   ビルド不要: <script> 2 本 (ricdom → ricdom/ui) と CSS 1 本で動きます。
 -->
 <div id="app"></div>
@@ -64,7 +64,7 @@
   // アイコンのデータ (SVG のパス) は `npx ricdom-icon settings` で取得します。手書きはしません。
   const ICON_GEAR = { p: ['M12 2v2', 'M12 20v2', 'M4.93 4.93l1.41 1.41', 'M17.66 17.66l1.41 1.41', 'M2 12h2', 'M20 12h2', 'M4.93 19.07l1.41-1.41', 'M17.66 6.34l1.41-1.41', 'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z'] };
 
-  // App state, in order: the splitter, the chat (scroll pane), the details box, the sort dropdown and the inline menu.
+  // App state, in order: the splitter, the chat (scroll pane), the details box, the sort dropdown and the row menus.
   // アプリの状態です。上から順に、スプリッター・チャット (スクロールペイン)・詳細の開閉・並び順のドロップダウン・行のメニューで使います。
   const state = {
     sidebarCollapsed: false,
@@ -72,14 +72,15 @@
     draft: '',
     detailsOpen: false,
     sort: 'name',
-    menuForRow: null,
+    menuRow: null,
+    lastAction: '',
   };
 
   // Components that keep state are registered with app.use(). They are assigned in `setup` at the
   // bottom, which runs once before the first render, so render needs no "is it ready yet" check.
   // 状態を持つ部品は app.use() で登録します。登録は下の `setup` で行います。
   // setup は最初の描画の前に 1 回だけ実行されるので、render 側で「準備できたか」を確かめる必要はありません。
-  let split, pane, box, acc, tabs, sortDD, actionsDD;
+  let split, pane, box, acc, tabs, sortDD, actionsDD, rowMenu;
 
   // createSplitter: a side panel and a main area with a draggable divider. Passing `collapsed` and
   // `onCollapseChange` keeps the collapsed state in your own state.
@@ -241,42 +242,45 @@
       ],
     });
 
-  // uiInlineMenu is a plain function: the menu is drawn inside the row itself (the row's
-  // position: relative anchors it). Which row's menu is open lives in state.menuForRow.
-  // uiInlineMenu はただの関数で、メニューは行そのものの中に描かれます (行の position: relative が基準)。
-  // どの行のメニューが開いているかは state.menuForRow で持ちます。
-  const inlineMenuDemo = (s) =>
+  // A "⋯" menu on every row, with one createPopup for all rows. Called without `trigger`, it draws
+  // no button of its own; each row's "⋯" opens it with rowMenu.openAt(button). The menu opens under
+  // the button, or above it when there is no room below, and closes on Escape, on a choice or on a
+  // click elsewhere. Which row it acts on lives in state.menuRow.
+  // 行ごとの「…」メニューを、全行で 1 つの createPopup でまかないます。trigger を渡さないので自分のボタンは描かず、
+  // 各行の「…」から rowMenu.openAt(ボタン) で開きます。ボタンの下に開き、下に余地が無ければ上に開きます。
+  // Escape・項目の選択・外側のクリックで閉じます。どの行に対するメニューかは state.menuRow で持ちます。
+  const rowMenuDemo = (s) =>
     U.uiCol({
       children: [
-        { tag: 'h2', children: ['uiInlineMenu (pure function, no portal)'] },
+        { tag: 'h2', children: ['createPopup + openAt (a "⋯" menu on every row)'] },
+        rowMenu({
+          children: [
+            U.uiButton({ children: [t('Rename', { ja: '名前を変更' })], onclick: () => { s.lastAction = `${t('Rename', { ja: '名前を変更' })}: ${t(s.menuRow)}`; } }),
+            U.uiButton({ children: [t('Delete', { ja: '削除' })], onclick: () => { s.lastAction = `${t('Delete', { ja: '削除' })}: ${t(s.menuRow)}`; } }),
+          ],
+        }),
         U.uiCol({
           children: ['Row A', 'Row B'].map((row) => ({
             tag: 'div',
-            style: { position: 'relative', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 8px', border: '1px solid var(--ric-color-border)', borderRadius: 'var(--ric-radius)' },
+            style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 8px', border: '1px solid var(--ric-color-border)', borderRadius: 'var(--ric-radius)' },
             children: [
               t(row),
               U.uiButton({
                 variant: 'ghost',
+                // The row buttons are your own elements, so give them the menu-button attributes yourself.
+                // 行のボタンは自分の要素なので、メニューボタンであることを示す属性は自分で付けます。
+                'aria-haspopup': 'menu',
+                'aria-label': t('Row actions', { ja: '行の操作' }),
                 children: ['⋯'],
                 onclick: (e) => {
-                  // Keep this click from reaching the document listener below, which would close the menu again.
-                  // このクリックが下の document のリスナーに届くと、開いたメニューがすぐ閉じてしまうので止めます。
-                  e.stopPropagation();
-                  s.menuForRow = s.menuForRow === row ? null : row;
+                  s.menuRow = row;
+                  rowMenu.openAt(e.currentTarget);
                 },
-              }),
-              U.uiInlineMenu({
-                open: s.menuForRow === row,
-                anchor: 'br',
-                onClose: () => { s.menuForRow = null; },
-                children: [
-                  U.uiButton({ children: [t('Rename', { ja: '名前を変更' })], onclick: () => { s.menuForRow = null; } }),
-                  U.uiButton({ children: [t('Delete', { ja: '削除' })], onclick: () => { s.menuForRow = null; } }),
-                ],
               }),
             ],
           })),
         }),
+        U.uiText({ variant: 'muted', children: [s.lastAction] }),
       ],
     });
 
@@ -301,7 +305,7 @@
           U.uiSeparator(),
           dropdownDemo(s),
           U.uiSeparator(),
-          inlineMenuDemo(s),
+          rowMenuDemo(s),
         ],
       }),
     {
@@ -313,17 +317,10 @@
         tabs = a.use(U.createTabs());
         sortDD = a.use(U.createDropdown());
         actionsDD = a.use(U.createDropdown());
+        rowMenu = a.use(U.createPopup());
       },
     },
   );
-
-  // Close the inline menu on a click anywhere else. The library keeps no global listener for this,
-  // so the app writes this one. Write through `app` (the reactive handle), not the original `state`.
-  // どこか別の場所をクリックしたら行のメニューを閉じます。ライブラリはこのための全体リスナーを持たないので、アプリ側で 1 つ書きます。
-  // 書き込みは元の `state` ではなく、リアクティブな `app` を通して行います。
-  document.addEventListener('click', () => {
-    if (app.menuForRow !== null) app.menuForRow = null;
-  });
 
   // Site helper: t() returns a plain string, so draw again once when the language changes.
   // サイトの補助: t() の戻り値はただの文字列なので、言語が変わったら 1 回描き直します。
