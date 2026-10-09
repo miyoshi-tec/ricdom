@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.0.0-alpha.25] — not yet published
+
+Reported by the owner (`2026-10-09`): in the `03-forms` sample the textarea ran past the right
+edge of its panel.
+
+### Fixed
+
+- **Full-width controls overflowed their container.** `.ric-input`, `.ric-textarea` and
+  `.ric-select` have `width: 100%` plus padding and a 1px border but declared no
+  `box-sizing`, so `<input>` and `<textarea>` used the user-agent `content-box` and became
+  `100% + padding + border` wide (measured: 749.3px in a 720px column, 29.3px over). The
+  input mostly hid it because it sits in a shrinking flex row; a block-level textarea showed
+  it. v1 masked the same gap with a universal `box-sizing: inherit` reset under `.ric-page`,
+  which v2 dropped along with the page wrapper. All seven full-width rules
+  (`.ric-input`, `.ric-textarea`, `.ric-select`, `.ric-button`, `.ric-popup__item`,
+  `.ric-accordion__header`, `.ric-tweak-folder__header`) now declare
+  `box-sizing: border-box`; for `<select>` and `<button>` this only makes the existing
+  user-agent default explicit. SPEC §10.1 FACT.
+- **`uiTextarea({ autoResize })` was 2 × padding too tall** (an empty band under the last
+  line: 16px in the light theme) because it wrote the padding-box height into
+  `style.height` of a `content-box` element; in apps that reset textareas to `border-box` it
+  clipped the last line by the border width instead. It now reads the computed `box-sizing`
+  and converts, so the outer height is exactly rows × line-height + padding + border in both
+  models.
+- **Visible change**: block-level inputs and textareas become `padding + 2px` narrower (they
+  now fit), and auto-resizing textareas lose the extra bottom band. Apps that already use a
+  `border-box` reset see only the autoResize change (their last line is no longer clipped).
+- Tests (red first, `tests/browser/uiControlBoxSizing.test.ts`): with the alpha.24 CSS the
+  input/textarea were `content-box`, `.ric-button` became `content-box` under an app's
+  `button { box-sizing: content-box }`, and the autoResize height was 97px instead of 81px
+  for three lines (all confirmed failing, then passing). A fourth case pins the conversion
+  when an app sets `.ric-textarea { box-sizing: content-box }`.
+
 ## [2.0.0-alpha.24] — not yet published
 
 Owner decision (`2026-10-08`), found while giving the docs site one typeface: two of the four
