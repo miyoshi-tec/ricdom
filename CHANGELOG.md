@@ -5,6 +5,42 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.0.0-alpha.26] — not yet published
+
+Reported by the owner (`2026-10-09`): on the docs site, the "Source" dialog opened from the nav
+bar had its top half off screen.
+
+### Fixed
+
+- **Floating surfaces were trapped by the app's ancestors.** Dialogs, popups, dropdowns,
+  toasts and tooltips place themselves with `position: fixed`, which CSS resolves against
+  the nearest ancestor with `transform`/`filter`/`backdrop-filter`/`contain` instead of the
+  viewport. An app mounted in such an element (the docs nav bar has `backdrop-filter: blur()`)
+  showed its dialog centred on the 52px bar — top at -265px — with an overlay that covered
+  only the bar; a popup inside a `transform`ed box appeared ~300px below its trigger; toasts
+  lost to any page element with a higher `z-index`. v1 had the same structure (its popups and
+  tooltips compensated by searching ancestors; its dialog did not).
+- The app's own portal is now lifted into the browser's **top layer** with the Popover API
+  (`popover="manual"` + `showPopover()`) the first time a floating component renders. Top-layer
+  elements ignore their ancestors' containing blocks, overflow and z-index, while staying at
+  the same place in the DOM — theme variables, the dialog's `inert` handling, focus order,
+  `Escape`/outside-click behavior and the internal z-index order are unchanged.
+  `ricdom-ui.css` resets the popover user-agent styles so the portal is a 0×0 box that never
+  intercepts clicks. Not native `<dialog>.showModal()`: a modal dialog would make a dropdown
+  opened from inside it inert. SPEC §7 FACT; the §10.3 positioning FACT is updated.
+- Unchanged: an element passed as `portalTo` is not lifted. Browsers without the Popover API
+  (before 2024) keep the old behavior.
+- **Electron consumers with a frameless title bar** (`-webkit-app-region: drag`): the SPEC §7
+  rule `[data-ricdom-role="portal"] { -webkit-app-region: no-drag; }` is inherited through the
+  DOM, so it should keep working, but it has not been verified in Electron yet — please report
+  if a dialog or toast over the title bar stops taking clicks.
+- Tests (red first, `tests/browser/uiTopLayer.test.ts`, 8 cases): dialog centring and overlay
+  coverage under `backdrop-filter`, `transform` and `filter` ancestors (card centre 146px
+  instead of 448px before the fix), popup placement under a `transform`ed box (304px off),
+  a toast beating a `z-index: 2147483647` page element, the portal being a 0×0 box that leaves
+  app clicks alone, inherited `color`/variables despite the popover UA `color: CanvasText`,
+  and `portalTo` elements left untouched.
+
 ## [2.0.0-alpha.25] — not yet published
 
 Reported by the owner (`2026-10-09`): in the `03-forms` sample the textarea ran past the right

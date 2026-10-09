@@ -10,6 +10,7 @@
 // 無いと解決できないため。公開後の consumer は `import type { Host } from 'ricdom'` を使う)。
 import type { Host, RicNode } from '../../types.js';
 import { warnIfStylesMissing } from '../injectStyles.js';
+import { promotePortalToTopLayer } from './topLayer.js';
 
 export type { Host };
 
@@ -52,13 +53,23 @@ export interface AttachGuard {
   ensure: () => Host | null;
 }
 
+export interface AttachGuardOptions {
+  /**
+   * portal に描画する浮遊部品 (dialog / popup / dropdown / toast / tooltip) は true。
+   * attach 時と毎 render (ensure) で、アプリ専用 portal を top layer に上げる
+   * (internal/topLayer.ts、2.0.0-alpha.26)。
+   */
+  topLayer?: boolean;
+}
+
 /**
- * 4 部品 (dialog/popup/toast/tooltip) で共有する「host 未接続検知」の実装。
+ * 状態を持つ部品で共有する「host 未接続検知」の実装。
  * `componentName` はエラーメッセージに使う (例: 'createDialog')。
  */
-export const createAttachGuard = (componentName: string): AttachGuard => {
+export const createAttachGuard = (componentName: string, options: AttachGuardOptions = {}): AttachGuard => {
   let host: Host | null = null;
   let warned = false;
+  const { topLayer = false } = options;
 
   return {
     get host() {
@@ -68,12 +79,18 @@ export const createAttachGuard = (componentName: string): AttachGuard => {
       host = h;
       warned = false; // 再 attach (再 use()) されたら警告状態もリセットする
       if (typeof document !== 'undefined') warnIfStylesMissing(document);
+      if (topLayer) promotePortalToTopLayer(h.portal);
     },
     dispose: () => {
       host = null;
     },
     ensure: () => {
-      if (host) return host;
+      if (host) {
+        // 毎 render で確認する (既に上がっていれば matches 1 回で終わる)。attach 時点では
+        // target が未接続だった場合や、app を別の親へ移して popover が閉じた場合の再昇格。
+        if (topLayer) promotePortalToTopLayer(host.portal);
+        return host;
+      }
       if (!warned) {
         warned = true;
         console.error(

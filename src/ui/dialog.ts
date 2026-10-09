@@ -130,7 +130,7 @@ export const createDialog = (): DialogInstance => {
   const dialogRoleAttr = `ricdom-dialog-${id}`;
   const titleId = `ricdom-dialog-title-${id}`;
   const bodyId = `ricdom-dialog-body-${id}`;
-  const guard: AttachGuard = createAttachGuard('createDialog');
+  const guard: AttachGuard = createAttachGuard('createDialog', { topLayer: true });
 
   // 内部状態 (v1 継承の短縮名は付けず、素直な名前にする)
   let isOpenInternal = false; // uncontrolled 用

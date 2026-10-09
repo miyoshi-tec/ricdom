@@ -707,6 +707,47 @@ portal content (dialogs, toasts) to a specific place in the DOM regardless of wh
 `target` itself lives. When `portalTo` is set, the portal element is **not** managed as
 part of `target`'s child list (it is not a sentinel node inside the app's own tree).
 
+### FACT: the auto portal is lifted into the top layer, so floating surfaces ignore the app's ancestors (`2.0.0-alpha.26`)
+
+Dialogs, popups, dropdowns, toasts and tooltips each place themselves with
+`position: fixed`. CSS resolves a fixed element against the viewport **unless** an ancestor
+has `transform`, `filter`, `backdrop-filter`, `contain`, `perspective` or a matching
+`will-change` — then that ancestor becomes the containing block. ricdom-ui therefore lifts
+the app's own portal element into the browser's **top layer** with the Popover API: the first
+time a floating component renders, the portal gets `popover="manual"` and `showPopover()`.
+
+- **What this guarantees**: wherever you mount the app (a frosted-glass header, a
+  `transform`ed card, a `glass`-themed panel, a scroll container with `overflow: hidden`),
+  a dialog is centred in the viewport with its overlay covering the whole viewport, a popup
+  or tooltip sits next to its trigger, and toasts are drawn above every element on the page,
+  whatever its `z-index`.
+- **What does not change**: the portal stays where it is in the DOM, so it still inherits the
+  theme's CSS variables and `color` from the app; a dialog still makes the portal's siblings
+  `inert`; focus order, `Escape`, outside-click dismissal and the `toast > dialog >
+  popup/dropdown/tooltip` z-index order inside the portal are exactly as before. The Popover
+  API's own behaviors (light dismiss, `Escape`) do not apply to `popover="manual"`.
+- **Why not native `<dialog>.showModal()`**: a modal `<dialog>` makes everything outside
+  itself `inert`, including a dropdown or popup opened from inside the dialog (those render
+  into the same portal, outside the dialog element) — they would show but not take clicks.
+- **The portal is a 0×0 box** (`ricdom-ui.css` resets the popover user-agent styles with a
+  zero-specificity `:where()` rule): it never intercepts pointer events, and its children,
+  which are all `position: fixed`, are not clipped (`overflow: visible`). The existing
+  `[data-ricdom-role="portal"]:empty { display: none }` still hides it while empty.
+- **Only the auto portal is lifted.** An element you pass as `portalTo` is left alone: you
+  chose where it lives, and a `popover` attribute would apply the user-agent popover styles
+  to your element.
+- **Several apps on one page**: each app's portal enters the top layer the first time one of
+  its floating components renders, and a later entry is drawn above an earlier one. Two apps
+  showing modal dialogs at the same time therefore stack by that order, not by which dialog
+  opened last. Re-examine if a consumer reports this.
+- **No Popover API** (jsdom, browsers before 2024): nothing is lifted and the behavior is the
+  one described in the containing-block FACT under §10.3.
+- **Before `2.0.0-alpha.26`** (and in v1), the portal was an ordinary element inside `target`.
+  Mounting an app inside an element with one of the properties above pushed its dialogs off
+  screen (reported against the docs site: a dialog opened from a `backdrop-filter` nav bar
+  resolved `top: 50%` against the 52px bar), and toasts lost to any page element with a
+  higher `z-index`.
+
 ### One portal per app
 
 Multiple independent `createApp()` calls each get (or are given) their own portal — there
@@ -1413,16 +1454,13 @@ a `backdrop-filter`/`transform`/`filter` that would change what a `position: fix
 descendant is actually positioned relative to) plus `_get_expand_ref` (finding a "logical
 container" to decide which way an icon-mode menu should expand). Neither is ported to v2:
 there is no `.ric-page` concept to search from, and `createPopup`/`createDropdown` already
-treat the viewport as ground truth. In the common case (no `backdrop-filter`/`transform`/
-`filter` on an intervening ancestor) this makes no difference — a `position: fixed`
-element really is positioned relative to the viewport. It only diverges when the popup's
-DOM ancestor chain has such a property set (the `cyber`/`aqua` bundled themes use
-`backdrop-filter`/`blur()` inside `.ric-panel`, so a popup/dropdown nested inside a
-`cyber`/`aqua`-themed `.ric-panel` island could theoretically be positioned relative to
-that panel by the browser while `ricdom`'s own math still assumes the viewport) — in that
-case the computed `left`/`top` could be visually offset from the intended viewport-relative
-position. No such case has been reported in practice. Re-examine if a `cyber`/`aqua`
-`.ric-panel` popup/dropdown mispositioning is reported.
+treat the viewport as ground truth. **Since `2.0.0-alpha.26` that assumption always holds**:
+the app's portal is in the top layer (§7 FACT), so a `position: fixed` element inside it is
+positioned relative to the viewport no matter which `backdrop-filter`/`transform`/`filter`
+the app's ancestors carry. Before that release (and in browsers without the Popover API,
+where nothing is lifted) the popup's left/top were off by the offset of the nearest such
+ancestor — e.g. ~300px below the trigger for an app inside a `transform`ed box 300px down the
+page (measured in `tests/browser/uiTopLayer.test.ts`).
 
 #### 10.3.1 FACT: dialog focus-return control (`returnFocus`)
 
