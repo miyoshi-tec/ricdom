@@ -404,9 +404,33 @@ const TOOLTIP_CSS = `
 // contents 化すると要素の box が消えて region 指定ごと無効になる。また contents は
 // 一部ブラウザで子孫の a11y ツリー計算に既知の癖がある (フォーカス順序等) — 空の間しか
 // 効かない :empty の方がシンプルで副作用が無い。
+//
+// top layer (2.0.0-alpha.26、internal/topLayer.ts): 浮遊部品を使うアプリでは、自前 portal に
+// `popover="manual"` が付き top layer に上がる。popover の UA スタイル (fixed + inset:0 +
+// width/height:fit-content + margin:auto で中央寄せ、枠線、padding、overflow:auto、
+// color:CanvasText、background:Canvas) をここで打ち消し、portal を「左上に置いた幅 0・
+// 高さ 0 の fixed 箱」にする。中身はどれも自分で `position: fixed` を持つので箱の大きさに
+// 依存しない (overflow:visible なので切れない)。箱が 0×0 なので画面のクリックを奪わず、
+// pointer-events の細工も要らない。color:inherit が無いと、portal 内の文字色がアプリの
+// テーマではなく UA の CanvasText になる (CSS 変数は継承されるが color 自体は UA が上書き
+// する)。`:where()` で詳細度 0 にしてあるので consumer の規則が常に勝つ (UA 規則には
+// オリジンの差で必ず勝つ)。上の `:empty { display: none }` は popover が開いたままでも効く
+// (空の間は描画しない)。
 const PORTAL_CSS = `
 [data-ricdom-role="portal"]:empty {
   display: none;
+}
+:where([data-ricdom-role="portal"][popover]) {
+  position: fixed;
+  inset: 0 auto auto 0;
+  width: 0;
+  height: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  overflow: visible;
+  background: transparent;
+  color: inherit;
 }`;
 
 // ── 状態を持たない部品とレイアウト (設計書 §4/§13) ─────────────

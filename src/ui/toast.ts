@@ -42,7 +42,7 @@ export interface ToastInstance extends Component<void> {
  *   toast.show('保存しました', { type: 'success' });
  */
 export const createToast = (): ToastInstance => {
-  const guard: AttachGuard = createAttachGuard('createToast');
+  const guard: AttachGuard = createAttachGuard('createToast', { topLayer: true });
   const items: ToastItem[] = [];
   let nextId = 0;
 

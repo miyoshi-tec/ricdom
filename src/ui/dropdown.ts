@@ -69,7 +69,7 @@ let nextDropdownId = 0;
 export const createDropdown = (): DropdownInstance => {
   const id = ++nextDropdownId;
   const bodyMarker = `ricdom-dropdown-${id}`;
-  const guard: AttachGuard = createAttachGuard('createDropdown');
+  const guard: AttachGuard = createAttachGuard('createDropdown', { topLayer: true });
   const exclusiveSelf = { close: () => doClose() };
 
   let isOpen = false;

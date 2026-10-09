@@ -136,7 +136,7 @@ const wrapMenuItem = (node: RicNode, opts: WrapMenuItemOptions): RicNode => {
 export const createPopup = (): PopupInstance => {
   const id = ++nextPopupId;
   const bodyMarker = `ricdom-popup-${id}`;
-  const guard: AttachGuard = createAttachGuard('createPopup');
+  const guard: AttachGuard = createAttachGuard('createPopup', { topLayer: true });
 
   let isOpen = false;
   let isClosing = false;

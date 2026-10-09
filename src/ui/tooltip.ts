@@ -35,7 +35,7 @@ export type TooltipInstance = Component<TooltipProps>;
 export const createTooltip = (): TooltipInstance => {
   const id = ++nextTooltipId;
   const tooltipId = `ricdom-tooltip-${id}`;
-  const guard: AttachGuard = createAttachGuard('createTooltip');
+  const guard: AttachGuard = createAttachGuard('createTooltip', { topLayer: true });
 
   let isOpen = false;
   let pos: Pos = {};
