@@ -1358,9 +1358,13 @@ override the binding.
 ### FACT: every control inherits the page's font (`2.0.0-alpha.24`)
 
 `.ric-button`, `.ric-input`, `.ric-textarea` and `.ric-select` all carry
-`font-family: inherit; font-size: 1em`. ricdom-ui never chooses a typeface: set `font-family`
-once on `<body>` (or on the element you `applyTheme`) and every control follows it, the same
-way labels, panels and text do. The `--ric-*` tokens carry colors, radii, shadows, density
+`font-family: inherit; font-size: 1em`, and so does every other native form element ricdom-ui
+draws text in: the `<button>`s of `.ric-accordion__header`, `.ric-tabs__tab`,
+`.ric-dropdown__trigger`, `.ric-splitter__collapse-btn`, `.ric-dialog__close`,
+`.ric-toast__close` and `.ric-tweak-folder__header` (whose label and summary inherit from it)
+carry `font-family: inherit` with their own `font-size`. ricdom-ui never chooses a typeface:
+set `font-family` once on `<body>` (or on the element you `applyTheme`) and every control
+follows it, the same way labels, panels and text do. The `--ric-*` tokens carry colors, radii, shadows, density
 and font *size* — no font family, on purpose.
 
 - **Why this is a FACT and not the browser default**: the user-agent stylesheet gives
@@ -1376,6 +1380,11 @@ and font *size* — no font family, on purpose.
   Arial has none and the browser fell back to the OS Japanese font — on a non-Japanese OS
   that fallback can be a Chinese typeface). Apps that already reset `button, input { font-family:
   inherit }` see no change.
+- **Changed in `2.0.0-alpha.29`**: alpha.24 covered the four controls above but not the
+  component-internal `<button>`s listed after them, which stayed at the user-agent font
+  (tweak folder headers, accordion headers, tabs, dropdown triggers, the splitter's collapse
+  button and the ✕ of dialogs and toasts). A browser contract test now walks every form
+  element ricdom-ui renders (in the app and in the portal), so a new component cannot miss it.
 - **Opting out** is one line of app CSS after `ricdom-ui.css`: `.ric-button { font-family:
   ...; }` — same single-class specificity, later wins (see the base-layer FACT in §8).
 
@@ -1396,6 +1405,9 @@ A full-width control's outer box is exactly its container's content width: paddi
   `uiInput` outside a shrinking flex row) was therefore `100% + padding + border` wide and
   overflowed its container (light theme: 29px in the `03-forms` sample). Apps with their own
   `*, *::before, *::after { box-sizing: border-box }` reset see no change in width.
+  `.ric-input` also has `height: var(--ric-control-h)`, so its outer height lost the 2px of
+  its border at the same time: it is now exactly `--ric-control-h`, the same as `.ric-select`
+  (default `comfortable` density: 38px → 36px).
 - **`uiTextarea` `autoResize` reads the computed `box-sizing`** and converts its target
   height (rows × line-height + vertical padding) into the right `style.height` for either
   model, so the outer height is always rows × line-height + padding + border. Before

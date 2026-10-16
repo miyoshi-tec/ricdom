@@ -176,6 +176,18 @@ v1 は 5 か月・46 リリース・社内 11 アプリの実戦で API が磨�
 - **追報 4 (alpha.4 取り込み) で第 2 号は完了**: 再現スクリプト 5→5→5→5→5、E2E 10/10、回避策ゼロ。初報 10 + 追報 5 = 15 件が同日中に公式 API で閉じた
 - ~~観察 (対応なし)~~ → **§23 で実バグ (#14) と判明**。DPI 150% の実機で右端密着トリガーの dropdown body の `right` が `innerWidth` を 0.33px 超えた件、統括は「`clampLeft` が右端も収めるので最終位置では起き得ない、実測フェーズの rect を拾ったのでは」と判断したが誤り。consumer が再計測後 (200ms / 600ms) の inline `left` / `offsetWidth` / 本来幅を取り直し、**測った幅そのものが位置依存で過小**になっていることを示した (§23)。教訓: 「式は正しい」で止めず、式に入る実測値の取り方まで疑う
 
+## 48. 部品内部の `<button>` も書体を継承する = alpha.24 の取りこぼし (2026-10-16、2.0.0-alpha.29、ギア軽量化デモ報告)
+
+- **報告**: ギア軽量化デモが alpha.28 を取り込み (npm test 166 / e2e 7 合格)。body に `font-family: "Courier New"` を置くと、uiButton・uiInput・`.ric-tweak-row__label` は Courier New なのに、閉じた tweak フォルダの見出し・ラベル・要約は Arial (Chromium 140 / Chrome 155)。CSS を読んで `.ric-accordion__header`・`.ric-tabs__tab`・`.ric-dropdown__trigger--label` も同じと指摘
+- **取りこぼしの理由**: alpha.24 (§43) は「4 部品 (button / input / textarea / select)」を対象にし、テストも 4 部品を名指しで見ていた。部品が自前のクラスで描く `<button>` (見出し・タブ・トリガー・✕) は `.ric-button` を持たないので、4 部品の修正が届かない。§44 の box-sizing は CSS 全体を走査して 7 規則を見つけたのに、§43 は走査しなかった
+- **全数の確認**: `src/ui` で `tag: 'button' | 'input' | 'select' | 'textarea'` を描く箇所を全部洗い出し、指摘の 4 つに加えて `.ric-splitter__collapse-btn`・`.ric-dialog__close`・`.ric-toast__close` も UA 既定と判明 (計 7 規則、dropdown はアイコン形・ラベル形の両方が `.ric-dropdown__trigger`)。字形を描かない input (range / checkbox / radio / color) は対象外。popup の trigger と項目は `.ric-button`、md-editor の textarea は `uiTextarea` なので既に継承
+- **修正 (alpha.29)**: 7 規則に `font-family: inherit` を 1 行ずつ (font-size は各部品の既存値のまま)。tweak フォルダのラベル・要約は見出しから継承するので指定不要
+- **再発防止**: テストを「部品の一覧を手で持つ」形から、**全部品を描いてページ全体のフォーム要素を走査する** 形に変えた (アプリ内と portal 内の、文字を描く button / input / select / textarea すべてが body の書体と一致)。見落としやすい部品が実際に描かれていることも前提として assert する (描かれていなければ走査が空振りして偽の緑になる、§44 の教訓と同型)。red first で 8 要素が Arial と出ることを確認
+- **文書の補足 (同じ報告)**: alpha.25 の CHANGELOG は幅の変化しか書いていなかったが、`.ric-input` は `height: var(--ric-control-h)` を持つので border-box 化で外形の高さも 2px 低くなっていた (38 → 36px、`.ric-select` と同じ)。実測で確認するテストを足し、CHANGELOG の alpha.25 と SPEC §10.1 に追記
+- **統括の誤り (コミット前に訂正)**: SPEC に「portal は body 直下にあるので書体は body に」と書きかけたが、portal はマウント要素の中に入る (`src/app.ts` の `targetEl.appendChild(portalEl)`)。コードで確かめて削除
+- **テスト**: browser 199 (+2) / unit 727。コア gzip 4,877B 不変、ui IIFE 27,157B (+22B)
+- **教訓**: 「部品 X に性質 P を付けた」修正は、P が必要な要素を **型 (要素の種類) で全数走査** して確かめる。名前の付いた部品だけを見ると、部品の内部で同じ種類の要素を描いているものが漏れる
+
 ## 47. Rancha の移行報告 → uiInlineMenu 削除 + popup/dropdown の 5 件 (2026-10-09、2.0.0-alpha.28)
 
 - **報告の要点**: Rancha は `ui_inline_menu` 3 箇所 (一覧・ツリーの行、テーマメニュー) をすべて `createPopup` + `openAt` に移し、`_pick_menu_anchor`・`watch_outside_click`・document click リスナー・`.list-row { position: relative }` を削除。unit 902 / e2e 132 pass、dev 警告ゼロ。`uiInlineMenu` を消してよいと明言 → §46 の再検討条件を満たしたので **削除**

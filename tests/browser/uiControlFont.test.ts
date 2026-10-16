@@ -20,6 +20,14 @@ import { uiInput } from '../../src/ui/input.js';
 import { uiRange } from '../../src/ui/range.js';
 import { uiSelect } from '../../src/ui/select.js';
 import { uiTextarea } from '../../src/ui/textarea.js';
+import { createAccordion } from '../../src/ui/accordion.js';
+import { createDialog } from '../../src/ui/dialog.js';
+import { createDropdown } from '../../src/ui/dropdown.js';
+import { createPopup } from '../../src/ui/popup.js';
+import { createSplitter } from '../../src/ui/splitter.js';
+import { createTabs } from '../../src/ui/tabs.js';
+import { createToast } from '../../src/ui/toast.js';
+import { createTweakPanel } from '../../src/ui/tweakPanel.js';
 import { flush, setupApp } from '../_helpers/dom.js';
 
 injectStyles(document);
@@ -74,6 +82,85 @@ describe('実ブラウザ: フォームコントロールはページの書体�
 
     for (const sel of ['button.ric-button', 'input.ric-input', 'textarea.ric-textarea', 'select.ric-select']) {
       expect(getComputedStyle(app.querySelector(sel)!).fontSize, sel).toBe('19px');
+    }
+  });
+
+  // ギア軽量化デモの報告 (2.0.0-alpha.29): alpha.24 は「4 部品」だけを見ていたため、<button> で
+  // 描く見出し・トリガー・閉じるボタン (tweak フォルダ / accordion / tabs / dropdown / splitter /
+  // dialog・toast の ✕) が UA 既定の Arial のまま残っていた。部品の一覧を手で持つと次の部品で
+  // また漏れるので、「ricdom-ui が描いたフォーム要素はすべて」をページ全体の走査で確かめる。
+  it('ricdom-ui が描く文字入りのフォーム要素は、部品を問わずすべてページの書体になる (portal 内も含む)', async () => {
+    const app = setupApp();
+    const prevBodyFont = document.body.style.fontFamily;
+    // 書体は body に立てる (ギア軽量化デモの再現手順と同じ)。portal はマウント要素の中に入るので、
+    // dialog / toast の ✕ もここから継承する
+    document.body.style.fontFamily = PAGE_FONT;
+    try {
+      let acc: ReturnType<typeof createAccordion>;
+      let tabs: ReturnType<typeof createTabs>;
+      let ddLabel: ReturnType<typeof createDropdown>;
+      let ddIcon: ReturnType<typeof createDropdown>;
+      let split: ReturnType<typeof createSplitter>;
+      let dlg: ReturnType<typeof createDialog>;
+      let toast: ReturnType<typeof createToast>;
+      let tweak: ReturnType<typeof createTweakPanel>;
+      let pop: ReturnType<typeof createPopup>;
+      const handle = createApp('#app', {}, () => {
+        if (!acc) return null;
+        toast();
+        return {
+          tag: 'div',
+          children: [
+            acc({ items: [{ id: 'a', title: '見出し Header', children: ['a'] }] }),
+            tabs({ items: [{ key: 'a', label: 'タブ Tab', children: ['a'] }] }),
+            ddLabel({ label: '選択 Choose', children: [{ tag: 'div', children: ['x'] }] }),
+            ddIcon({ children: [{ tag: 'div', children: ['x'] }] }),
+            split({ side: [{ tag: 'div', children: ['side'] }], main: [{ tag: 'div', children: ['main'] }] }),
+            dlg({ triggerChildren: ['開く Open'], title: 't', children: ['本文 Body'] }),
+            tweak({ data: { gear: { teeth: 20 } }, keys: { gear: { summary: '要約 Summary' } } }),
+            pop({ trigger: { children: ['メニュー Menu'] }, children: [uiButton({ children: ['項目 Item'] })] }),
+          ],
+        };
+      });
+      acc = handle.use(createAccordion());
+      tabs = handle.use(createTabs());
+      ddLabel = handle.use(createDropdown());
+      ddIcon = handle.use(createDropdown());
+      split = handle.use(createSplitter());
+      dlg = handle.use(createDialog());
+      toast = handle.use(createToast());
+      tweak = handle.use(createTweakPanel());
+      pop = handle.use(createPopup());
+      handle.renderNow();
+      dlg.open();
+      toast.show('保存しました Saved');
+      await flush();
+
+      // 前提: 見落としやすい部品が実際に描かれている (描かれていなければ走査が空振りする)
+      for (const sel of [
+        '.ric-accordion__header', '.ric-tabs__tab', '.ric-dropdown__trigger--label', '.ric-dropdown__trigger',
+        '.ric-splitter__collapse-btn', '.ric-dialog__close', '.ric-toast__close',
+        '.ric-tweak-folder__header', '.ric-tweak-folder__label', '.ric-tweak-folder__summary',
+      ]) {
+        expect(document.querySelector(sel), `${sel} が描画されている`).not.toBeNull();
+      }
+
+      // 字形を描かない input (range / checkbox / radio / color) は対象外
+      const formEls = Array.from(
+        document.querySelectorAll<HTMLElement>(
+          'button, select, textarea, input:not([type="range"]):not([type="checkbox"]):not([type="radio"]):not([type="color"])',
+        ),
+      ).filter((el) => !el.closest('[data-vitest], #vitest-tester') && (app.contains(el) || el.closest('[data-ricdom-role="portal"]')));
+      expect(formEls.length).toBeGreaterThan(10);
+      const wrong = [
+        ...formEls,
+        ...document.querySelectorAll<HTMLElement>('.ric-tweak-folder__label, .ric-tweak-folder__summary'),
+      ]
+        .filter((el) => getComputedStyle(el).fontFamily !== PAGE_FONT)
+        .map((el) => `${el.tagName.toLowerCase()}.${String(el.className).trim().split(/\s+/)[0]} = ${getComputedStyle(el).fontFamily}`);
+      expect(wrong).toEqual([]);
+    } finally {
+      document.body.style.fontFamily = prevBodyFont;
     }
   });
 
