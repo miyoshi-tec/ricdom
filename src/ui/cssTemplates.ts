@@ -258,7 +258,7 @@ const DIALOG_CSS = `
   display: flex; align-items: center; justify-content: center;
   width: 24px; height: 24px;
   border: none; background: transparent; cursor: pointer;
-  color: ${fm}; font-size: 14px;
+  color: ${fm}; font-size: 14px; font-family: inherit;
   border-radius: ${r};
   transition: background 0.1s, color 0.1s;
 }
@@ -360,7 +360,7 @@ const TOAST_CSS = `
 .ric-toast__close {
   flex-shrink: 0; width: 20px; height: 20px;
   border: none; background: transparent; cursor: pointer;
-  color: ${fm}; font-size: 11px;
+  color: ${fm}; font-size: 11px; font-family: inherit;
   border-radius: ${r};
   display: flex; align-items: center; justify-content: center;
   transition: background 0.1s, color 0.1s;
@@ -1072,7 +1072,7 @@ const SPLITTER_CSS = `
   background: ${bg};
   border: ${b1};
   border-radius: 10px;
-  cursor: pointer;
+  cursor: pointer; font-family: inherit;
   display: flex; align-items: center; justify-content: center;
   font-size: 9px; color: ${fm};
   z-index: 2;
@@ -1110,7 +1110,7 @@ const ACCORDION_CSS = `
   width: 100%; padding: ${py} ${px};
   background: ${bg};
   border: none; cursor: pointer;
-  font-size: 1em; color: ${fg}; font-weight: 500;
+  font-size: 1em; font-family: inherit; color: ${fg}; font-weight: 500;
   text-align: left; user-select: none;
   transition: background ${da};
 }
@@ -1153,6 +1153,7 @@ const TABS_CSS = `
   margin-bottom: -1px;
   cursor: pointer;
   font-size: 1em;
+  font-family: inherit;
   color: ${fm};
   white-space: nowrap;
   transition: color 0.15s, border-bottom-color 0.15s, background 0.15s;
@@ -1198,7 +1199,7 @@ const DROPDOWN_CSS = `
   width: ${ch}; height: ${ch};
   border-radius: ${r};
   background: ${ct}; border: ${b1};
-  cursor: pointer; font-size: 18px; color: ${fg};
+  cursor: pointer; font-size: 18px; font-family: inherit; color: ${fg};
   display: flex; align-items: center; justify-content: center;
   transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
@@ -1333,7 +1334,7 @@ const TWEAK_CSS = `
   width: 100%; padding: ${g} ${gm};
   background: ${bg};
   border: none; cursor: pointer;
-  font-size: 0.9em; font-weight: 600; color: ${fg};
+  font-size: 0.9em; font-family: inherit; font-weight: 600; color: ${fg};
   text-align: left; user-select: none;
   transition: background ${da};
 }

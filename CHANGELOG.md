@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.0.0-alpha.29] — not yet published
+
+From the gear-lightweighting demo's alpha.28 report (`2026-10-16`).
+
+### Fixed
+
+- **Component-internal buttons now follow the page font too.** alpha.24 gave `.ric-button` and
+  `.ric-input` `font-family: inherit` but missed the `<button>`s that components draw with their
+  own class, which stayed at the user-agent font (Arial on Windows Chromium):
+  `.ric-tweak-folder__header` (and the folder label and summary inside it),
+  `.ric-accordion__header`, `.ric-tabs__tab`, `.ric-dropdown__trigger` (icon and label
+  forms), `.ric-splitter__collapse-btn`, `.ric-dialog__close` and `.ric-toast__close`. All
+  seven rules now declare `font-family: inherit`; their font sizes are unchanged. SPEC §10.1.
+- **Visible change** for apps without a CSS reset, on Windows: the Latin letters and digits in
+  these headers, tabs and triggers move from Arial to the page font, like the buttons and inputs
+  did in alpha.24.
+
+### Docs
+
+- alpha.25's visible change was incomplete: `.ric-input` has `height: var(--ric-control-h)`, so
+  `border-box` also made it 2px shorter (38px → 36px at the default density), now the same
+  height as `.ric-select`. Added to the alpha.25 entry below and to SPEC §10.1.
+
+### Tests
+
+- `tests/browser/uiControlFont.test.ts`: a new case renders every component that draws a native
+  form element (accordion, tabs, both dropdown forms, splitter, an open dialog, a toast, a tweak
+  folder with a summary, a popup trigger) and checks that every text-drawing `<button>`,
+  `<input>`, `<select>` and `<textarea>` in the app and its portal has the page font, instead of
+  listing the four controls by hand. Red first: 8 elements reported `Arial`.
+- `tests/browser/uiControlBoxSizing.test.ts`: `.ric-input` and `.ric-select` are both exactly
+  `--ric-control-h` tall.
+
 ## [2.0.0-alpha.28] — not yet published
 
 From Rancha's migration report (`2026-10-09`): it moved every "⋯" menu to `createPopup` +
@@ -151,7 +184,9 @@ edge of its panel.
   and converts, so the outer height is exactly rows × line-height + padding + border in both
   models.
 - **Visible change**: block-level inputs and textareas become `padding + 2px` narrower (they
-  now fit), and auto-resizing textareas lose the extra bottom band. Apps that already use a
+  now fit), and auto-resizing textareas lose the extra bottom band. `uiInput` is also 2px
+  shorter (38px → 36px at the default density; it has a fixed height), the same height as
+  `uiSelect` (added in alpha.29). Apps that already use a
   `border-box` reset see only the autoResize change (their last line is no longer clipped).
 - Tests (red first, `tests/browser/uiControlBoxSizing.test.ts`): with the alpha.24 CSS the
   input/textarea were `content-box`, `.ric-button` became `content-box` under an app's

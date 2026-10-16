@@ -57,6 +57,21 @@ describe('実ブラウザ: width:100% の部品は border-box で親からはみ
     }
   });
 
+  // ギア軽量化デモの補足 (alpha.29 で文書化): `.ric-input` は `height: var(--ric-control-h)` を
+  // 持つので、border-box 化で外形の高さも枠線の分 (2px) 低くなり、select と同じ高さになった。
+  it('height を持つ input と select の外形の高さは --ric-control-h ちょうどで揃う', async () => {
+    const app = themedApp();
+    createApp('#app', {}, () => ({ tag: 'div', children: [uiInput({ value: 'Alex' }), uiSelect({ value: 'a', options: ['a', 'b'] })] }));
+    await flush();
+
+    const controlH = parseFloat(getComputedStyle(app).getPropertyValue('--ric-control-h'));
+    expect(controlH).toBeGreaterThan(0); // 前提: テーマの寸法が当たっている
+    const inputH = (app.querySelector('input.ric-input') as HTMLElement).getBoundingClientRect().height;
+    const selectH = (app.querySelector('select.ric-select') as HTMLElement).getBoundingClientRect().height;
+    expect(inputH).toBeCloseTo(controlH, 0);
+    expect(selectH).toBeCloseTo(controlH, 0);
+  });
+
   it('UA 既定に依存せず、ボタン系 (button / popup item / accordion・tweak の見出し) も border-box を明示している', async () => {
     const app = themedApp();
     app.style.width = `${CONTAINER_W}px`;
