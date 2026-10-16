@@ -20,7 +20,9 @@ From the gear-lightweighting demo's alpha.28 report (`2026-10-16`).
   seven rules now declare `font-family: inherit`; their font sizes are unchanged. SPEC §10.1.
 - **Visible change** for apps without a CSS reset, on Windows: the Latin letters and digits in
   these headers, tabs and triggers move from Arial to the page font, like the buttons and inputs
-  did in alpha.24.
+  did in alpha.24. These rules leave `line-height` at `normal`, which depends on the font, so a
+  header can change height by about a pixel (gear-lightweighting demo, Segoe UI: tweak folder
+  rows 31px → 32px).
 
 ### Docs
 
