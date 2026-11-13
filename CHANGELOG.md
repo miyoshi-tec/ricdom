@@ -5,6 +5,55 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.0.0-alpha.30] — not yet published
+
+Reported by the gear DXF generator (`2026-11-13`), with a reproduction page and a proposed fix.
+
+### Fixed
+
+- **`uiSelect`: a selected label longer than the select spilled out of the box.** `.ric-select`
+  is drawn with `appearance: base-select`, where the selected text is ordinary text and wraps;
+  the box has a fixed height (`--ric-control-h`), so a long label became 2–3 lines that overlapped
+  the rows above and below (112px-wide select, 26px inner height, 42–45px of content). It showed
+  most in tweak panel rows, where a select is about 100px wide and a label like `S45C（炭素鋼）`
+  no longer fits. The select now starts with `<button><selectedcontent></selectedcontent></button>`
+  — the element the browser copies the selected option into — styled as a shrinking single-line
+  box with `text-overflow: ellipsis`. Long labels are cut with "…", the arrow stays visible, the
+  height stays `--ric-control-h`, and the opened list still shows every label in full.
+  SPEC §10.1 FACT.
+- **Not fixable in CSS alone** (tried, as the report did): `white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis` on `.ric-select` clips the text without an ellipsis and pushes the
+  arrow out of the box, with `display: flex` or `block`.
+
+### Changed
+
+- `uiSelect`'s first child element is now the `<button>`, not the first `<option>`.
+  `select.options`, `value`, `selectedIndex`, events, keyboard focus and the accessibility tree
+  are unchanged (checked against Chromium's own AX tree: one combobox, no extra button). Code or
+  tests that read `select.children[0]` / `firstElementChild` should use `select.options[0]`.
+- Browsers without `base-select` are unaffected: verified in Electron 32 (Chromium 128), where the
+  select is drawn natively, the button takes no space and `value`/`change` work as before.
+
+### Known limit
+
+- While a select **has focus**, a render that changes the label of its selected option leaves the
+  old label in the closed box until a render after focus has left (the browser does not re-copy on
+  a text change, and the editing guard skips the `value` re-assignment that refreshes it for
+  unfocused selects). `select.value` stays correct. Typical trigger: a language picker that
+  translates its own option labels. Replacing the `<selectedcontent>` element by `key` does not
+  help — it is the first child, so it is inserted before the option texts are patched. Fixing it
+  needs a change in the core's select handling; left for an owner decision (DESIGN §49).
+
+### Tests
+
+- `tests/browser/uiSelectOverflow.test.ts`, 7 cases, all red first: every option fits in a 112px
+  select and a long one is ellipsized with room left for the arrow; no ellipsis at 320px; a tweak
+  panel row; picking from the list updates the text and fires `change`; a label change is followed
+  (and the focused-select limit is pinned as current behavior); the inner button is not a tab
+  stop and the opened list is not truncated; placeholder, replaced options and no options.
+- `tests/ui/select.test.ts`: options are read after the leading button; one new case for the
+  button node.
+
 ## [2.0.0-alpha.29] — not yet published
 
 From the gear-lightweighting demo's alpha.28 report (`2026-10-16`).

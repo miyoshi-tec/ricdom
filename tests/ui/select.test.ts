@@ -16,9 +16,12 @@ interface TestSelectNode {
   disabled?: boolean;
   'data-ricdom-role'?: string;
   onchange?: (ev: unknown) => void;
-  children: TestOptionNode[];
+  children: unknown[];
   [key: string]: unknown;
 }
+
+// 子の先頭は選んだ文字の表示先 (<button><selectedcontent>、2.0.0-alpha.30)、option はその後ろ
+const optionsOf = (node: TestSelectNode): TestOptionNode[] => node.children.slice(1) as TestOptionNode[];
 
 describe('uiSelect', () => {
   it('文字列 options を { value, label } に正規化する', () => {
@@ -27,27 +30,34 @@ describe('uiSelect', () => {
     expect(node.class).toBe('ric-select');
     expect(node['data-ricdom-role']).toBe('select');
     expect(node.value).toBe('b');
-    expect(node.children.map((o) => o.value)).toEqual(['a', 'b', 'c']);
-    expect(node.children[1]!.children).toEqual(['b']);
+    expect(optionsOf(node).map((o) => o.value)).toEqual(['a', 'b', 'c']);
+    expect(optionsOf(node)[1]!.children).toEqual(['b']);
   });
 
   it('{ value, label } 形式の options を扱える', () => {
     const node = uiSelect({ options: [{ value: 'ja', label: '日本語' }] }) as unknown as TestSelectNode;
-    expect(node.children[0]!.value).toBe('ja');
-    expect(node.children[0]!.children).toEqual(['日本語']);
+    expect(optionsOf(node)[0]!.value).toBe('ja');
+    expect(optionsOf(node)[0]!.children).toEqual(['日本語']);
   });
 
   it('placeholder があると先頭に選択不可オプションが追加される', () => {
     const node = uiSelect({ options: ['a'], placeholder: '選んでください' }) as unknown as TestSelectNode;
-    expect(node.children.length).toBe(2);
-    expect(node.children[0]!.value).toBe('');
-    expect(node.children[0]!.disabled).toBe(true);
-    expect(node.children[0]!.children).toEqual(['選んでください']);
+    expect(optionsOf(node).length).toBe(2);
+    expect(optionsOf(node)[0]!.value).toBe('');
+    expect(optionsOf(node)[0]!.disabled).toBe(true);
+    expect(optionsOf(node)[0]!.children).toEqual(['選んでください']);
   });
 
   it('placeholder が無ければ選択不可オプションは追加されない', () => {
     const node = uiSelect({ options: ['a'] }) as unknown as TestSelectNode;
-    expect(node.children.length).toBe(1);
+    expect(optionsOf(node).length).toBe(1);
+  });
+
+  it('子の先頭は <button><selectedcontent> で、selectedcontent は island (中身はブラウザが書く)', () => {
+    const node = uiSelect({ options: ['a'] }) as unknown as TestSelectNode;
+    expect(node.children[0]).toEqual({ tag: 'button', children: [{ tag: 'selectedcontent', island: true }] });
+    // 選択肢が無くても先頭の子は変わらない (子の位置がずれると option の差分がずれる)
+    expect((uiSelect() as unknown as TestSelectNode).children).toEqual([{ tag: 'button', children: [{ tag: 'selectedcontent', island: true }] }]);
   });
 
   it('rest スプレッドで onchange/disabled/id/class 等を透過する', () => {

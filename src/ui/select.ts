@@ -48,6 +48,23 @@ export const uiSelect = ({ value = '', options = [], placeholder, disabled = fal
     }),
   ];
 
+  // 選んだ文字の表示先 (2.0.0-alpha.30、歯車DXFジェネレーターの報告)。`appearance: base-select`
+  // のセレクトでは、先頭の子の <button> が枠の中身になり、<selectedcontent> には「いま選ばれて
+  // いる option の中身」をブラウザが写して入れる。ここに 1 行で省略 (…) する CSS を当てる
+  // (cssTemplates.ts の SELECT_CSS)。これが無いと、選んだ文字は折り返して枠の上下にはみ出す。
+  //   - island: 中身を書くのはブラウザなので、ricdom の差分の対象から外す
+  //   - ブラウザが写し直すのは「選択が変わったとき」「selectedIndex / value が代入されたとき」
+  //     「この要素が挿入されたとき」だけで、選ばれている option の文字が後から変わっても
+  //     写し直さない (Chromium 140 で実測)。コアは毎 render で子を patch した後に select.value を
+  //     入れ直す (reapplySelectValue) ので、普段はその render で追従する。**フォーカス中だけは
+  //     編集中ガードで入れ直さないので、フォーカスが外れた後の render まで古い文字が残る**
+  //     (SPEC §10.1 の FACT、設計書 §49 に経緯と見送りの理由)。
+  //   - この要素に「選択肢の文字の並び」の key を付けて作り直させる案は効かない。先頭の子なので
+  //     option の文字が patch される前に挿入され、ブラウザは古い文字を写す (実測)。
+  //   - base-select に対応していないブラウザでは、<select> は option 以外の子を描かないので
+  //     従来どおりの見た目になる。
+  const selectedContent = { tag: 'button', children: [{ tag: 'selectedcontent', island: true }] } as RicElementNode;
+
   return {
     ...rest,
     tag: 'select',
@@ -56,6 +73,6 @@ export const uiSelect = ({ value = '', options = [], placeholder, disabled = fal
     value,
     ...(onchange ? { onchange } : {}),
     ...(disabled ? { disabled: true } : {}),
-    children: optionNodes,
+    children: [selectedContent, ...optionNodes],
   } as RicElementNode;
 };

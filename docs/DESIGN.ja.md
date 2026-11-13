@@ -176,6 +176,24 @@ v1 は 5 か月・46 リリース・社内 11 アプリの実戦で API が磨�
 - **追報 4 (alpha.4 取り込み) で第 2 号は完了**: 再現スクリプト 5→5→5→5→5、E2E 10/10、回避策ゼロ。初報 10 + 追報 5 = 15 件が同日中に公式 API で閉じた
 - ~~観察 (対応なし)~~ → **§23 で実バグ (#14) と判明**。DPI 150% の実機で右端密着トリガーの dropdown body の `right` が `innerWidth` を 0.33px 超えた件、統括は「`clampLeft` が右端も収めるので最終位置では起き得ない、実測フェーズの rect を拾ったのでは」と判断したが誤り。consumer が再計測後 (200ms / 600ms) の inline `left` / `offsetWidth` / 本来幅を取り直し、**測った幅そのものが位置依存で過小**になっていることを示した (§23)。教訓: 「式は正しい」で止めず、式に入る実測値の取り方まで疑う
 
+## 49. uiSelect の選んだ文字が枠からはみ出す → `<button><selectedcontent>` を先頭に置く (2026-11-13、2.0.0-alpha.30、歯車DXFジェネレーター報告)
+
+- **報告**: 選んだ選択肢の文字がセレクトの幅より長いと 2〜3 行に折り返し、高さ固定 (`--ric-control-h`) の枠の上下にはみ出して前後の行と重なる。tweak パネルの行 (セレクト幅 100px 前後) では「S45C（炭素鋼）」程度で起きる。再現ページ・実測表・修正案 (先頭に `<button><selectedcontent>`、island) つき。「確かめていないこと」も明記されていた (ricdom に組み込んだ動作、フォーカス中の追従、base-select 非対応ブラウザ)
+- **再現 (Playwright の Chromium 140)**: 幅 112px・compact 密度で、枠の内寸 26px に対して中身 42〜45px。報告どおり
+- **原因**: `.ric-select` は `appearance: base-select`。この見た目では選んだ文字が普通の文字として流し込まれ、折り返す (OS 描画のセレクトは 1 行で切る)。v1 の `ric_ui/css_templates.js` も同じ構成 (base-select + flex + 高さ固定、nowrap なし) なので同じ問題を持つはず (v1 では未実測、v1 は保守モードで今回は触らない)
+- **CSS だけでは直らない (統括も別形で実測)**: 報告の B (flex のまま nowrap + overflow + ellipsis) は「…が出ず矢印が枠外」。統括が試した block 配置 + `::picker-icon` の絶対配置も、文字は切れるが「…」も矢印も出ない。選んだ文字の箱に CSS を当てる手段が、`<selectedcontent>` を置く以外に無い
+- **修正 (alpha.30)**: 報告の案を採用。`uiSelect` の子の先頭に `{ tag: 'button', children: [{ tag: 'selectedcontent', island: true }] }`、CSS は `.ric-select > button { display: contents }`・`selectedcontent` に `flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap`・`::picker-icon { flex: none }`。コアは無変更
+- **報告が未確認としていた 3 点を統括が確認**:
+  - ricdom 上の動作: island で足りる。build は「button → option → value の再適用」の順になり、ブラウザが写す。選択肢の入れ替え・placeholder・選択肢なしでも先頭の子はずれない
+  - base-select 非対応: Rancha に入っている Electron 32.3.3 (Chromium 128) の実機で、ネイティブ描画・ボタンは 0×0・value / change は従来どおり、を確認 (Rancha のファイルには触らず、バイナリだけ借りてスクラッチのページを開いた)
+  - a11y: Chromium 自身の AX ツリー (CDP `Accessibility.getFullAXTree`) は修正前後で同一 (combobox 1 つ、ボタンは出ない)。Tab も中のボタンに止まらない。Playwright の `ariaSnapshot` は自前実装でボタンを列挙するので、この確認には使えない
+- **既知の制限 (報告の推測が当たっていた)**: フォーカス中のセレクトで、選んでいる選択肢の文字が render で変わると、枠の中は古い文字のまま。ブラウザが写し直す条件を実測した: 選択の変更 ○ / `select.value = 同じ値` ○ (ただし同じ value の option が複数あると先頭に選択が移る = 無害ではない) / `selectedIndex = selectedIndex` ○ (選択は不変) / `<selectedcontent>` の差し替え ○ / `option.selected = true` × / option の文字の変更 ×。フォーカスが無ければコアの `reapplySelectValue` が毎 render で value を入れ直すので追従する。フォーカス中は編集中ガード (§3.2) が入れ直しを止める
+- **ui だけで塞ごうとして失敗した案**: `<selectedcontent>` に「選択肢の文字の並び」の key を付けて作り直させる → 先頭の子なので **option の文字が patch される前に** 挿入され、古い文字が写る (red のまま)。ボタンを option の後ろに置けば順序は合うが、HTML の content model (button は先頭) に反する
+- **コアで塞ぐ案 (見送り、オーナー判断待ち)**: 編集中ガードで value を入れ直さない分岐で `selectedIndex = selectedIndex` を実行すれば写し直される。ただし (a) 「コアに機能を足さない」(§13) に触れる (b) `multiple` では選択が 1 つに潰れるので除外が要る (c) base-select 非対応の古い Chromium で、一覧を開いてキーボードで選んでいる最中に render が走ると、ハイライトが確定済みの選択に引き戻される恐れがある (編集中ガードが守っている状況そのもの、未検証)。条件を「`<selectedcontent>` の文字と選択中の option の文字が違うときだけ」に絞れば安全だが、コアが ui の都合の要素名を知ることになる。**再検討の条件: この制限を踏んだ consumer の報告 (言語を選ぶセレクトが自分の選択肢を翻訳する構成など)、またはオーナーの指示**
+- **互換性**: `select.children[0]` / `firstElementChild` が option でなくなる (`select.options` は不変)。ライブラリ内でこれに依存していたのは `tests/ui/select.test.ts` だけ。consumer の e2e が依存していれば直す必要がある → CHANGELOG と SPEC に明記
+- **テスト**: `tests/browser/uiSelectOverflow.test.ts` 7 件 (全件 red first)。既知の制限は「フォーカス中は古いまま、外れた後の render で追従」を現状の挙動として固定 (直したら書き換える)。browser 206 (+7) / unit 728 (+1)。コア gzip 4,877B 不変、ui IIFE 27,206B (+49B)
+- **作業ツリーの異常 (記録)**: 着手時、main の作業ツリーで CHANGELOG.md と DESIGN.ja.md が「変更あり」になっていた。中身は tag `v2.0.0-alpha.29` の版と完全一致 (= §48 の確認記録より前の内容)。10-18 に別セッションが tag を checkout した後の切り替えで取り残されたもので、新しい作業ではないと確かめてから HEAD に戻した
+
 ## 48. 部品内部の `<button>` も書体を継承する = alpha.24 の取りこぼし (2026-10-16、2.0.0-alpha.29、ギア軽量化デモ報告)
 
 - **報告**: ギア軽量化デモが alpha.28 を取り込み (npm test 166 / e2e 7 合格)。body に `font-family: "Courier New"` を置くと、uiButton・uiInput・`.ric-tweak-row__label` は Courier New なのに、閉じた tweak フォルダの見出し・ラベル・要約は Arial (Chromium 140 / Chrome 155)。CSS を読んで `.ric-accordion__header`・`.ric-tabs__tab`・`.ric-dropdown__trigger--label` も同じと指摘
