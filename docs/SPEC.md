@@ -1340,7 +1340,7 @@ the accessibility contract, which is FACT that is easy to miss by reading types 
 | `uiTextarea(props)` | `autoResize?: { minRows?, maxRows? }` grows/shrinks height to content, clamped, with overflow scrolling past `maxRows`. **IME note**: a controlled textarea can have its value overwritten mid-composition before IME confirmation — consider driving updates from `onchange` instead of `oninput` for CJK-heavy input |
 | `uiCheckbox(props)` | Renders `<label><input type=checkbox>…</label>`; `checked`/`onchange` are isolated to the inner `<input>` (rest props go on the outer `<label>`) |
 | `uiRadiobutton(props)` | `options: (string \| { value, label, ...attrs })[]`. Per-option extra attributes are forwarded to that option's `<label>`. **Known browser constraint**: `name` groups radios natively — give every independent group its own `name`, or they will merge |
-| `uiSelect(props)` | Native `<select>`; `options: (string \| { value, label })[]`, optional non-selectable `placeholder` option |
+| `uiSelect(props)` | Native `<select>`; `options: (string \| { value, label })[]`, optional non-selectable `placeholder` option. A long selected label is cut with "…" on one line (FACT below) |
 | `uiRange(props)` | Slider + live value display; mouse wheel over the control steps the value by `step` |
 | `uiColor(props)` | Accepts and emits either `#rrggbb` hex or `rgba(r,g,b,a)`, auto-detected from `value`; rgba mode adds an alpha slider |
 | `uiSeparator(props)` | `<hr>` |
@@ -1417,6 +1417,43 @@ A full-width control's outer box is exactly its container's content width: paddi
 - Setting `.ric-textarea { box-sizing: content-box }` after `ricdom-ui.css` is supported
   (both `autoResize` and `ricdom/md-editor`'s mirror measure rather than assume), but the
   control then overflows a `width: 100%` slot again.
+
+### FACT: `uiSelect` shows the selected text on one line, cut with an ellipsis (`2.0.0-alpha.30`)
+
+`uiSelect` renders `<select class="ric-select">` whose **first child is
+`<button><selectedcontent></selectedcontent></button>`**, followed by the `<option>`s.
+`.ric-select` is drawn with `appearance: base-select`; in that mode the first child `<button>`
+is the content of the closed box and the browser copies the selected option's content into
+`<selectedcontent>`. ricdom-ui styles that element as a shrinking, single-line box
+(`white-space: nowrap; overflow: hidden; text-overflow: ellipsis`), so a label longer than the
+select is cut with "…" and the arrow stays visible. The outer height is always
+`--ric-control-h`. The opened list is not truncated; it grows to the widest option.
+
+- **Why the extra elements**: with `base-select` the selected text is laid out as ordinary text
+  and wraps when the select is too narrow (the OS-drawn select clips to one line), so before
+  `2.0.0-alpha.30` a long label became 2–3 lines and spilled above and below the fixed-height
+  box — in a tweak panel row (select about 100px wide) with labels as short as
+  `S45C（炭素鋼）`. CSS on `.ric-select` alone cannot fix it: the text is clipped without an
+  ellipsis and the arrow is pushed out of the box (measured).
+- **What your code sees**: `select.options`, `select.value`, `selectedIndex` and the
+  `change`/`input` events are unchanged. `select.children[0]` / `firstElementChild` is now the
+  `<button>`, not the first option — use `select.options[0]`. Keyboard focus and the
+  accessibility tree are unchanged (the browser exposes one combobox; the button is not a tab
+  stop).
+- **`<selectedcontent>` is an `island`**: its content is written by the browser, never by
+  ricdom.
+- **Browsers without `base-select`** (Chromium before 135 — e.g. Electron 32 — Firefox,
+  Safari) ignore non-option children of `<select>` and draw the native control as before, which
+  already clips to one line.
+- **Known limit — a focused select does not follow a label change.** The browser copies into
+  `<selectedcontent>` when the selection changes, when `value`/`selectedIndex` is assigned and
+  when the element is inserted, but *not* when the selected option's text changes afterwards.
+  ricdom re-assigns `select.value` after patching the options on every render, so the shown text
+  follows a label change in that same render — except while the select has focus, where the
+  editing guard (§3.2) skips the assignment. If your render changes the label of the selected
+  option while that select is focused (typically a language picker that translates its own
+  option labels), the closed box keeps the old label until a render after focus has left.
+  `select.value` and the options themselves are correct throughout.
 
 ### 10.2 Stateless — layout
 

@@ -627,7 +627,18 @@ const SELECT_CSS = `
   opacity: 0.45;
   cursor: not-allowed;
 }
+.ric-select > button {
+  display: contents;
+}
+.ric-select selectedcontent {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .ric-select::picker-icon {
+  flex: none;
   content: '❯';
   color: ${fm};
   font-size: 0.6em;
