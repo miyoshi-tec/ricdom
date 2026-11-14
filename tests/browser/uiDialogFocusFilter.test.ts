@@ -10,7 +10,7 @@ import { createApp } from '../../src/app.js';
 import { createDialog } from '../../src/ui/dialog.js';
 import { uiButton } from '../../src/ui/button.js';
 import { injectStyles } from '../../src/ui/injectStyles.js';
-import { flush, setupApp } from '../_helpers/dom.js';
+import { dialogOpened, flush, setupApp } from '../_helpers/dom.js';
 
 injectStyles(document);
 
@@ -31,7 +31,7 @@ describe('実ブラウザ: createDialog の focus trap 可視要素フィルタ'
     await flush();
 
     await userEvent.click(app.querySelector('button')!);
-    await new Promise((r) => setTimeout(r, 300));
+    await dialogOpened();
 
     const closeBtn = app.querySelector('.ric-dialog__close') as HTMLElement;
     const [itemA, , itemC] = Array.from(app.querySelectorAll('.ric-dialog__body button')) as HTMLElement[];
@@ -55,7 +55,7 @@ describe('実ブラウザ: createDialog の focus trap 可視要素フィルタ'
     await flush();
 
     await userEvent.click(app.querySelector('button')!);
-    await new Promise((r) => setTimeout(r, 300));
+    await dialogOpened();
 
     // header の close ボタンは可視なので、これが唯一の focusable として初期フォーカスを受ける。
     const closeBtn = app.querySelector('.ric-dialog__close') as HTMLElement;

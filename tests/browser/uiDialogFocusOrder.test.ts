@@ -18,7 +18,7 @@ import { createApp } from '../../src/app.js';
 import { createDialog } from '../../src/ui/dialog.js';
 import { uiButton } from '../../src/ui/button.js';
 import { injectStyles } from '../../src/ui/injectStyles.js';
-import { flush, setupApp } from '../_helpers/dom.js';
+import { dialogOpened, flush, pastDialogBackstop, setupApp } from '../_helpers/dom.js';
 
 injectStyles(document);
 
@@ -40,7 +40,8 @@ describe('実ブラウザ: createDialog の既定初期フォーカス順 (LCP #
     await flush();
 
     await userEvent.click(app.querySelector('button')!);
-    await new Promise((r) => setTimeout(r, 800));
+    await dialogOpened();
+    await pastDialogBackstop();
 
     const input = app.querySelector('#name') as HTMLElement;
     expect(document.activeElement).toBe(input);
@@ -63,7 +64,8 @@ describe('実ブラウザ: createDialog の既定初期フォーカス順 (LCP #
     await flush();
 
     await userEvent.click(app.querySelector('button')!);
-    await new Promise((r) => setTimeout(r, 800));
+    await dialogOpened();
+    await pastDialogBackstop();
 
     const footerFirst = app.querySelector('.ric-dialog__footer button') as HTMLElement;
     expect(footerFirst.textContent).toBe('キャンセル');
@@ -78,7 +80,8 @@ describe('実ブラウザ: createDialog の既定初期フォーカス順 (LCP #
     await flush();
 
     await userEvent.click(app.querySelector('button')!);
-    await new Promise((r) => setTimeout(r, 800));
+    await dialogOpened();
+    await pastDialogBackstop();
 
     const closeBtn = app.querySelector('.ric-dialog__close') as HTMLElement;
     expect(document.activeElement).toBe(closeBtn);
@@ -103,7 +106,8 @@ describe('実ブラウザ: createDialog の既定初期フォーカス順 (LCP #
     await flush();
 
     await userEvent.click(app.querySelector('button')!);
-    await new Promise((r) => setTimeout(r, 800));
+    await dialogOpened();
+    await pastDialogBackstop();
 
     const textarea = app.querySelector('textarea') as HTMLElement;
     expect(document.activeElement).toBe(textarea);

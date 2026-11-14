@@ -8,7 +8,7 @@ import { createApp } from '../../src/app.js';
 import { createDialog } from '../../src/ui/dialog.js';
 import { uiButton } from '../../src/ui/button.js';
 import { injectStyles } from '../../src/ui/injectStyles.js';
-import { flush, setupApp } from '../_helpers/dom.js';
+import { dialogClosed, dialogOpened, flush, pastDialogBackstop, setupApp } from '../_helpers/dom.js';
 
 // CSS を読み込んでおく (実 CSS アニメーションの animationend で焦点移動・
 // クローズ処理が完了する。ANIMATION_FALLBACK_MS の backstop 経由ではなく
@@ -33,7 +33,7 @@ describe('実ブラウザ: createDialog の focus trap', () => {
 
     await userEvent.click(app.querySelector('button')!);
     // エントランスアニメーション終了 (onanimationend) を待つ
-    await new Promise((r) => setTimeout(r, 300));
+    await dialogOpened();
 
     // DOM 順で最初の focusable 要素はヘッダーの ✕ (close) ボタンだが、新順序 (本文 →
     // フッター → ✕ → root) では本文内の最初の要素 (ここでは「最初」ボタン) が勝つ。
@@ -58,7 +58,7 @@ describe('実ブラウザ: createDialog の focus trap', () => {
     await flush();
 
     await userEvent.click(app.querySelector('button')!);
-    await new Promise((r) => setTimeout(r, 300));
+    await dialogOpened();
 
     const closeBtn = app.querySelector('.ric-dialog__close') as HTMLElement;
     const [itemA, itemB] = Array.from(app.querySelectorAll('.ric-dialog__body button')) as HTMLElement[];
@@ -90,11 +90,11 @@ describe('実ブラウザ: createDialog の focus trap', () => {
 
     const trigger = app.querySelector('button')!;
     await userEvent.click(trigger);
-    await new Promise((r) => setTimeout(r, 300));
+    await dialogOpened();
     expect(app.querySelector('[role="dialog"]')).not.toBeNull();
 
     await userEvent.keyboard('{Escape}');
-    await new Promise((r) => setTimeout(r, 300)); // exit アニメーション終了を待つ
+    await dialogClosed(); // exit アニメーション終了を待つ
 
     expect(app.querySelector('[role="dialog"]')).toBeNull();
     expect(document.activeElement).toBe(trigger);
@@ -117,12 +117,12 @@ describe('実ブラウザ: createDialog の focus trap', () => {
     expect(document.activeElement).toBe(unrelated);
 
     dlg.open({ returnFocus: false });
-    await new Promise((r) => setTimeout(r, 300));
+    await dialogOpened();
     expect(app.querySelector('[role="dialog"]')).not.toBeNull();
     expect(document.activeElement).not.toBe(unrelated); // 開いた時点でダイアログ内へ移動済み
 
     dlg.close();
-    await new Promise((r) => setTimeout(r, 300));
+    await dialogClosed();
     expect(app.querySelector('[role="dialog"]')).toBeNull();
     // 復帰しない = 無関係な要素 (unrelated) へは絶対に戻らない。ダイアログの DOM が
     // 消えたことで activeElement は自然に <body> になる (明示的に .focus() されていない)。
@@ -146,11 +146,11 @@ describe('実ブラウザ: createDialog の focus trap', () => {
     unrelated.focus();
 
     dlg.open({ returnFocus: target });
-    await new Promise((r) => setTimeout(r, 300));
+    await dialogOpened();
     expect(app.querySelector('[role="dialog"]')).not.toBeNull();
 
     dlg.close();
-    await new Promise((r) => setTimeout(r, 300));
+    await dialogClosed();
     expect(document.activeElement).toBe(target);
   });
 
@@ -168,11 +168,11 @@ describe('実ブラウザ: createDialog の focus trap', () => {
     unrelated.focus();
 
     state.show = true;
-    await new Promise((r) => setTimeout(r, 300));
+    await dialogOpened();
     expect(app.querySelector('[role="dialog"]')).not.toBeNull();
 
     state.show = false;
-    await new Promise((r) => setTimeout(r, 300));
+    await dialogClosed();
     expect(app.querySelector('[role="dialog"]')).toBeNull();
     expect(document.activeElement).not.toBe(unrelated);
   });
@@ -191,9 +191,9 @@ describe('実ブラウザ: createDialog の focus trap', () => {
     unrelated.focus();
 
     dlg.open();
-    await new Promise((r) => setTimeout(r, 300));
+    await dialogOpened();
     dlg.close();
-    await new Promise((r) => setTimeout(r, 300));
+    await dialogClosed();
     expect(document.activeElement).toBe(unrelated);
   });
 
@@ -215,7 +215,8 @@ describe('実ブラウザ: createDialog の focus trap', () => {
     await flush();
 
     await userEvent.click(app.querySelector('button')!);
-    await new Promise((r) => setTimeout(r, 800)); // 700ms バックストップより後で確認
+    await dialogOpened();
+    await pastDialogBackstop(); // 700ms バックストップより後で確認
 
     const textarea = app.querySelector('textarea') as HTMLElement;
     expect(textarea.hasAttribute('autofocus')).toBe(true);
@@ -240,11 +241,11 @@ describe('実ブラウザ: createDialog の focus trap', () => {
     expect(outside.inert).toBe(false);
 
     await userEvent.click(app.querySelectorAll('button')[1]!); // trigger は 2 番目
-    await new Promise((r) => setTimeout(r, 300));
+    await dialogOpened();
     expect(outside.inert).toBe(true);
 
     await userEvent.keyboard('{Escape}');
-    await new Promise((r) => setTimeout(r, 300));
+    await dialogClosed();
     expect(outside.inert).toBe(false);
   });
 });

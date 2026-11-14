@@ -27,7 +27,7 @@ import { createTooltip } from '../../src/ui/tooltip.js';
 import { createToast } from '../../src/ui/toast.js';
 import { createDialog } from '../../src/ui/dialog.js';
 import { injectStyles } from '../../src/ui/injectStyles.js';
-import { flush, setupApp } from '../_helpers/dom.js';
+import { dialogOpened, flush, setupApp, until } from '../_helpers/dom.js';
 
 injectStyles(document);
 
@@ -189,7 +189,7 @@ const CASES: PortalCase[] = [
         triggerEl,
         open: async () => {
           triggerEl.click();
-          await new Promise((r) => setTimeout(r, 300)); // entrance animationend を待つ
+          await dialogOpened(); // 開くアニメーションが終わり、初期フォーカスが入るまで
         },
       };
     },
@@ -345,7 +345,7 @@ describe('実ブラウザ: ポータル部品の light dismiss (外側 pointerdo
       // (プログラム的呼び出し) は 'click' イベントのみで pointerdown を発火しないため、
       // light dismiss の再現には userEvent 経由が必須 (uiPopup.test.ts と同じ理由)。
       await userEvent.click(outsideBtn);
-      await new Promise((r) => setTimeout(r, 350)); // exit アニメーション終了を待つ
+      await until(() => app.querySelector(c.bodySelector) === null, '外側クリックで本体が閉じて DOM から消える');
 
       expect(app.querySelector(c.bodySelector)).toBeNull();
       expect(clicked).toBe(1);
