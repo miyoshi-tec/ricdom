@@ -17,19 +17,22 @@ import { UI_ROLE, mergeClass } from './internal/pureHelpers.js';
 // 復活が原則」に基づき、他 variant と同じ `.ric-button--${variant}` 命名規則にそのまま乗る
 // (JS 側は class 文字列を付与するだけで済み、CSS_TEMPLATES 側で見た目を定義する)。
 export type UiButtonVariant = 'default' | 'primary' | 'ghost' | 'link';
-/** ボタンの寸法 (v1 ric_ui/css_templates.js の .ric-button--sm/--lg を移植、既定は 'md')。 */
+// v1 ric_ui/css_templates.js の .ric-button--sm/--lg を移植。
+/** ボタンの寸法 (既定は 'md')。 */
 export type UiButtonSize = 'sm' | 'md' | 'lg';
 
 export interface UiButtonProps {
   children?: RicNode | RicNode[];
   variant?: UiButtonVariant;
+  // v1 は .ric-button--md を明示定義していたが、値がコアの既定と同じため
+  // v2 では冗長なクラスを増やさない。
   /** 既定 'md' — コア (.ric-button) の高さ/フォントサイズをそのまま使うので 'md' 用の
-   *  修飾クラスは付与しない (v1 は .ric-button--md を明示定義していたが、値がコアの
-   *  既定と同じため v2 では冗長なクラスを増やさない)。 */
+   *  修飾クラスは付与しない。 */
   size?: UiButtonSize;
   disabled?: boolean;
   class?: ClassValue;
-  /** rest スプレッド経由で常に透過されていたが、型に無かった (LCP の指摘、2.0.0-alpha.9)。 */
+  // rest スプレッド経由で常に透過されていたが、型に無かった (LCP の指摘、2.0.0-alpha.9)。
+  /** inline style。任意の属性と同じく要素にそのまま渡る (型の補完用に宣言している)。 */
   style?: StyleValue;
   onclick?: (ev: MouseEvent) => void;
   [key: string]: unknown;

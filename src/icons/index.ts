@@ -105,9 +105,10 @@ export const ICON_NAMES: Readonly<Record<string, string>> = {
   x: 'x',
 };
 
+// CLI の同梱解決は v1 CLI の `load_bundled` 相当。
 /**
  * 元のケバブケース名 (Lucide 由来、`ricdom-icon` CLI の引数と同じ表記) → descriptor。
- * CLI の同梱解決 (`load_bundled` 相当) と、動的に名前でアイコンを引きたい場合に使う。
+ * CLI の同梱解決と、動的に名前でアイコンを引きたい場合に使う。
  * 個別 import (`import { check } from 'ricdom/icons'`) の方が tree-shakable なので、
  * 静的に import 名が分かる場合はそちらを使うこと。
  */

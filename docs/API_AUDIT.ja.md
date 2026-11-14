@@ -375,3 +375,45 @@ dist/ricdom-ui.iife.min.js` → 0 を確認済み、最終報告に記載)。CSS
 `ricdom/ui` 側に置くため、`ricdom-ui.iife.min.js` の gzip サイズはわずかに増える
 (24,994B → 25,637B、+643B) — コア (`ricdom.iife.min.js`、gzip 4,877B) には影響なし。
 `docs/SPEC.md` §13・`docs/TUTORIAL.md` §10・`CHANGELOG.md` に反映。
+
+## 14. 2.0.0 凍結前の再点検 (2026-11-14、2.0.0-alpha.35 時点、読み取り専用のエージェント + 統括の確認)
+
+§1〜§12 は 2026-09-02 (alpha.0) 時点の監査で、§13 の追跡は alpha.16 で止まっていた。2.0.0 として名前を凍結する前に、4 つの入口 (`ricdom` / `ricdom/ui` / `ricdom/icons` / `ricdom/md-editor`) を横断で見直した。経緯と判断は設計書 §55。
+
+### 14.1 以前の節の訂正
+
+- §2.2「Props 型の export 漏れなし」は `XxxProps` だけを数えた結果だった。補助型の `UiButtonSize` / `PopupTriggerObject` が漏れていた → alpha.36 で export
+- §3.3「全 export が tests / examples から参照されている」は、深いパス (`../src/reactivity.js` など) 経由の参照を数えたもの。**`src/index.ts` 経由で内部 8 関数を使う箇所は、リポジトリ内にも、手元の利用アプリにも 1 つも無い**
+
+### 14.2 名前を変えずに直したもの (alpha.36)
+
+| 内容 | 対応 |
+|---|---|
+| `UiButtonSize` / `PopupTriggerObject` / `CreateMdEditorOptions` の export | 済み |
+| `"sideEffects": ["**/*.css"]` | 済み |
+| 公開 JSDoc の制作過程の語 (29 ファイル 81 ブロック) | 済み。経緯は `//` コメントへ |
+| JSDoc の置き場所の誤り (`warnIfStylesMissing` / `inferTweakType`) | 済み |
+| SPEC の誤り (`'link'` と `size`、uiCodePre の色、相互参照、md-editor の記載) | 済み |
+| SPEC に無かった動き (`bindRadiobutton` / `bindColor`、`oninput` に渡る簡易オブジェクト、`uiRow` の寄せ、`toast()`、`autoResize`) | FACT として追記 |
+
+### 14.3 名前が変わる候補 (オーナー判断待ち。使用状況は手元の全プロジェクトの検索による概数)
+
+| # | 内容 | 影響するアプリ | 統括のおすすめ |
+|---|---|---|---|
+| A | コアの内部 8 関数を `src/index.ts` から外す (または `ricdom/internal` へ) | 0 | 入れる |
+| B | 開くボタンの渡し方を統一 (dialog `triggerChildren` / `triggerVariant`、popup `trigger`、dropdown `label` / `icon` / `chevron` / `ghost`) | 5〜6 | 今の名前で凍結 (2.x で新しい名前を足せる) |
+| C | tabs と accordion の語彙 (`TabItem.key` と `AccordionItem.id`、`label` と `title`、`defaultActive` は props で `defaultOpen` は factory options) | 9〜10 | 同上 |
+| D | `tabs.active()` → `getActive()`、`splitter.collapsed()` → `isCollapsed()`、`TabsProps.onChange` (DOM の `onchange` と 1 字違い)、tooltip `dir` → `placement`、collapse box `'v'` / `'h'`、splitter の `side` の二重の意味と `onResizeEnd` の置き場 | 各 2〜10 | 同上 |
+| E | `uiRange` / `uiColor` の `oninput` (DOM 素通しではなく部品独自の値通知) の改名 | 6 前後 | 改名せず、FACT として明記 (済み) |
+| F | `Component<P>` (コアは同じ概念を `UsePart` と呼ぶ) の名前、`inferTweakType` / `createNoopApp` を残すか | 0 | 名前はそのまま、SPEC に載せるかは A と一緒に判断 |
+| G | `maxlength` → `maxLength`、`uiRadiobutton` → `uiRadioGroup`、`createPopup` / `createDropdown` の名前 | 多数 | 変えない |
+
+### 14.4 そのままでよいと判断したもの
+
+`uiXxx` / `createXxx` / `bindXxx` と型名の規約 (例外なし)、DOM 素通しのイベントは小文字・部品独自のコールバックは camelCase という区別 (例外は 14.3 の D と E だけ)、コールバックが位置引数であること、`collapseBox.visible` (常時 controlled の headless 部品で `open` とは意味が違う)、`FocusWhenInstance` の位置引数 (理由が SPEC §10.3.2 にある)、`ToastShowOptions.type`、`Host` の二重 export、stateless Props の index signature (rest スプレッド契約の根幹。打ち間違いが型で拾えない点は承知のうえ)、exports の対応と `types` 条件の順序。
+
+### 14.5 点検で未確認のまま残ったもの
+
+- `sideEffects: false` で `import 'ricdom/ui.css'` が実際に落ちるか (バンドラでの再現はしていない。予防として直した)
+- SPEC §11 (role の一覧) と `UI_ROLE` の突き合わせ
+- README / GUIDE / examples の全文と公開 API の突き合わせ (検索で当たった箇所だけ)

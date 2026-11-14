@@ -11,8 +11,9 @@
 
 export interface RenderScheduler {
   scheduleRender: () => void;
+  // renderNow は v1 の render_now に当たる。
   /**
-   * render_now() のように scheduleRender を経由せず外部から直接描画した直後に呼ぶ。
+   * renderNow() のように scheduleRender を経由せず外部から直接描画した直後に呼ぶ。
    * 保留中の rAF / バックストップを解除し、後追いで二重描画するのを防ぐ。
    */
   cancelPending: () => void;

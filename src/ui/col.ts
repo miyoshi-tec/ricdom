@@ -8,7 +8,8 @@ import type { ClassValue, RicElementNode, RicNode, StyleValue } from '../types.j
 import { UI_ROLE, mergeClass } from './internal/pureHelpers.js';
 
 export interface UiColProps {
-  /** v1 parity (2.0.0-alpha.2)。uiRow の `gap` と同じ意味・実装 (row.ts のヘッダコメント参照)。 */
+  // v1 parity (2.0.0-alpha.2)。経緯は row.ts の UiRowProps.gap のコメント参照。
+  /** 子要素の間隔。uiRow の `gap` と同じ意味・実装 (`style.gap` に書く。数値は px 扱い)。 */
   gap?: string | number;
   children?: RicNode | RicNode[];
   style?: StyleValue;

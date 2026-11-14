@@ -14,7 +14,8 @@ import { promotePortalToTopLayer } from './topLayer.js';
 
 export type { Host };
 
-/** `app.use(part)` に渡す部品の呼び出し可能インターフェース (設計書 A)。 */
+// 設計書 A。
+/** `app.use(part)` に渡す部品の呼び出し可能インターフェース。 */
 export interface Component<P> {
   (props: P): RicNode;
   /** app.use() が登録時に呼ぶ。host を経由して初めて notify/portal が使えるようになる。 */
@@ -23,7 +24,7 @@ export interface Component<P> {
   dispose(): void;
   /**
    * app の render サイクルごとに portal へ描画すべき内容を返す (コアの `UsePart.renderPortal`
-   * のブリッジ、設計書 §3.5)。dialog/popup/toast/tooltip はこれを実装する。状態を持たず
+   * に当たる)。dialog/popup/toast/tooltip はこれを実装する。状態を持たず
    * portal も使わない部品 (uiButton 等) には無い。
    */
   renderPortal?(): RicNode;

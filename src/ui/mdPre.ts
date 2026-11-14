@@ -38,7 +38,7 @@
 //                       console.error を出し、元の src のまま表示する (NOOP フォールバック)。
 
 import type { RicElementNode, RicNode, StyleValue } from '../types.js';
-import { warnHljsMissing } from './internal/hljs.js';
+import { hljsKnows, warnHljsMissing } from './internal/hljs.js';
 import { UI_ROLE, mergeClass } from './internal/pureHelpers.js';
 
 export type MdTransformText = (text: string) => (RicNode | string)[] | string;
@@ -49,7 +49,9 @@ export interface UiMdPreProps {
   transformText?: MdTransformText;
   transformImageSrc?: MdTransformImageSrc;
   class?: import('../types.js').ClassValue;
-  /** rest スプレッド経由で常に透過されていたが、型に無かった (LCP の指摘、2.0.0-alpha.9)。 */
+  // rest スプレッド経由で常に透過されていたが、型に無かった (LCP の指摘、2.0.0-alpha.9)。
+  /** inline style。任意の属性と同じく要素にそのまま渡る (型の補完用に宣言している)。
+   *  変換結果を包む外側の .ric-md-pre に付く。 */
   style?: StyleValue;
   [key: string]: unknown;
 }
@@ -151,6 +153,7 @@ const highlightFenceCode = (raw: string, lang: string | null): RicElementNode =>
       warnHljsMissing();
       return { tag: 'code', children: [raw] } as RicElementNode;
     }
+    if (!hljsKnows(lang)) return { tag: 'code', children: [raw] } as RicElementNode;
     try {
       const result = window.hljs.highlight(raw, { language: lang });
       return { tag: 'code', class: 'hljs', innerHTML: result.value } as RicElementNode;

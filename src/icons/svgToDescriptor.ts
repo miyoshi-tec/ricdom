@@ -97,7 +97,8 @@ const elemToD = (tag: string, a: Record<string, string>): string => {
   }
 };
 
-/** SVG 文字列 → uiIcon descriptor `{ v?, s?, p }` (v1 svg_to_descriptor の TS 移植)。 */
+// v1 svg_to_descriptor の TS 移植。
+/** SVG 文字列 → uiIcon descriptor `{ v?, s?, p }`。 */
 export const svgToDescriptor = (svg: string): IconDescriptor => {
   if (typeof svg !== 'string') throw new Error('svgToDescriptor: 文字列を渡してください');
 

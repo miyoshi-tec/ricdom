@@ -59,6 +59,33 @@ export const createScrollPane = (options: CreateScrollPaneOptions = {}): ScrollP
   let followNow = false; // render 前に計測した「追従すべきか」
   let forceTo: 'bottom' | 'top' | null = null;
 
+  // 利用者が端から離れたか (2.0.0-alpha.36、設計書 §55)。
+  // render の時点の位置だけで判定すると、内容が増え続けている間 (チャットの応答が流れている間) は
+  // 端から離れられない:
+  //   - 「端にいた」と測ってから scrollTop を書くまでに 1 フレームある。その間のスクロールは
+  //     上書きされる (ホイール 1 目盛りが毎フレーム戻される)
+  //   - 1 回の移動が threshold より小さい操作 (↑キーは 40px) は、何度やっても「まだ端の近く」
+  //     と判定されて戻される
+  // そこで scroll イベントで「端から離れる向きに動いた」ことを見て、その時点で追従をやめる。
+  // 端 (threshold 以内) まで戻ったら再開する。scroll イベントは描画の更新の中で rAF の
+  // コールバックより先に配られるので、書き込みの直前に見れば間に合う。
+  // 自分の書き込みで起きる scroll イベントは「端へ向かう動き」なので、特別扱いは要らない。
+  // 内容が減ってブラウザが scrollTop を押し戻した場合は「離れる向き」に見えるが、行き先が
+  // 端そのものなので、先に「端にいるか」を見て区別する。
+  let userAway = false;
+  let lastTop: number | null = null;
+  const distanceFromEnd = (el: HTMLElement): number => (follow === 'bottom' ? el.scrollHeight - el.scrollTop - el.clientHeight : el.scrollTop);
+  const noteScroll = (el: HTMLElement): void => {
+    if (follow === 'none') return;
+    const top = el.scrollTop;
+    const movedAway = lastTop !== null && (follow === 'bottom' ? top < lastTop : top > lastTop);
+    lastTop = top;
+    const dist = distanceFromEnd(el);
+    if (dist <= 1) userAway = false;
+    else if (movedAway) userAway = true;
+    else if (dist <= threshold) userAway = false;
+  };
+
   // rAF + setTimeout(200ms) バックストップの二重化用の状態 (LCP #5)。
   // 「先に来た方が実行し、後発は no-op」はコアの描画スケジューラ (src/scheduler.ts) と
   // 同じ考え方 (コア自体は import せず、同じアルゴリズムをここに複製する — 状態が
@@ -82,10 +109,14 @@ export const createScrollPane = (options: CreateScrollPaneOptions = {}): ScrollP
     if (!el) return;
     if (forceTo === 'bottom') el.scrollTop = el.scrollHeight;
     else if (forceTo === 'top') el.scrollTop = 0;
-    else if (followNow) {
+    // userAway は書き込みの直前に見る (render の後に届いた scroll イベントを反映するため)
+    else if (followNow && !userAway) {
       if (follow === 'bottom') el.scrollTop = el.scrollHeight;
       else if (follow === 'top') el.scrollTop = 0;
     }
+    // 強制スクロールは「そこへ行く」という利用者側の指示なので、追従の向きと同じなら再開する
+    if (forceTo === follow) userAway = false;
+    lastTop = el.scrollTop;
     forceTo = null;
     followNow = false;
   };
@@ -115,11 +146,14 @@ export const createScrollPane = (options: CreateScrollPaneOptions = {}): ScrollP
     const host = guard.ensure();
     if (!host) return null;
 
-    const { children = [], class: extraClass, style, ...rest } = props;
+    const { children = [], class: extraClass, style, onscroll, ...rest } = props;
 
     // render 前に「追従中か」を計測。DOM がまだ無い場合 (初回) は false。
     const el = findEl();
-    if (el) followNow = shouldFollow(el);
+    if (el) {
+      followNow = shouldFollow(el);
+      if (lastTop === null) lastTop = el.scrollTop;
+    }
 
     // 描画後にスクロール位置を適用する (rAF + 200ms バックストップの二重化、LCP #5)
     scheduleApplyScroll();
@@ -131,6 +165,11 @@ export const createScrollPane = (options: CreateScrollPaneOptions = {}): ScrollP
       'data-ricdom-role': UI_ROLE.scrollPane,
       'data-ricdom-scroll-pane-id': String(id),
       style: { ...(style ?? {}), overflowY: 'auto' },
+      // 端から離れたかを見る (上のコメント)。利用者が渡した onscroll も呼ぶ。
+      onscroll: (ev: Event) => {
+        noteScroll(ev.currentTarget as HTMLElement);
+        if (typeof onscroll === 'function') (onscroll as (ev: Event) => void)(ev);
+      },
       children,
     } as unknown as RicNode;
   }) as ScrollPaneInstance;

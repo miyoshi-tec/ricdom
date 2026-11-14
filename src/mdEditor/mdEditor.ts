@@ -41,13 +41,15 @@ import { tokenizeMarkdown } from './tokenizer.js';
 export interface MdEditorProps extends UiTextareaProps {
   /** 'none' で装飾なしの素の uiTextarea にフォールバックする (既定 'markdown') */
   highlight?: 'markdown' | 'none';
+  // consumer がラッパーを flex item としてサイズ指定したい、という要望
+  // (Raccoon Memo 追報 4、2026-09-17) に対応して追加した。
   /**
    * ラッパー `div.ric-md-editor`（`[data-ricdom-role="md-editor"]`）に合成する追加 class。
-   * textarea 側の `class` (`.ric-md-editor__input` に合成される) とは別系統 — consumer が
-   * ラッパーを flex item としてサイズ指定したいという要望 (Raccoon Memo 追報 4、
-   * 2026-09-17) に対応する。**`highlight:'none'` / 閾値超えのフォールバック時はラッパー
-   * 自体が存在しないため、この prop は単に無視される** (SPEC.md §13 FACT 参照 — その
-   * パスに入る前に rest から取り除いているので uiTextarea には一切渡らない)。
+   * textarea 側の `class` (`.ric-md-editor__input` に合成される) とは別系統 — ラッパーを
+   * flex item としてサイズ指定したいときに使う。**`highlight:'none'` / 閾値超えの
+   * フォールバック時はラッパー自体が存在しないため、この prop は単に無視される**
+   * (SPEC.md §13 FACT 参照 — そのパスに入る前に rest から取り除いているので
+   * uiTextarea には一切渡らない)。
    */
   wrapperClass?: ClassValue;
   /**
@@ -109,13 +111,20 @@ const ZERO_WIDTH_SPACE = String.fromCharCode(0x200b);
 
 let nextMdEditorId = 0;
 
+// 公開 API の点検 (2026-11-14) で名前を付けた: ほかの部品は CreateXxxOptions を export しているのに、
+// ここだけ引数の型が無名で、利用者が自分の設定オブジェクトに型を付けられなかった。
+export interface CreateMdEditorOptions {
+  /** この文字数を超える入力は色分けせず、素の textarea として描く (既定 200,000)。 */
+  maxHighlightLength?: number;
+}
+
 /**
  * uiTextarea と同じ props/DOM 挙動を保ったまま、Markdown ソースを VS Code 風に色分け表示する
  * textarea を作る。状態を持つため `app.use()` で登録する。
  *   const md = app.use(createMdEditor());
  *   md({ value: s.body, oninput: (ev) => { s.body = ev.target.value; } })
  */
-export const createMdEditor = (options: { maxHighlightLength?: number } = {}): MdEditorInstance => {
+export const createMdEditor = (options: CreateMdEditorOptions = {}): MdEditorInstance => {
   const { maxHighlightLength = 200_000 } = options;
   const id = ++nextMdEditorId;
   const guard: AttachGuard = createAttachGuard('createMdEditor');

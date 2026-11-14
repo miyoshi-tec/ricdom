@@ -48,6 +48,55 @@ describe('実ブラウザ: createPopup', () => {
     expect(document.activeElement).toBe(items[2]);
   });
 
+  // 2.0.0-alpha.36: native の disabled な <button> はフォーカスを受けない。以前は ↓ がその項目に
+  // focus() して何も起きず、「いまの位置」が進まないので、無効な項目の手前で止まっていた
+  // (その先の項目へ ↓ では行けない)。矢印・Home・End は、フォーカスできる項目だけを巡る。
+  // aria-disabled="true" の項目はフォーカスを受けるので、従来どおり止まる (読み上げで存在が伝わる)。
+  it('矢印キーは native の disabled な項目を飛ばし、aria-disabled の項目には止まる', async () => {
+    const app = setupApp();
+    let menu: ReturnType<typeof createPopup>;
+    const handle = createApp('#app', {}, () =>
+      menu
+        ? menu({
+            trigger: ['⋯'],
+            children: [
+              { tag: 'button', class: 'ric-button', disabled: true, children: ['先頭 (無効)'] },
+              { tag: 'button', class: 'ric-button', children: ['A'] },
+              { tag: 'button', class: 'ric-button', disabled: true, children: ['無効'] },
+              { tag: 'button', class: 'ric-button', 'aria-disabled': 'true', children: ['ソフト無効'] },
+              { tag: 'button', class: 'ric-button', children: ['B'] },
+              { tag: 'button', class: 'ric-button', disabled: true, children: ['末尾 (無効)'] },
+            ],
+          })
+        : null,
+    );
+    menu = handle.use(createPopup());
+    await flush();
+
+    await userEvent.click(app.querySelector('button')!);
+    await flush(100);
+
+    const items = app.querySelectorAll('[role="menuitem"]') as NodeListOf<HTMLElement>;
+    const texts = (): string => document.activeElement?.textContent ?? '';
+    items[1]!.focus();
+    expect(texts()).toBe('A');
+
+    await userEvent.keyboard('{ArrowDown}');
+    expect(texts(), 'A の次は、無効を飛ばしてソフト無効').toBe('ソフト無効');
+    await userEvent.keyboard('{ArrowDown}');
+    expect(texts()).toBe('B');
+    await userEvent.keyboard('{ArrowDown}');
+    expect(texts(), '末尾の無効を飛ばして A へ戻る').toBe('A');
+    await userEvent.keyboard('{ArrowUp}');
+    expect(texts(), '先頭の無効を飛ばして B へ').toBe('B');
+    await userEvent.keyboard('{Home}');
+    expect(texts(), 'Home は最初のフォーカスできる項目').toBe('A');
+    await userEvent.keyboard('{End}');
+    expect(texts(), 'End は最後のフォーカスできる項目').toBe('B');
+    await userEvent.keyboard('{Escape}');
+    handle.unmount();
+  });
+
   it('Home/End で先頭/末尾の項目へ移動する', async () => {
     const app = setupApp();
     let menu: ReturnType<typeof createPopup>;

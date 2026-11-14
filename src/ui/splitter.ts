@@ -51,7 +51,8 @@ export interface SplitterProps {
   main?: RicNode | RicNode[];
   /** controlled mode の折り畳み状態。指定すると controlled になる。 */
   collapsed?: boolean;
-  /** controlled mode の折り畳みトグル通知 (v1 の on_collapse_change 継承) */
+  // v1 の on_collapse_change 継承。
+  /** controlled mode の折り畳みトグル通知 */
   onCollapseChange?: (collapsed: boolean) => void;
 }
 

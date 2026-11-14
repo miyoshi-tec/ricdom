@@ -65,6 +65,11 @@ export interface FloatingMenu {
   close(): void;
   /** 閉じて、開いた元の要素へフォーカスを戻す (Escape・項目の選択・トリガーの toggle)。 */
   closeAndRestoreFocus(): void;
+  /**
+   * 部品の公開メソッド close() 用。フォーカスが本体の中にあれば、開いた元の要素へ戻してから閉じる。
+   * 本体の外にあれば、フォーカスには触らない。
+   */
+  closeFromApi(): void;
   /** 本体の onanimationend に渡す。閉じアニメーションの終わりで片付ける (冪等)。 */
   handleAnimEnd(): void;
   /** 毎 render 呼ぶ: 開いている間だけ document のリスナーを付ける。 */
@@ -119,6 +124,17 @@ export const createFloatingMenu = (options: FloatingMenuOptions): FloatingMenu =
   const closeAndRestoreFocus = (): void => {
     close();
     if (restoreFocusEl && typeof restoreFocusEl.focus === 'function') restoreFocusEl.focus();
+  };
+
+  // 公開メソッドの close() (2.0.0-alpha.36): 本体の中のボタンが `dd.close()` を呼ぶ使い方では、
+  // そのボタンが本体ごと DOM から消えるので、フォーカスを戻さないと <body> に落ちる。
+  // フォーカスが本体の外にあるとき (タイマーや外のボタンから閉じた) は、利用者がいま居る場所から
+  // フォーカスを奪わないよう、何もしない。
+  const closeFromApi = (): void => {
+    const body = options.bodyEl();
+    const focusInside = !!body && typeof document !== 'undefined' && body.contains(document.activeElement);
+    if (focusInside) closeAndRestoreFocus();
+    else close();
   };
 
   const exclusiveSelf: Exclusive = { close };
@@ -274,6 +290,7 @@ export const createFloatingMenu = (options: FloatingMenuOptions): FloatingMenu =
     exclusiveSelf,
     close,
     closeAndRestoreFocus,
+    closeFromApi,
     handleAnimEnd,
     syncListeners,
     openFromElement,

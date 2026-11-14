@@ -64,8 +64,9 @@ const hasRicdomStylesheetLoaded = (doc: Document): boolean => {
   return false;
 };
 
-/** 部品の初回 use() 時、スタイルが未注入なら案内を出す (設計書 §4、throw しない・1 回だけ) */
+// 設計書 §4。
 let warnedMissingStyles = false;
+/** 部品の初回 use() 時、スタイルが未注入なら案内を出す (throw しない・1 回だけ) */
 export const warnIfStylesMissing = (doc: Document = document): void => {
   if (warnedMissingStyles) return;
   if (!doc || typeof doc.querySelector !== 'function') return;

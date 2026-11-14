@@ -48,11 +48,12 @@ export const bindInput = <S extends object, K extends KeyOfType<S, string>>(s: S
     oninput: (ev: Event) => setKey(s, key, (ev.target as HTMLInputElement).value as S[K]),
   });
 
+// IME 注意は v1 継承。
 /**
  * uiTextarea を state と双方向バインドする。
  *   bindTextarea(s, 'memo', { autoResize: { minRows: 2, maxRows: 8 } })
  *
- * ⚠️ IME 注意 (v1 継承): controlled な textarea では IME 確定前に value が上書きされる場合が
+ * ⚠️ IME 注意: controlled な textarea では IME 確定前に value が上書きされる場合が
  *   ある。日本語入力中心の場面では onchange 方式を検討すること。
  */
 export const bindTextarea = <S extends object, K extends KeyOfType<S, string>>(
@@ -103,11 +104,13 @@ export const bindRange = <S extends object, K extends KeyOfType<S, number>>(s: S
     oninput: (ev: Event) => setKey(s, key, (parseFloat((ev.target as HTMLInputElement).value) || 0) as S[K]),
   });
 
+// v1 bind_radiobutton.js 継承、alpha.14 で追加移植 (経緯はファイル先頭のコメント参照)。
+// name の既定が key なのも v1 と同じ。
 /**
- * uiRadiobutton を state と双方向バインドする (v1 bind_radiobutton.js 継承、alpha.14 で追加移植)。
+ * uiRadiobutton を state と双方向バインドする。
  *   bindRadiobutton(s, 'role', { options: ['viewer', 'editor', 'admin'] })
  *
- * name は既定で key を使う (v1 と同じ)。同一ページに同じ key のグループを複数置く場合は
+ * name は既定で key を使う。同一ページに同じ key のグループを複数置く場合は
  * options.name で別名を指定する (ブラウザは name が同じ radio を 1 グループとして扱うため、
  * name を分けないと意図せず連動してしまう — uiRadiobutton の JSDoc の既知の制約と同じ)。
  * name は他の options より先に展開するので、options.name があればそちらが勝つ。
@@ -124,12 +127,14 @@ export const bindRadiobutton = <S extends object, K extends KeyOfType<S, string>
     onchange: (ev: Event) => setKey(s, key, (ev.target as HTMLInputElement).value as S[K]),
   });
 
+// v1 bind_color.js 継承、alpha.14 で追加移植 (経緯はファイル先頭のコメント参照)。
+// alpha モードの自動判定も v1 継承。
 /**
- * uiColor を state と双方向バインドする (v1 bind_color.js 継承、alpha.14 で追加移植)。
+ * uiColor を state と双方向バインドする。
  *   bindColor(s, 'bgColor')    // state 値が hex なら hex picker
  *   bindColor(s, 'overlay')    // state 値が rgba(...) なら自動で alpha つき picker
  * alpha モードは state 値が rgba(...) 形式か否かで uiColor が自動判定するため、
- * 呼び出し側で明示するオプションはない (v1 継承)。
+ * 呼び出し側で明示するオプションはない。
  */
 export const bindColor = <S extends object, K extends KeyOfType<S, string>>(s: S, key: K, options: Omit<UiColorProps, 'value' | 'oninput'> = {}): RicNode =>
   uiColor({

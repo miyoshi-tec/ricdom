@@ -23,7 +23,8 @@ export const convertStyleKeyToCamel = (key: string): string => {
   return key.replace(/-([a-z])/g, (_, char: string) => char.toUpperCase());
 };
 
-/** style は object 限定 (設計書 §3.1)。キーをキャメルケースに統一して返す。 */
+// object 限定は設計書 §3.1。
+/** style は object 限定。キーをキャメルケースに統一して返す。 */
 export const normalizeStyle = (style: Record<string, string | number> | undefined): Record<string, string | number> => {
   if (!style) return {};
   const result: Record<string, string | number> = {};
@@ -80,7 +81,8 @@ export interface NormalizedElement {
   id: string | null;
   class: string[];
   style: Record<string, string | number>;
-  /** 生の children 配列 (まだ flatten/normalize していない、v1 の ctx_array 相当) */
+  // v1 の ctx_array 相当。
+  /** 生の children 配列 (まだ flatten/normalize していない) */
   children: RicNode[];
   ref: string | null;
   key: string | number | null;
@@ -93,7 +95,8 @@ export type NormalizedNode = NormalizedText | NormalizedInvisible | NormalizedEl
 
 const STRUCTURAL_KEYS = new Set(['tag', 'id', 'class', 'style', 'children', 'ref', 'key', 'island']);
 
-/** RicNode を正規化された内部表現に変換する (v1 の normalize_ric_node 継承) */
+// v1 の normalize_ric_node 継承。
+/** RicNode を正規化された内部表現に変換する */
 export const normalizeNode = (raw: RicNode): NormalizedNode => {
   if (typeof raw === 'string' || typeof raw === 'number') {
     return { kind: 'text', text: String(raw) };
@@ -180,7 +183,8 @@ export const isJsonEqual = (a: unknown, b: unknown): boolean => {
 // children 正規化 (ネスト配列の展開 + invisible 除去)
 // =====================================================================
 
-/** raw な children 配列を平坦化し、invisible を除去する (v1 の normalize_children 継承) */
+// v1 の normalize_children 継承。
+/** raw な children 配列を平坦化し、invisible を除去する */
 export const normalizeChildren = (rawChildren: RicNode[]): RicNode[] => {
   const result: RicNode[] = [];
   for (const child of rawChildren) {

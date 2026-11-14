@@ -41,6 +41,35 @@ describe('実ブラウザ: uiButton variant: "link" (v1 からの復活)', () =>
     expect(computed.paddingLeft).toBe('5px');
   });
 
+  // SPEC は 2.0.0-alpha.35 まで「'link' は size を無視する (v1 と同じ)」と書いていたが、実際は
+  // v1 も v2 も size が効く (.ric-button--sm / --lg の規則が --link より後ろにあり、詳細度は同じ)。
+  // 公開 API の点検 (2026-11-14) で食い違いが見つかり、SPEC のほうを実際の動きに合わせた。
+  // その動きをここで固定する: link が無視するのは「密度による高さ」で、明示した size は効く。
+  it('variant: "link" に size を付けると、その大きさになる (size なしの link は高さを持たない)', async () => {
+    const app = setupApp();
+    applyTheme(app, { theme: 'light' });
+    await parkPointer();
+    createApp(app, {}, () => ({
+      tag: 'div',
+      children: [
+        uiButton({ id: 'l', variant: 'link', children: ['x'] }),
+        uiButton({ id: 'ls', variant: 'link', size: 'sm', children: ['x'] }),
+        uiButton({ id: 'll', variant: 'link', size: 'lg', children: ['x'] }),
+        uiButton({ id: 'ds', size: 'sm', children: ['x'] }),
+        uiButton({ id: 'dl', size: 'lg', children: ['x'] }),
+      ],
+    }));
+    await flush();
+    const h = (id: string): number => document.getElementById(id)!.getBoundingClientRect().height;
+    const fs = (id: string): string => getComputedStyle(document.getElementById(id)!).fontSize;
+    expect(h('ls')).toBe(h('ds'));
+    expect(h('ll')).toBe(h('dl'));
+    expect(fs('ls')).toBe(fs('ds'));
+    expect(fs('ll')).toBe(fs('dl'));
+    expect(getComputedStyle(document.getElementById('l')!).paddingTop, 'size なしの link は文字に沿う').toBe('1px');
+    expect(h('ls')).toBeLessThan(h('ll'));
+  });
+
   it('通常の (default) ボタンは背景色を持ち、高さも link より大きい (対照実験)', async () => {
     const app = setupApp();
     applyTheme(app, { theme: 'light' });

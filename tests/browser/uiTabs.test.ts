@@ -5,6 +5,7 @@ import { userEvent } from '@vitest/browser/context';
 import { createApp } from '../../src/app.js';
 import { createTabs } from '../../src/ui/tabs.js';
 import { injectStyles } from '../../src/ui/injectStyles.js';
+import { applyTheme } from '../../src/ui/theme.js';
 import { flush, setupApp } from '../_helpers/dom.js';
 
 injectStyles(document);
@@ -107,4 +108,45 @@ describe('実ブラウザ: createTabs の帯の中のタブを中央に寄せる
       expect(gaps(app).left, '外側の justify-content では動かない').toBeLessThan(8);
     });
   }
+});
+
+// 2.0.0-alpha.36: サンプル 15 (AI チャット) を書く過程で見つかった。タブの帯は折り返さないので、
+// タブが多い・幅が狭いと親からはみ出す。ダイアログ (overflow: hidden) の中では切れて押せなくなる
+// (幅 640px のダイアログで 8 個目のタブが切れ、420px の画面では 5 個が切れた)。
+describe('実ブラウザ: createTabs のタブは、入りきらないとき折り返す (2.0.0-alpha.36)', () => {
+  const ITEMS = ['Demo (no server)', 'LM Studio', 'Ollama', 'OpenAI', 'Claude', 'Gemini', 'Grok', 'Other'].map((label, i) => ({ key: `k${i}`, label }));
+
+  for (const variant of ['pill', 'default'] as const) {
+    it(`variant: '${variant}' — 幅 300px の箱の中で、どのタブも箱からはみ出さない`, async () => {
+      document.body.innerHTML = '<div id="box" style="width:300px;overflow:hidden"><div id="app"></div></div>';
+      applyTheme(document.getElementById('box')!, { theme: 'light' });
+      let tabs: ReturnType<typeof createTabs>;
+      const handle = createApp('#app', {}, () => (tabs ? tabs({ items: ITEMS, ...(variant === 'pill' ? { variant: 'pill' as const } : {}) }) : null));
+      tabs = handle.use(createTabs());
+      handle.renderNow();
+      const box = document.getElementById('box')!.getBoundingClientRect();
+      const list = Array.from(document.querySelectorAll('[role="tab"]')) as HTMLElement[];
+      expect(list.length).toBe(8);
+      for (const tab of list) {
+        const r = tab.getBoundingClientRect();
+        expect(r.right, `${tab.textContent}: 右端が箱の中`).toBeLessThanOrEqual(box.right + 0.5);
+        expect(r.left, `${tab.textContent}: 左端が箱の中`).toBeGreaterThanOrEqual(box.left - 0.5);
+      }
+      const rows = new Set(list.map((tab) => Math.round(tab.getBoundingClientRect().top)));
+      expect(rows.size, '前提: 1 行には入りきらず、複数の行になっている').toBeGreaterThan(1);
+      handle.unmount();
+    });
+  }
+
+  it('入りきるときは 1 行のまま (見た目は変わらない)', async () => {
+    document.body.innerHTML = '<div id="box" style="width:900px"><div id="app"></div></div>';
+    applyTheme(document.getElementById('box')!, { theme: 'light' });
+    let tabs: ReturnType<typeof createTabs>;
+    const handle = createApp('#app', {}, () => (tabs ? tabs({ items: ITEMS, variant: 'pill' }) : null));
+    tabs = handle.use(createTabs());
+    handle.renderNow();
+    const list = Array.from(document.querySelectorAll('[role="tab"]')) as HTMLElement[];
+    expect(new Set(list.map((tab) => Math.round(tab.getBoundingClientRect().top))).size).toBe(1);
+    handle.unmount();
+  });
 });
