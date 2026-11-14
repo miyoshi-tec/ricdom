@@ -120,6 +120,19 @@
               U.uiRow({
                 children: [U.uiColor({ value: s.bg, oninput: (e) => (s.bg = e.target.value) }), U.uiColor({ value: s.overlay, oninput: (e) => (s.overlay = e.target.value) })],
               }),
+              // uiProgress shows how far a long task has got. `value` is 0 to 1; here it follows the
+              // slider above. `children` is a detail line under the bar, `action` a button beside it.
+              // uiProgress は、時間のかかる処理の進み具合を表示します。`value` は 0〜1 で、ここでは上の
+              // スライダーに合わせています。`children` は棒の下の補足、`action` はその横のボタンです。
+              U.uiProgress({
+                value: s.volume / 100,
+                label: t('Analysing…', { ja: '解析しています…' }),
+                children: [t('Move the slider above', { ja: '上のスライダーを動かしてみてください' })],
+                action: U.uiButton({ size: 'sm', children: [t('Reset', { ja: 'リセット' })], onclick: () => (s.volume = 0) }),
+              }),
+              // Leave out `value` when the amount of work is unknown: the bar keeps moving.
+              // 全体の量が分からないときは `value` を渡しません。棒が動き続けます。
+              U.uiProgress({ label: t('Waiting for a connection…', { ja: '接続を待っています…' }) }),
             ],
           }),
 
