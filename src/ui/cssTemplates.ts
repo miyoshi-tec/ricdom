@@ -855,6 +855,71 @@ const SEPARATOR_CSS = `
   margin: ${g} 0;
 }`;
 
+// uiProgress (2.0.0-alpha.33)。棒は div + role="progressbar" で、見た目は全部ここで決める
+// (progress.ts の冒頭コメント参照)。色は既存のトークンを既定にして、専用の変数で上書きできる:
+//   --ric-progress-bar   塗りの色 (既定 --ric-color-accent)
+//   --ric-progress-track 棒の地の色 (既定 --ric-color-border)
+// 専用の変数はパレットには入れない (全パレットが同じキー集合を持つ契約を増やさないため。
+// 未定義なら var() の第 2 引数が効く)。
+// 見出しの行と下の行は「伸びる箱 (文) + 縮まない箱 (% / ボタン)」の flex。文の箱は min-width: 0 で
+// 折り返すので、狭い場所でも % とボタンが枠の外に押し出されない。
+// 不定のときは塗りが左から右へ流れ続ける。prefers-reduced-motion では流さず、棒全体を薄く塗る
+// (止まっていても「値が無い」ことが分かるように)。
+const PROGRESS_CSS = `
+.ric-progress {
+  display: flex;
+  flex-direction: column;
+  gap: ${g};
+  min-width: 0;
+}
+.ric-progress__head,
+.ric-progress__foot {
+  display: flex;
+  align-items: center;
+  gap: ${gm};
+  min-width: 0;
+}
+.ric-progress__label,
+.ric-progress__detail {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.ric-progress__detail {
+  color: ${fm};
+  font-size: 0.85em;
+}
+.ric-progress__percent {
+  flex: none;
+  color: ${fm};
+  font-size: 0.85em;
+  font-variant-numeric: tabular-nums;
+}
+.ric-progress__action {
+  flex: none;
+}
+.ric-progress__track {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--ric-progress-track, ${bd});
+  overflow: hidden;
+}
+.ric-progress__fill {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--ric-progress-bar, ${ac});
+  transition: width ${da};
+}
+@keyframes ric-progress-slide { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
+.ric-progress__track--indeterminate > .ric-progress__fill {
+  width: 40%;
+  animation: ric-progress-slide 1.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ric-progress__fill { transition: none; }
+  .ric-progress__track--indeterminate > .ric-progress__fill { width: 100%; opacity: 0.5; animation: none; }
+}`;
+
 const TEXT_CSS = `
 .ric-text {
   font-size: 1em;
@@ -1536,6 +1601,7 @@ export const buildStylesheet = (): string =>
     RANGE_CSS,
     COLOR_CSS,
     SEPARATOR_CSS,
+    PROGRESS_CSS,
     TEXT_CSS,
     ICON_CSS,
     COL_CSS,
