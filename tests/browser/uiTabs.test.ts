@@ -28,19 +28,19 @@ describe('実ブラウザ: createTabs', () => {
     expect(document.activeElement).toBe(tabEls()[0]);
 
     await userEvent.keyboard('{ArrowRight}');
-    await new Promise((r) => setTimeout(r, 50));
+    await flush(50);
     expect(document.activeElement).toBe(tabEls()[1]);
 
     await userEvent.keyboard('{ArrowRight}');
-    await new Promise((r) => setTimeout(r, 50));
+    await flush(50);
     expect(document.activeElement).toBe(tabEls()[2]);
 
     await userEvent.keyboard('{ArrowRight}'); // 末尾から先頭へループ
-    await new Promise((r) => setTimeout(r, 50));
+    await flush(50);
     expect(document.activeElement).toBe(tabEls()[0]);
 
     await userEvent.keyboard('{ArrowLeft}'); // 先頭から末尾へループ
-    await new Promise((r) => setTimeout(r, 50));
+    await flush(50);
     expect(document.activeElement).toBe(tabEls()[2]);
   });
 
@@ -55,11 +55,11 @@ describe('実ブラウザ: createTabs', () => {
     tabEls()[0]!.focus();
 
     await userEvent.keyboard('{End}');
-    await new Promise((r) => setTimeout(r, 50));
+    await flush(50);
     expect(document.activeElement).toBe(tabEls()[2]);
 
     await userEvent.keyboard('{Home}');
-    await new Promise((r) => setTimeout(r, 50));
+    await flush(50);
     expect(document.activeElement).toBe(tabEls()[0]);
   });
 });

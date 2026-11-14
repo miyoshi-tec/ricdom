@@ -20,7 +20,7 @@ describe('実ブラウザ: createDropdown', () => {
     await flush();
 
     await userEvent.click(app.querySelector('button')!);
-    await new Promise((r) => setTimeout(r, 100)); // rAF 実測フェーズ
+    await flush(100); // rAF 実測フェーズ
     expect(app.querySelector('.ric-dropdown__body')!.className).toContain('ric-popup__body--below');
   });
 
@@ -40,7 +40,7 @@ describe('実ブラウザ: createDropdown', () => {
 
     const trigger = app.querySelector('button')!;
     await userEvent.click(trigger);
-    await new Promise((r) => setTimeout(r, 100)); // rAF 実測フェーズ
+    await flush(100); // rAF 実測フェーズ
 
     const body = app.querySelector('.ric-dropdown__body')!;
     expect(body.className).toContain('ric-popup__body--above');
@@ -59,7 +59,7 @@ describe('実ブラウザ: createDropdown', () => {
     const trigger = app.querySelector('button')!;
     const triggerWidth = trigger.getBoundingClientRect().width;
     await userEvent.click(trigger);
-    await new Promise((r) => setTimeout(r, 100));
+    await flush(100);
 
     const body = app.querySelector('.ric-dropdown__body') as HTMLElement;
     expect(parseFloat(body.style.minWidth)).toBeCloseTo(triggerWidth, 0);
@@ -87,7 +87,7 @@ describe('実ブラウザ: createDropdown', () => {
       const trigger = app.querySelector('button')!;
       Object.assign(trigger.style, { position: 'fixed', top: '50px' }, triggerStyle);
       trigger.click();
-      await new Promise((r) => setTimeout(r, 100)); // rAF 実測フェーズ + 再描画を待つ
+      await flush(100); // rAF 実測フェーズ + 再描画を待つ
       const body = app.querySelector('.ric-dropdown__body') as HTMLElement;
       // offsetWidth/rect は数値としてここで確定させる (次の buildAndMeasure が
       // setupApp() で DOM を丸ごと差し替えるため、要素参照のまま後段で読むと
@@ -127,11 +127,11 @@ describe('実ブラウザ: createDropdown の light dismiss (2.0.0-alpha.12)', (
     document.body.appendChild(outsideBtn);
 
     await userEvent.click(app.querySelector('button')!);
-    await new Promise((r) => setTimeout(r, 100));
+    await flush(100);
     expect(dd!.isOpen()).toBe(true);
 
     await userEvent.click(outsideBtn);
-    await new Promise((r) => setTimeout(r, 350)); // exit アニメーション終了を待つ
+    await flush(350); // exit アニメーション終了を待つ
 
     expect(dd!.isOpen()).toBe(false);
     expect(clicked).toBe(1); // 修正前: 0 (overlay がクリックを吸っていた)
@@ -145,12 +145,12 @@ describe('実ブラウザ: createDropdown の light dismiss (2.0.0-alpha.12)', (
     await flush();
 
     await userEvent.click(app.querySelector('button')!);
-    await new Promise((r) => setTimeout(r, 100));
+    await flush(100);
     expect(dd!.isOpen()).toBe(true);
 
     const checkbox = app.querySelector('#chk') as HTMLInputElement;
     await userEvent.click(checkbox);
-    await new Promise((r) => setTimeout(r, 100));
+    await flush(100);
 
     expect(checkbox.checked).toBe(true);
     expect(dd!.isOpen()).toBe(true); // 閉じていない (開いたまま)
@@ -165,11 +165,11 @@ describe('実ブラウザ: createDropdown の light dismiss (2.0.0-alpha.12)', (
 
     const trigger = app.querySelector('button')!;
     await userEvent.click(trigger);
-    await new Promise((r) => setTimeout(r, 100));
+    await flush(100);
     expect(dd!.isOpen()).toBe(true);
 
     await userEvent.click(trigger); // 再クリック (トグルで close)
-    await new Promise((r) => setTimeout(r, 350)); // exit アニメーション終了を待つ
+    await flush(350); // exit アニメーション終了を待つ
 
     expect(dd!.isOpen()).toBe(false);
     // outside-pointerdown 経路 (doClose のみ、フォーカス復帰なし) がトリガークリックにも

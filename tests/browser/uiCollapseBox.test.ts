@@ -24,7 +24,7 @@ describe('実ブラウザ: createCollapseBox', () => {
 
     visible = true;
     handle.renderNow();
-    await new Promise((r) => setTimeout(r, 300)); // 実測 (rAF) + transition (50ms) 完了を待つ
+    await flush(300); // 実測 (rAF) + transition (50ms) 完了を待つ
 
     const el = app.querySelector('.ric-collapse-box') as HTMLElement;
     expect(el).not.toBeNull();
@@ -42,12 +42,12 @@ describe('実ブラウザ: createCollapseBox', () => {
     );
     box = handle.use(createCollapseBox({ duration: 50 }));
     await flush();
-    await new Promise((r) => setTimeout(r, 300)); // open 完了まで待つ
+    await flush(300); // open 完了まで待つ
     expect(app.querySelector('.ric-collapse-box')).not.toBeNull();
 
     visible = false;
     handle.renderNow();
-    await new Promise((r) => setTimeout(r, 300)); // 2 段クロージング + transition 完了を待つ
+    await flush(300); // 2 段クロージング + transition 完了を待つ
 
     expect(app.querySelector('.ric-collapse-box')).toBeNull();
     expect(box!.isAnimating()).toBe(false);

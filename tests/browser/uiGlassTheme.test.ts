@@ -50,7 +50,7 @@ const dialogBackdropFilter = async (theme: ThemeName): Promise<string> => {
   dlg = handle.use(createDialog());
   await flush();
   await userEvent.click(app.querySelector('button')!);
-  await new Promise((r) => setTimeout(r, 300)); // entrance アニメーション終了待ち
+  await flush(300); // entrance アニメーション終了待ち
   return getComputedStyle(document.querySelector('.ric-dialog')!).backdropFilter;
 };
 
@@ -62,7 +62,7 @@ const popupBackdropFilter = async (theme: ThemeName): Promise<string> => {
   menu = handle.use(createPopup());
   await flush();
   await userEvent.click(app.querySelector('button')!);
-  await new Promise((r) => setTimeout(r, 150));
+  await flush(150);
   return getComputedStyle(document.querySelector('.ric-popup__body')!).backdropFilter;
 };
 
@@ -101,7 +101,7 @@ const dropdownBackdropFilter = async (theme: ThemeName): Promise<string> => {
   dd = handle.use(createDropdown());
   await flush();
   await userEvent.click(app.querySelector('button')!);
-  await new Promise((r) => setTimeout(r, 100));
+  await flush(100);
   return getComputedStyle(document.querySelector('.ric-dropdown__body')!).backdropFilter;
 };
 
@@ -166,7 +166,7 @@ describe('実ブラウザ: 透明ウィンドウ対応 (createTheme override、2
     dlg = handle.use(createDialog());
     await flush();
     await userEvent.click(app.querySelector('button')!);
-    await new Promise((r) => setTimeout(r, 300)); // entrance アニメーション終了待ち
+    await flush(300); // entrance アニメーション終了待ち
     expect(getComputedStyle(document.querySelector('.ric-dialog')!).backdropFilter).toContain('blur(');
   });
 });

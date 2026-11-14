@@ -62,13 +62,13 @@ describe('実ブラウザ: 空の portal は flex/grid の gap に数えられ�
 
     const trigger = app.querySelector('button')!;
     trigger.click();
-    await new Promise((r) => setTimeout(r, 300)); // entrance animationend を待つ (uiDialog.test.ts と同じ待ち方)
+    await flush(300); // entrance animationend を待つ (uiDialog.test.ts と同じ待ち方)
 
     expect(portal.childElementCount).toBeGreaterThan(0);
     expect(getComputedStyle(portal).display).not.toBe('none');
 
     dlg.close();
-    await new Promise((r) => setTimeout(r, 300)); // exit animationend を待つ
+    await flush(300); // exit animationend を待つ
 
     expect(portal.childElementCount).toBe(0);
     expect(getComputedStyle(portal).display).toBe('none');

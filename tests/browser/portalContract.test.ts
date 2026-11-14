@@ -86,7 +86,7 @@ const CASES: PortalCase[] = [
         triggerEl,
         open: async () => {
           triggerEl.click();
-          await new Promise((r) => setTimeout(r, 100)); // rAF 実測フェーズ
+          await flush(100); // rAF 実測フェーズ
         },
       };
     },
@@ -110,7 +110,7 @@ const CASES: PortalCase[] = [
         triggerEl,
         open: async () => {
           triggerEl.click();
-          await new Promise((r) => setTimeout(r, 100));
+          await flush(100);
         },
       };
     },
@@ -234,7 +234,7 @@ const WIDTH_CASES: WidthCase[] = [
       const trigger = app.querySelector('button')!;
       Object.assign(trigger.style, { position: 'fixed', top: '50px' }, triggerStyle);
       trigger.click();
-      await new Promise((r) => setTimeout(r, 100));
+      await flush(100);
       return measureBody(app, '[data-ricdom-role="popup"]');
     },
   },
@@ -250,7 +250,7 @@ const WIDTH_CASES: WidthCase[] = [
       const trigger = app.querySelector('button')!;
       Object.assign(trigger.style, { position: 'fixed', top: '50px' }, triggerStyle);
       trigger.click();
-      await new Promise((r) => setTimeout(r, 100));
+      await flush(100);
       return measureBody(app, '[data-ricdom-role="dropdown"]');
     },
   },

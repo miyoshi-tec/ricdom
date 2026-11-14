@@ -42,7 +42,7 @@ const mountInBar = (trapCss: string): HTMLElement => {
   return document.getElementById('app')!;
 };
 
-const waitAnim = (): Promise<void> => new Promise((r) => setTimeout(r, 400)); // 開くアニメーション (最長 aqua 600ms の手前で十分な位置)
+const waitAnim = (): Promise<void> => flush(400); // 開くアニメーション (最長 aqua 600ms の手前で十分な位置)
 
 describe('実ブラウザ: 浮遊面は祖先の containing block に閉じ込められない (2.0.0-alpha.26)', () => {
   for (const [name, css] of TRAPS) {
@@ -80,7 +80,7 @@ describe('実ブラウザ: 浮遊面は祖先の containing block に閉じ込�
 
     const trigger = document.querySelector('#app button') as HTMLElement;
     await userEvent.click(trigger);
-    await new Promise((r) => setTimeout(r, 150)); // rAF 実測フェーズ
+    await flush(150); // rAF 実測フェーズ
     const t = trigger.getBoundingClientRect();
     const p = document.querySelector('[data-ricdom-role="popup"]')!.getBoundingClientRect();
     // 修正前は transform の箱 (top 300px) を基準に top が解決され、トリガーより約 300px 下に出た

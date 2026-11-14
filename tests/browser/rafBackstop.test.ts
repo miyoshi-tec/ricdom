@@ -28,7 +28,7 @@ describe('実ブラウザ: rAF 停止環境でもバックストップで再描�
 
     handle.n = 2;
     // rAF は発火しないので、setTimeout(200ms) バックストップが効くまで待つ
-    await new Promise((r) => setTimeout(r, 300));
+    await flush(300);
     expect(app.querySelector('#out')!.textContent).toBe('2');
   });
 
