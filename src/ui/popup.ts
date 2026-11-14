@@ -22,10 +22,10 @@
 //   任意の座標に開く: menu.openAt(event) / menu.openAt({ x, y })
 
 import type { ClassValue, RicNode, StyleValue } from '../types.js';
-import { ANIMATION_FALLBACK_MS, type AttachGuard, type Component, createAttachGuard, type Host } from './internal/component.js';
+import { type AttachGuard, type Component, createAttachGuard, type Host } from './internal/component.js';
 import { UI_ROLE, mergeClass } from './internal/pureHelpers.js';
-import { clampLeft, computeAnchoredLeft, computeFlipDir, computeFlipDirAt, fitHeight, measuringLeft, type Pos, posToStyle, shouldCloseOnScroll } from './internal/popupPosition.js';
-import { closeOthers, registerExclusive, unregisterExclusive } from './internal/exclusiveRegistry.js';
+import { registerExclusive, unregisterExclusive } from './internal/exclusiveRegistry.js';
+import { createFloatingMenu } from './internal/floatingMenu.js';
 
 /**
  * トリガーの見た目を `uiButton` 相当 (icon + ghost の丸ボタン等) にしたいケース向けの
@@ -158,32 +158,14 @@ export const createPopup = (): PopupInstance => {
   const bodyMarker = `ricdom-popup-${id}`;
   const guard: AttachGuard = createAttachGuard('createPopup', { topLayer: true });
 
-  let isOpen = false;
-  let isClosing = false;
-  let isMeasuring = false;
-  let dir: 'below' | 'above' = 'below';
-  let pos: Pos = {};
-  let escBound = false;
-  let lightDismissBound = false;
   let triggerChildrenLast: RicNode | RicNode[] = [];
   let menuChildrenLast: RicNode[] = [];
   let closeOnSelectLast = true;
-  let restoreFocusEl: HTMLElement | null = null;
-  // openAt(element) で開いたときの基準要素 (2.0.0-alpha.27)。light dismiss がこの要素上の
-  // pointerdown を「外側」と見なさないために使う — 見なすと、同じ「…」をもう一度押したとき
-  // pointerdown で閉じ → click で開き直す、になり閉じられない。閉じ終わったら null に戻す。
-  let anchorEl: HTMLElement | null = null;
-  // 本体をどの要素の矩形に合わせて置いたか (トリガー、または openAt(element) の要素)。点の形の openAt
-  // では null。スクロールで閉じる判定 (handleScroll) が「その要素を含む領域が動いたか」を見るのに使う (alpha.28)。
-  let placedFrom: HTMLElement | null = null;
 
   const getBodyEl = (): HTMLElement | null => (typeof document === 'undefined' ? null : document.querySelector(`[data-ricdom-popup-id="${bodyMarker}"]`));
-  // light dismiss (#A、2.0.0-alpha.12) が「トリガー上のクリックか」を判定するための参照。
-  // トリガーはこの部品自身の描画結果 (inst の戻り値) の一部で portal の外にあるため、
-  // getBodyEl と同じ「マーカー属性を都度クエリする」方式にする — onclick 内で要素を
-  // 変数に保持する方式だと openAt() 経由 (トリガーボタンをクリックせずに開く) で
-  // 一度も更新されず stale になる (openAt でも menu({...}) は毎 render 呼ばれ続けるため
-  // トリガー自体は常に存在する、トリガー経由で開いていないだけ)。
+  // 「トリガーの上の操作か」を判定するための参照。トリガーはこの部品自身の描画結果の一部で portal の
+  // 外にあるため、getBodyEl と同じ「マーカー属性を都度クエリする」方式にする — onclick の中で要素を
+  // 変数に保持する方式だと、openAt() 経由 (トリガーを押さずに開く) では一度も更新されず古くなる。
   const getTriggerEl = (): HTMLElement | null => (typeof document === 'undefined' ? null : document.querySelector(`[data-ricdom-popup-trigger-id="${bodyMarker}"]`));
 
   const getMenuItems = (): HTMLElement[] => {
@@ -192,39 +174,8 @@ export const createPopup = (): PopupInstance => {
     return Array.from(body.querySelectorAll<HTMLElement>(`[data-ricdom-role="${UI_ROLE.popupItem}"]`));
   };
 
-  // handleAnimEnd は冪等 (isClosing チェック) — 実 animationend と
-  // ANIMATION_FALLBACK_MS のフォールバックタイマーの両方から安全に呼べる。
-  // consumer が ricdom-ui.css を読み込み忘れている等でアニメーションが走らない場合、
-  // animationend が永久に発火せず popup が閉じたまま DOM に残り続けるのを防ぐ。
-  const handleAnimEnd = (): void => {
-    if (!isClosing) return;
-    isOpen = false;
-    isClosing = false;
-    anchorEl = null;
-    guard.host?.notify();
-  };
-
-  const doClose = (): void => {
-    if (isClosing || !isOpen) return;
-    isClosing = true;
-    guard.host?.notify();
-    if (typeof setTimeout !== 'undefined') setTimeout(handleAnimEnd, ANIMATION_FALLBACK_MS);
-  };
-
-  const closeAndRestoreFocus = (): void => {
-    doClose();
-    if (restoreFocusEl && typeof restoreFocusEl.focus === 'function') restoreFocusEl.focus();
-  };
-
-  // 排他制御 (host.app 単位、internal/exclusiveRegistry.ts、設計書「共通」節)。
-  // createDropdown と同じレジストリを共有し、「popup 系」全体で 1 つ開いたら他を閉じる。
-  const exclusiveSelf = { close: doClose };
-
-  const handleKeydown = (ev: KeyboardEvent): void => {
-    if (ev.key === 'Escape') {
-      closeAndRestoreFocus();
-      return;
-    }
+  // メニューの中のキー操作 (矢印・Home・End)。Escape は共有の本体が受ける。
+  const handleMenuKey = (ev: KeyboardEvent): void => {
     const items = getMenuItems();
     if (items.length === 0) return;
     const currentIndex = items.indexOf(document.activeElement as HTMLElement);
@@ -243,119 +194,11 @@ export const createPopup = (): PopupInstance => {
     }
   };
 
-  const bindKeydownIfNeeded = (): void => {
-    if (typeof document === 'undefined') return;
-    if (isOpen && !escBound) {
-      document.addEventListener('keydown', handleKeydown);
-      escBound = true;
-    }
-    if (!isOpen && escBound) {
-      document.removeEventListener('keydown', handleKeydown);
-      escBound = false;
-    }
-  };
-
-  // light dismiss (#A、2.0.0-alpha.12): HTML `popover="auto"` と同じ「外側の pointerdown
-  // で閉じつつ、そのクリックは下の要素にそのまま届く」挙動。alpha.11 以前は
-  // `.ric-popup__overlay` (viewport 全面を覆う要素) が click を吸っていたため、
-  // 「dropdown を開いたまま別のボタンを押す」操作が「閉じるだけ」になり、consumer は
-  // 2 回目のクリックを要求されていた (パイロット第 10 号・線茶からの報告)。
-  // capture phase で見るのは、項目 (menuitem) 側が stopPropagation() していても
-  // (wrapMenuItem と同じ理由で) 確実に検知するため。
-  const handleOutsidePointerDown = (ev: PointerEvent): void => {
-    if (!isOpen || isClosing) return;
-    const target = ev.target as Node | null;
-    if (!target) return;
-    const body = getBodyEl();
-    if (body && body.contains(target)) return; // 本体内クリックでは閉じない
-    const triggerEl = getTriggerEl();
-    if (triggerEl && triggerEl.contains(target)) return; // トリガー上は既存の toggle に任せる (二重に閉じない)
-    if (anchorEl && anchorEl.contains(target)) return; // openAt(element) の基準要素も同じ (openAt 側が toggle する)
-    doClose(); // 外側クリックはフォーカス復帰しない (Esc/項目活性化は closeAndRestoreFocus のまま)
-  };
-
-  // 基準要素を含む領域 (またはページ) のスクロールで閉じる (alpha.28、popupPosition.ts の
-  // shouldCloseOnScroll 参照)。基準要素は placedFrom (トリガー or openAt の要素)。openAt({x,y}) で
-  // 開いた場合は null で、ページのスクロールだけで閉じる。
-  const handleScroll = (ev: Event): void => {
-    if (!isOpen || isClosing) return;
-    if (shouldCloseOnScroll(ev.target, placedFrom, getBodyEl())) doClose();
-  };
-
-  const bindLightDismissIfNeeded = (): void => {
-    if (typeof document === 'undefined') return;
-    if (isOpen && !lightDismissBound) {
-      document.addEventListener('pointerdown', handleOutsidePointerDown, true);
-      document.addEventListener('scroll', handleScroll, { capture: true, passive: true });
-      lightDismissBound = true;
-    }
-    if (!isOpen && lightDismissBound) {
-      document.removeEventListener('pointerdown', handleOutsidePointerDown, true);
-      document.removeEventListener('scroll', handleScroll, true);
-      lightDismissBound = false;
-    }
-  };
-
-  // #14 (2.0.0-alpha.5): 実測前 (measuredWidth undefined、= 実測 render の間) は
-  // `measuringLeft()` で本体を viewport マージン位置に仮置きし、実測を横幅制約なしで
-  // 行う (popupPosition.ts の `measuringLeft` コメント参照)。実測後は従来どおり
-  // `computeAnchoredLeft`/`clampLeft` で最終位置を決める。トリガー経路・openAt 経路の
-  // 両方で同じ関数を使う (dropdown とも共有)。
-  // measuredH (実測後のみ) を渡すと、上下どちらにも入りきらないときに maxHeight で画面内に収める (alpha.28)。
-  const computePos = (rect: DOMRect, chosenDir: 'below' | 'above', measuredWidth?: number, measuredH?: number): Pos => ({
-    top: chosenDir === 'below' ? rect.bottom + 4 : undefined,
-    bottom: chosenDir === 'above' ? window.innerHeight - rect.top + 4 : undefined,
-    left: measuredWidth === undefined ? measuringLeft() : computeAnchoredLeft(rect, measuredWidth),
-    maxHeight: measuredH === undefined ? undefined : fitHeight(chosenDir, chosenDir === 'below' ? rect.bottom + 4 : rect.top - 4, measuredH),
-  });
-
-  const computePosAt = (x: number, y: number, chosenDir: 'below' | 'above', measuredWidth: number | undefined, measuredH?: number): Pos => ({
-    top: chosenDir === 'below' ? y + 4 : undefined,
-    bottom: chosenDir === 'above' ? window.innerHeight - y + 4 : undefined,
-    left: measuredWidth === undefined ? measuringLeft() : clampLeft(x, measuredWidth),
-    maxHeight: measuredH === undefined ? undefined : fitHeight(chosenDir, chosenDir === 'below' ? y + 4 : y - 4, measuredH),
-  });
-
-  const beginMeasuredOpen = (initialDir: 'below' | 'above', initialPos: Pos, remeasure: () => void): void => {
-    if (guard.host) closeOthers(guard.host.app, exclusiveSelf);
-    dir = initialDir;
-    pos = initialPos;
-    const canMeasure = typeof requestAnimationFrame !== 'undefined' && typeof document !== 'undefined';
-    isMeasuring = canMeasure;
-    isClosing = false;
-    isOpen = true;
-    guard.host?.notify();
-    if (canMeasure) requestAnimationFrame(remeasure);
-  };
-
-  // 要素 (トリガーボタン、または openAt(element) の基準要素) の矩形を基準に開く。下端の直下に
-  // 入らなければ上端の直上に反転し、横は要素に揃えて viewport 内に収める。トリガー経路と
-  // openAt(element) 経路で共有する (2.0.0-alpha.27 に切り出し、以前はトリガーの onclick 内にあった)。
-  const openFromElement = (el: HTMLElement): void => {
-    restoreFocusEl = el;
-    placedFrom = el;
-    const rect = el.getBoundingClientRect();
-    const initialDir = computeFlipDir(rect, 160);
-    beginMeasuredOpen(initialDir, computePos(rect, initialDir), () => {
-      if (!isOpen || isClosing) {
-        isMeasuring = false;
-        return;
-      }
-      const body = getBodyEl();
-      if (!body) {
-        isMeasuring = false;
-        guard.host?.notify();
-        return;
-      }
-      const measuredW = body.offsetWidth;
-      const measuredH = body.offsetHeight;
-      const newDir = computeFlipDir(rect, measuredH);
-      dir = newDir;
-      pos = computePos(rect, newDir, measuredW, measuredH);
-      isMeasuring = false;
-      guard.host?.notify();
-    });
-  };
+  // 開閉の状態・外側の操作で閉じる処理・実測して置く処理は createDropdown と共有する
+  // (internal/floatingMenu.ts)。同じ排他の登録簿も共有し、「popup 系」全体で 1 つ開いたら他を閉じる。
+  // スクロールで閉じる判定の基準は既定のまま (本体を置く基準にした要素 = トリガーか openAt の要素。
+  // 点で開いたときは基準なし = ページのスクロールでだけ閉じる)。
+  const menu = createFloatingMenu({ host: () => guard.host, bodyEl: getBodyEl, triggerEl: getTriggerEl, onKey: handleMenuKey });
 
   const inst = ((props: PopupProps): RicNode => {
     const host = guard.ensure();
@@ -363,8 +206,7 @@ export const createPopup = (): PopupInstance => {
 
     menuChildrenLast = props.children ?? [];
     closeOnSelectLast = props.closeOnSelect ?? true;
-    bindKeydownIfNeeded();
-    bindLightDismissIfNeeded();
+    menu.syncListeners();
 
     // trigger 省略 = openAt() 専用 (2.0.0-alpha.27)。メニューの中身 (children / closeOnSelect) は
     // 上で記録済みなので、トリガーボタンを描かずに終える。
@@ -393,85 +235,78 @@ export const createPopup = (): PopupInstance => {
     return {
       ...triggerRest,
       tag: 'button',
-      class: `${triggerBaseClass}${isOpen ? ' ric-popup__trigger--open' : ''}`,
+      class: `${triggerBaseClass}${menu.isOpen() ? ' ric-popup__trigger--open' : ''}`,
       ...(triggerObj?.style ? { style: triggerObj.style } : {}),
       // dropdown には dropdownTrigger role があるのに popup のトリガーには無かった非対称を
       // 解消 (#2 の役割棚卸しで発見、2.0.0-alpha.8)。
       'data-ricdom-role': UI_ROLE.popupTrigger,
-      // light dismiss (#A) の getTriggerEl が問い合わせる安定セレクタ。getBodyEl の
-      // data-ricdom-popup-id と対になる (両方とも bodyMarker を共有する)。
+      // getTriggerEl が問い合わせる安定セレクタ。getBodyEl の data-ricdom-popup-id と対になる
+      // (両方とも bodyMarker を共有する)。
       'data-ricdom-popup-trigger-id': bodyMarker,
       'aria-haspopup': 'menu',
-      'aria-expanded': isOpen ? 'true' : 'false',
+      'aria-expanded': menu.isOpen() ? 'true' : 'false',
       onclick: (ev: MouseEvent) => {
-        if (isClosing) return;
-        if (isOpen) {
-          closeAndRestoreFocus();
+        if (menu.isClosing()) return;
+        if (menu.isOpen()) {
+          menu.closeAndRestoreFocus();
           return;
         }
-        anchorEl = null; // トリガー経路は getTriggerEl() が light dismiss の例外を担う
-        openFromElement(ev.currentTarget as HTMLElement);
+        // トリガー経路は基準要素として覚えない (getTriggerEl が「この上では閉じない」を担う)
+        menu.openFromElement(ev.currentTarget as HTMLElement);
       },
       children: triggerChildrenLast,
     } as unknown as RicNode;
   }) as PopupInstance;
 
   inst.renderPortal = (): RicNode => {
-    if (!guard.host || !isOpen) return null;
+    if (!guard.host || !menu.isOpen()) return null;
     return [
-      // light dismiss (#A、2.0.0-alpha.12): overlay は視覚・role (popup-overlay) 用に
-      // 残すが pointer-events: none にして onclick は持たない (CSS 側、cssTemplates.ts)。
-      // 閉じる判定・下要素へのクリック透過は handleOutsidePointerDown (document 監視) が担う。
+      // overlay は視覚・role (popup-overlay) 用に残すが pointer-events: none にして onclick は
+      // 持たない (CSS 側、cssTemplates.ts)。外側クリックで閉じる処理と下の要素へのクリックの透過は
+      // floatingMenu.ts が document で受ける (2.0.0-alpha.12)。
       { tag: 'div', class: 'ric-popup__overlay', 'data-ricdom-role': UI_ROLE.popupOverlay },
       {
         tag: 'div',
-        class: `ric-popup__body ric-popup__body--${dir}${isClosing ? ' ric-popup__body--out' : ''}`,
+        class: `ric-popup__body ric-popup__body--${menu.dir()}${menu.isClosing() ? ' ric-popup__body--out' : ''}`,
         role: 'menu',
         'data-ricdom-role': UI_ROLE.popup,
         'data-ricdom-popup-id': bodyMarker,
-        style: { ...posToStyle(pos), ...(isMeasuring ? { visibility: 'hidden' } : {}) },
-        onanimationend: handleAnimEnd,
-        children: menuChildrenLast.map((child) => wrapMenuItem(child, { closeOnSelect: closeOnSelectLast, close: closeAndRestoreFocus })),
+        style: menu.bodyStyle(),
+        onanimationend: menu.handleAnimEnd,
+        children: menuChildrenLast.map((child) => wrapMenuItem(child, { closeOnSelect: closeOnSelectLast, close: menu.closeAndRestoreFocus })),
       },
     ] as unknown as RicNode;
   };
 
   inst.attach = (host: Host) => {
     guard.attach(host);
-    registerExclusive(host.app, exclusiveSelf);
+    registerExclusive(host.app, menu.exclusiveSelf);
   };
   inst.dispose = (): void => {
-    if (escBound && typeof document !== 'undefined') {
-      document.removeEventListener('keydown', handleKeydown);
-      escBound = false;
-    }
-    if (lightDismissBound && typeof document !== 'undefined') {
-      document.removeEventListener('pointerdown', handleOutsidePointerDown, true);
-      document.removeEventListener('scroll', handleScroll, true);
-      lightDismissBound = false;
-    }
-    if (guard.host) unregisterExclusive(guard.host.app, exclusiveSelf);
+    menu.dispose();
+    if (guard.host) unregisterExclusive(guard.host.app, menu.exclusiveSelf);
     guard.dispose();
   };
 
-  inst.close = (): void => doClose();
-  inst.isOpen = (): boolean => isOpen;
+  inst.close = (): void => menu.close();
+  inst.isOpen = (): boolean => menu.isOpen();
 
   inst.openAt = (point: PopupPoint | Element): void => {
     // 要素の形 (2.0.0-alpha.27): 行ごとの「…」ボタン等を基準に、トリガーと同じ規則で開く。
-    // 閉じアニメーション中でも受け付ける — 別の行の「…」を押すと、pointerdown の light dismiss で
-    // 閉じ始めた直後にこの click が来るため、ここで弾くと 2 回押さないと開かない。
+    // 閉じアニメーション中でも受け付ける — 別の行の「…」を押すと、pointerdown で閉じ始めた直後に
+    // この click が来るため、ここで弾くと 2 回押さないと開かない。
     if (typeof Element !== 'undefined' && point instanceof Element) {
       const el = point as HTMLElement;
-      if (isOpen && !isClosing && anchorEl === el) {
-        closeAndRestoreFocus(); // 同じ要素でもう一度 = 閉じる (トリガーの toggle と同じ)
+      if (menu.isOpen() && !menu.isClosing() && menu.anchorEl() === el) {
+        menu.closeAndRestoreFocus(); // 同じ要素でもう一度 = 閉じる (トリガーの toggle と同じ)
         return;
       }
-      anchorEl = el;
-      openFromElement(el);
+      // 基準要素として覚える: この要素の上の pointerdown では閉じない (閉じると、同じ「…」を
+      // もう一度押したとき pointerdown で閉じ → click で開き直す、になり閉じられない)
+      menu.openFromElement(el, { asAnchor: true });
       return;
     }
-    if (isClosing) return;
+    if (menu.isClosing()) return;
     if (!point || typeof point !== 'object') {
       console.error('RicDOM UI: createPopup().openAt には要素、または { x, y } / { clientX, clientY } を持つオブジェクトを渡してください。');
       return;
@@ -484,29 +319,7 @@ export const createPopup = (): PopupInstance => {
       console.error('RicDOM UI: createPopup().openAt: x/y (または clientX/clientY) が数値ではありません。');
       return;
     }
-    anchorEl = null; // 点の形は基準要素を持たない (前回の openAt(element) の値を残さない)
-    placedFrom = null;
-    restoreFocusEl = p.target instanceof HTMLElement ? p.target : (typeof document !== 'undefined' ? (document.activeElement as HTMLElement | null) : null);
-    const initialDir = computeFlipDirAt(y, 160);
-    beginMeasuredOpen(initialDir, computePosAt(x, y, initialDir, undefined), () => {
-      if (!isOpen || isClosing) {
-        isMeasuring = false;
-        return;
-      }
-      const body = getBodyEl();
-      if (!body) {
-        isMeasuring = false;
-        guard.host?.notify();
-        return;
-      }
-      const measuredW = body.offsetWidth;
-      const measuredH = body.offsetHeight;
-      const newDir = computeFlipDirAt(y, measuredH);
-      dir = newDir;
-      pos = computePosAt(x, y, newDir, measuredW, measuredH);
-      isMeasuring = false;
-      guard.host?.notify();
-    });
+    menu.openAtPoint(x, y, p.target instanceof HTMLElement ? p.target : typeof document !== 'undefined' ? (document.activeElement as HTMLElement | null) : null);
   };
 
   return inst;

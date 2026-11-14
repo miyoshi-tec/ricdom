@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.0.0-alpha.34] — not yet published
+
+Internal refactoring (`2026-11-14`, owner-approved). No API or behavior change.
+
+### Changed (internal)
+
+- **`createPopup` and `createDropdown` share one implementation of opening and closing**
+  (`src/ui/internal/floatingMenu.ts`). They already shared the position math and the "one open
+  at a time" registry, but each kept its own copy of the open/closing/measuring state, the
+  `Escape` handler, the outside-`pointerdown` and scroll dismissal, the `document` listener
+  bookkeeping and the measure-then-place sequence — ten functions with the same names. alpha.12
+  (light dismiss) and alpha.28 (close on scroll, height limit) each had to be written twice.
+  The components now keep only what they draw and what is specific to them (the popup's arrow-key
+  navigation and `openAt` entry point, the dropdown's label-width minimum).
+- `popup.ts` 513 → 326 lines, `dropdown.ts` 284 → 158, the shared module 283 (most of it
+  comments). The ui bundle shrinks by 127B gzip (27,864 → 27,737).
+
+### Tests
+
+- No test was changed: the existing 740 unit and 220 browser tests pass as they are, including the
+  13 browser test files that exercise popups and dropdowns (placement, flipping, light dismiss,
+  scroll dismissal, height limit, row menus, focus return, exclusivity, top layer, z-order).
+
 ## [2.0.0-alpha.33] — not yet published
 
 Requested by Paper Bridge (`2026-11-14`): a progress bar for computations that take seconds to

@@ -176,6 +176,19 @@ v1 は 5 か月・46 リリース・社内 11 アプリの実戦で API が磨�
 - **追報 4 (alpha.4 取り込み) で第 2 号は完了**: 再現スクリプト 5→5→5→5→5、E2E 10/10、回避策ゼロ。初報 10 + 追報 5 = 15 件が同日中に公式 API で閉じた
 - ~~観察 (対応なし)~~ → **§23 で実バグ (#14) と判明**。DPI 150% の実機で右端密着トリガーの dropdown body の `right` が `innerWidth` を 0.33px 超えた件、統括は「`clampLeft` が右端も収めるので最終位置では起き得ない、実測フェーズの rect を拾ったのでは」と判断したが誤り。consumer が再計測後 (200ms / 600ms) の inline `left` / `offsetWidth` / 本来幅を取り直し、**測った幅そのものが位置依存で過小**になっていることを示した (§23)。教訓: 「式は正しい」で止めず、式に入る実測値の取り方まで疑う
 
+## 53. popup と dropdown の開閉処理を 1 つにまとめる (2026-11-14、2.0.0-alpha.34、ユーザー承認の順番の 3 番目、動作は不変)
+
+- **動機**: 2 つの部品は位置の計算 (`popupPosition.ts`) と排他 (`exclusiveRegistry.ts`) を共有していたが、開閉の状態と後始末を **同じ名前の関数 10 個** (`getBodyEl` / `getTriggerEl` / `handleAnimEnd` / `doClose` / `closeAndRestoreFocus` / `handleKeydown` / `bindKeydownIfNeeded` / `handleOutsidePointerDown` / `handleScroll` / `bindLightDismissIfNeeded`) でそれぞれ持っていた。alpha.12 (外側クリックで閉じる) と alpha.28 (スクロールで閉じる、高さの制限) は同じ変更を 2 か所に入れた。alpha.31 の box-sizing も 2 つの本体にそれぞれ入れている
+- **切り出したもの (`src/ui/internal/floatingMenu.ts` の `createFloatingMenu`)**: 状態 (開いている・閉じアニメーション中・実測中・向き・位置・フォーカスの戻し先・基準要素)、閉じ方 (animationend と 700ms のタイマーの早いほう)、Escape、外側の pointerdown と scroll で閉じる処理、document のリスナーの付け外しと dispose、「非表示で仮置き → 次のフレームで実測 → 向きと位置を決め直す」の手順 (要素の矩形基準と点基準の 2 つの入口)
+- **部品に残したもの**: 何を描くか (トリガーと本体の VDOM、role、マーカー属性)、popup の矢印・Home・End (`onKey` で渡す)、popup の `openAt` の入口 (要素か点かの振り分け、同じ要素で toggle、引数の検査)、dropdown のラベル形の最小幅 (`minWidthFromElement`)
+- **2 つの部品で違っていた点は、オプションで元のまま残した** (動作を変えないため):
+  - スクロールで閉じる判定の基準: popup は「本体を置く基準にした要素」(点で開いたら null)、dropdown は「今のトリガー要素を毎回問い合わせる」。既定を前者にし、dropdown は `scrollAnchor: getTriggerEl` を渡す
+  - `openAt(element)` の基準要素 (この上の pointerdown では閉じない): popup だけの概念。`openFromElement(el, { asAnchor: true })` で覚え、トリガー経路では null に戻す
+- **検証**: テストは 1 本も変えていない。unit 740 / browser 220 がそのまま通る (popup / dropdown を動かす browser テストは 13 ファイル: 位置・反転・外側クリック・スクロール・高さ制限・行メニュー・フォーカス復帰・排他・top layer・z-index)。純粋なリファクタリングなので red first は無い (既存のテストが安全網)
+- **数**: popup.ts 513 → 326 行、dropdown.ts 284 → 158 行、共有部 283 行 (大半はコメント)。ui IIFE gzip 27,864 → 27,737B (−127B)。コア不変
+- **見送り**: tooltip と dialog は載せていない。tooltip は hover / focus で出て外側クリックや実測の手順を持たず、dialog は幕・フォーカストラップ・背景の inert と性質が違う。共通化すると分岐が増えるだけ。再検討の条件: tooltip に「実測して画面内に収める」が必要になったとき (幅 200px で端に近いと画面外に出うる、未報告)
+- **作業メモ**: 長い書き換えスクリプトを Bash の heredoc で渡すとシェルの構文解析で失敗した (`unexpected EOF while looking for matching`)。何も実行されず実害は無かったが、**長いスクリプトは Write でファイルに書いてから node で実行する**
+
 ## 52. Paper Bridge の依頼: 進捗棒 `uiProgress` を追加、カルーセルは見送り (2026-11-14、2.0.0-alpha.33、オーナー決定)
 
 - **依頼 (Paper Bridge v1 = 15 番目の consumer、依頼者はオーナー自身)**: ①`createCarousel` (複数の画面を横一列に並べて 1 枚ずつ見せ、選ぶと横に動く。両どなりをすりガラス越しに少し見せて押せる。アプリ側に 104 行の実装あり) ②`createProgress` (進捗棒 + 経過秒 + 残りのめやす + やめるボタン。アプリ側に 37 行の実装あり) ③createTabs への小さなお願い 2 つ (帯の中の寄せ方、タブ間の「→」)
