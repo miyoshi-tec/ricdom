@@ -1,0 +1,884 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ricdom — 15 AI chat (no build step)</title>
+<!-- ricdom-ui.css styles ricdom's UI components (load it before your own CSS). _fonts.css only sets this site's fonts.
+     ricdom-ui.css は ricdom の UI 部品の見た目です (自分の CSS より先に読み込みます)。_fonts.css はこのサイトのフォント設定だけです。 -->
+<link rel="stylesheet" href="../dist/ricdom-ui.css">
+<link rel="stylesheet" href="_fonts.css">
+<style>
+  .page { box-sizing: border-box; width: calc(100% - 2rem); max-width: 720px; margin: 1.5rem auto; }
+  .page > h1 { font-size: 1.1rem; margin: 0; }
+  .page > p { margin: 0; }
+
+  /* The chat has a height of its own: the history scrolls inside it, and the page keeps its normal scroll.
+     チャットには専用の高さを与えます。履歴はその中でスクロールし、ページ全体のスクロールはそのまま残ります。 */
+  .chat { box-sizing: border-box; display: flex; flex-direction: column; height: min(64vh, 640px); min-height: 320px; border: 1px solid var(--ric-color-border); border-radius: var(--ric-radius); overflow: hidden; }
+  .chat__head { flex: none; display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--ric-color-border); }
+  .chat__dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--ric-color-fg-muted); }
+  .chat__dot--on { background: #22c55e; }
+  .chat__where { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .chat__log { flex: 1; padding: 12px; }
+  .chat__foot { flex: none; display: flex; flex-direction: column; gap: 6px; padding: 8px 12px; border-top: 1px solid var(--ric-color-border); }
+  .chat__input { flex: 1; min-width: 0; }
+  .chat__input .ric-textarea { resize: none; }
+
+  /* One message. The user's text is shown as typed; a reply is Markdown, so wide tables and code scroll sideways inside it.
+     メッセージ 1 件分です。利用者の文章は入力したとおりに表示します。応答は Markdown なので、幅の広い表やコードはその中で横にスクロールします。 */
+  .bubble { box-sizing: border-box; max-width: 85%; padding: 8px 12px; border-radius: var(--ric-radius); overflow-wrap: break-word; }
+  .bubble--user { align-self: flex-end; background: var(--ric-color-accent); color: var(--ric-color-accent-fg); white-space: pre-wrap; }
+  .bubble--assistant { align-self: flex-start; background: var(--ric-color-control); border: 1px solid var(--ric-color-border); }
+  .bubble__md { overflow-x: auto; }
+  .bubble__md > :first-child { margin-top: 0; }
+  .bubble__md > :last-child { margin-bottom: 0; }
+
+  /* Red and green mixed with the theme's text colour, so they stay readable on light and dark themes.
+     赤と緑を、テーマの文字色と混ぜています。明るいテーマでも暗いテーマでも読める色になります。 */
+  .is-error { color: color-mix(in srgb, #dc2626 70%, var(--ric-color-fg)); }
+  .is-ok { color: color-mix(in srgb, #16a34a 70%, var(--ric-color-fg)); }
+
+  /* The settings dialog. Eight tabs do not fit on one line of a phone, so the row of tabs is allowed to wrap.
+     設定ダイアログです。8 個のタブはスマートフォンの 1 行に収まらないので、タブの列を折り返せるようにしています。 */
+  .cfg__modes .ric-tabs__bar { flex-wrap: wrap; }
+  .cfg__row { flex-wrap: wrap; }
+  .cfg__label { flex: 0 0 5em; }
+  .cfg__field { flex: 1 1 180px; min-width: 0; }
+  .cfg__status { display: flex; flex-direction: column; gap: 4px; overflow-wrap: anywhere; }
+</style>
+</head>
+<body>
+<!--
+  15 AI chat: a chat screen that shows the reply while it is still arriving.
+  Each piece of the reply is added to the state, uiMdPre draws what has arrived so far as Markdown,
+  and createScrollPane keeps the newest line in view. The settings are a createDialog opened and
+  closed by the app's state, with createTabs to choose the kind of server. Every server is called
+  through the OpenAI-compatible API, so one piece of code talks to all of them. The page starts in
+  demo mode, which plays back a prepared text and contacts no server.
+  No build step: two scripts (ricdom, then ricdom/ui) and one stylesheet.
+
+  15 AI チャット: 応答を、届いている途中から表示するチャット画面です。
+  応答のかけらが届くたびに state へ足し、uiMdPre が届いたところまでを Markdown として描き、
+  createScrollPane が最新の行を表示し続けます。設定は、アプリの state で開閉する createDialog で、
+  サーバーの種類は createTabs で選びます。どのサーバーも OpenAI 互換の API で呼ぶので、
+  同じコードですべてと通信できます。最初は、用意した文章を再生するだけでどのサーバーにも
+  接続しないデモになっています。
+  ビルド不要: <script> 2 本 (ricdom → ricdom/ui) と CSS 1 本で動きます。
+-->
+<div id="app"></div>
+
+<!-- Optional: highlight.js colours the code in this site's Source view, and the code blocks of a reply that name their language. ricdom does not need it.
+     任意: highlight.js は、このサイトの「ソース」表示と、応答の中の言語名つきのコードブロックを色分けします。ricdom 自体には不要です。 -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
+<!-- ricdom itself: the core first, then the UI components. They define the globals ricdom and ricdomUI.
+     ricdom 本体: コア → UI 部品の順に読み込みます。グローバル変数 ricdom と ricdomUI ができます。 -->
+<script src="../dist/ricdom.iife.min.js"></script>
+<script src="../dist/ricdom-ui.iife.min.js"></script>
+<!-- Docs-site helpers, not part of ricdom: the nav bar (theme, language, previous / next page) and t() for translations.
+     このサイト専用の補助で、ricdom の一部ではありません: ナビバー (テーマ・言語・前後のページ) と翻訳用の t() です。 -->
+<script src="_i18n.js"></script><script src="_samples.js"></script><script src="_nav.js"></script>
+<script>
+  // A short name for the UI components.
+  // UI 部品を短い名前で呼べるようにします。
+  const U = ricdomUI;
+
+  // Site helper: t(text, { ja: '...' }) returns the text in the chosen language, with the Japanese
+  // written where the string is used. addDict holds the strings used in several places, and the
+  // t`...${value}...` form, which puts a value into the text and is always looked up in the dictionary.
+  // サイトの補助: t(文字列, { ja: '…' }) は選択中の言語の文字列を返します。日本語は使う場所に書きます。
+  // addDict には、何度も使う文字列と、値を差し込む t`…${値}…` の形 (常に辞書から訳を引きます) を登録します。
+  const { t, addDict, onLangChange } = ricdomI18n;
+  addDict('ja', {
+    'Get models': '一覧取得',
+    'Test': '接続テスト',
+    '{0} models found': '{0} 個のモデルが見つかりました',
+    'Reply received ({0} ms)': '応答がありました ({0} ms)',
+    'No reply within {0} seconds.': '{0} 秒以内に応答がありませんでした。',
+    'Unexpected reply: {0}': '想定外の応答: {0}',
+  });
+
+  // Icon data (SVG paths). This block is the output of
+  // `npx ricdom-icon send square loader circle-check triangle-alert search play`, pasted as it is.
+  // Always copy icon data from that command; do not write the paths by hand.
+  // アイコンのデータ (SVG のパス) です。下のかたまりは
+  // `npx ricdom-icon send square loader circle-check triangle-alert search play` の出力を、そのまま貼ったものです。
+  // アイコンのデータは必ずこのコマンドから写し、パスを手で書かないでください。
+  const ICONS = {
+    send: {"p":"M22 2 11 13M22 2l-7 20-4-9-9-4z"},
+    square: {"p":"M4 4h16v16H4z"},
+    loader: {"p":"M12 3v3M12 18v3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M3 12h3M18 12h3M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"},
+    "circle-check": {"p":["M12 22a10 10 0 1 0 0-20 10 10 0 1 0 0 20z","m9 12 2 2 4-4"]},
+    "triangle-alert": {"p":["M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z","M12 9v4","M12 17h.01"]},
+    search: {"p":["M18 11a7 7 0 1 1-14 0 7 7 0 0 1 14 0z","m21 21-5-5"]},
+    play: {"p":"M8 5.1 18.5 11.3a.8 .8 0 0 1 0 1.4L8 18.9a.8 .8 0 0 1-1.2-.7V5.8A.8 .8 0 0 1 8 5.1z"},
+  };
+
+  // ── Where to connect ──
+  // 'demo' contacts no server. Every other kind is called through the OpenAI-compatible API, so they
+  // differ only in their settings: the Endpoint to start from, and whether an API key is needed
+  // (the kinds whose defaults have `apiKey`). Claude and "Other" have no Endpoint to start from.
+  // ── 接続先 ──
+  // 'demo' はどのサーバーにも接続しません。それ以外はすべて OpenAI 互換の API で呼ぶので、違いは設定だけです。
+  // 最初に入っている Endpoint と、API キーが要るかどうか (既定値に `apiKey` がある種類) が違います。
+  // Claude と「その他」には、最初に入っている Endpoint がありません。
+  const MODES = ['demo', 'lmstudio', 'ollama', 'openai', 'claude', 'gemini', 'grok', 'custom'];
+  const DEFAULTS = {
+    lmstudio: { baseURL: 'http://localhost:1234/v1', model: '' },
+    ollama: { baseURL: 'http://localhost:11434/v1', model: '' },
+    openai: { baseURL: 'https://api.openai.com/v1', model: '', apiKey: '' },
+    claude: { baseURL: '', model: '', apiKey: '' },
+    gemini: { baseURL: 'https://generativelanguage.googleapis.com/v1beta/openai', model: '', apiKey: '' },
+    grok: { baseURL: 'https://api.x.ai/v1', model: '', apiKey: '' },
+    custom: { baseURL: '', model: '', apiKey: '' },
+  };
+  const SERVERS = Object.keys(DEFAULTS);
+  const needsKey = (mode) => 'apiKey' in DEFAULTS[mode];
+
+  // Product names are not translated; only the two descriptive labels are.
+  // 製品名は翻訳しません。翻訳するのは、説明になっている 2 つのラベルだけです。
+  const modeLabel = (mode) =>
+    ({
+      demo: t('Demo (no server)', { ja: 'デモ (サーバー不要)' }),
+      lmstudio: 'LM Studio',
+      ollama: 'Ollama',
+      openai: 'OpenAI',
+      claude: 'Claude',
+      gemini: 'Gemini',
+      grok: 'Grok',
+      custom: t('Other', { ja: 'その他' }),
+    })[mode];
+
+  // One line of advice per kind of server, shown in the dialog until a request has a result to show.
+  // サーバーの種類ごとの案内です。リクエストの結果が出るまで、ダイアログに表示します。
+  const modeHint = (mode) => {
+    const local = t('Start the server, then press "Get models" to load its models.', { ja: 'サーバーを起動してから「一覧取得」を押すと、モデルを読み込めます。' });
+    return {
+      lmstudio: local,
+      ollama: local,
+      openai: t('Enter your OpenAI API key, then press "Get models" or type a Model.', { ja: 'OpenAI の API Key を入力し、「一覧取得」を押すか、Model を手で入力します。' }),
+      claude: t('For Claude, enter the Endpoint and Key of an OpenAI-compatible proxy (LiteLLM, OpenRouter and the like).', { ja: 'Claude は、OpenAI 互換のプロキシ (LiteLLM・OpenRouter など) の Endpoint と Key を入力します。' }),
+      gemini: t('Enter your Gemini API key (the Endpoint is the official OpenAI-compatible one).', { ja: 'Gemini の API Key を入力します (Endpoint は公式の OpenAI 互換エンドポイントです)。' }),
+      grok: t('Enter your xAI (Grok) API key and name a Model.', { ja: 'xAI (Grok) の API Key を入力し、Model を指定します。' }),
+      custom: t('Enter an OpenAI-compatible Endpoint and, if the server needs one, an API key.', { ja: 'OpenAI 互換の Endpoint と、必要なら API Key を入力します。' }),
+    }[mode];
+  };
+
+  // ── Saved settings ──
+  // The kind of server, and each kind's Endpoint and Model, are kept in localStorage. The API key is
+  // never written there: it lives only in the app state, so reloading the page clears it.
+  // localStorage can be unavailable (a page opened as a file, a sandboxed iframe, a private window),
+  // so both the read and the write are wrapped in try / catch, and the page works without them.
+  // ── 設定の保存 ──
+  // サーバーの種類と、種類ごとの Endpoint・Model を localStorage に保存します。API キーはそこへ書き込みません。
+  // アプリの state にあるだけなので、ページを読み込み直すと消えます。
+  // localStorage は使えないことがあります (ファイルとして開いたページ、sandbox つきの iframe、プライベートウィンドウ)。
+  // そのため、読み込みも書き込みも try / catch で包み、使えなくてもページが動くようにしています。
+  const STORAGE_KEY = 'ricdom-example.ai-chat';
+  const loadCfg = () => {
+    let saved = {};
+    try {
+      saved = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
+    } catch {
+      // Storage is blocked, or what was saved is not JSON: start from the defaults.
+      // 保存領域が使えないか、保存されていた内容が JSON ではありません。既定値から始めます。
+    }
+    const text = (value, fallback) => (typeof value === 'string' ? value : fallback);
+    const cfg = { mode: MODES.includes(saved.mode) ? saved.mode : 'demo' };
+    for (const mode of SERVERS) {
+      cfg[mode] = { ...DEFAULTS[mode], baseURL: text(saved[mode]?.baseURL, DEFAULTS[mode].baseURL), model: text(saved[mode]?.model, '') };
+    }
+    return cfg;
+  };
+  const saveCfg = (cfg) => {
+    const out = { mode: cfg.mode };
+    for (const mode of SERVERS) out[mode] = { baseURL: cfg[mode].baseURL, model: cfg[mode].model };
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(out));
+    } catch {
+      // Storage is blocked: the settings still work until the page is closed.
+      // 保存領域が使えません。設定は、ページを閉じるまではそのまま使えます。
+    }
+  };
+
+  // ricdom watches assignments to the state's own properties, and one level below them. A setting
+  // sits two levels down (s.cfg.openai.model), where an assignment would not redraw the page, so a
+  // change replaces s.cfg with a copy that carries the new value. The results of the two requests
+  // (s.modelStatus, s.testStatus) are replaced whole in the same way.
+  // ricdom が監視するのは、state 直下のプロパティと、そのもう 1 段下への代入です。設定は 2 段下
+  // (s.cfg.openai.model) にあり、そこへ代入しても画面は描き直されません。そこで、変更するときは、
+  // 新しい値を入れた写しで s.cfg を置き換えます。2 つのリクエストの結果 (s.modelStatus・s.testStatus) も、
+  // 同じように丸ごと置き換えます。
+  const setField = (s, mode, key, value) => {
+    s.cfg = { ...s.cfg, [mode]: { ...s.cfg[mode], [key]: value } };
+    saveCfg(s.cfg);
+  };
+  const setMode = (s, mode) => {
+    s.cfg = { ...s.cfg, mode };
+    saveCfg(s.cfg);
+  };
+  const setStatus = (s, name, mode, status) => {
+    s[name] = { ...s[name], [mode]: status };
+  };
+
+  // The settings of one kind of server, tidied for use: no spaces around the values, no slash at
+  // the end of the Endpoint, and a key only for the kinds that take one.
+  // ある種類のサーバーの設定を、使える形に整えます。値の前後の空白と、Endpoint の末尾のスラッシュを取り、
+  // キーは、キーを使う種類のときだけ渡します。
+  const connection = (cfg, mode) => ({
+    baseURL: cfg[mode].baseURL.trim().replace(/\/+$/, ''),
+    model: cfg[mode].model.trim(),
+    apiKey: needsKey(mode) ? cfg[mode].apiKey.trim() : '',
+  });
+
+  // ── Requests ──
+  // The browser sends these straight to the Endpoint the user entered. The server therefore has to
+  // allow requests from other origins (CORS); when it does not, fetch fails and the page is not told
+  // why. The API key travels in the Authorization header, to that Endpoint and nowhere else.
+  // A reply that is not 2xx becomes an error that carries the status and the start of the body.
+  // ── リクエスト ──
+  // ブラウザが、利用者の入力した Endpoint へ直接送ります。そのため、サーバーが別のオリジンからのリクエストを
+  // 許可している (CORS) 必要があります。許可していない場合、fetch は失敗し、ページには理由が知らされません。
+  // API キーは Authorization ヘッダーに入れて、その Endpoint にだけ送ります。
+  // 2xx 以外の応答は、ステータスと本文の先頭を持たせたエラーにします。
+  const request = async ({ baseURL, apiKey }, path, { body, signal }) => {
+    const headers = {};
+    if (body) headers['content-type'] = 'application/json';
+    if (apiKey) headers.authorization = `Bearer ${apiKey}`;
+    const res = await fetch(baseURL + path, { method: body ? 'POST' : 'GET', headers, body: body ? JSON.stringify(body) : undefined, signal });
+    if (!res.ok) {
+      const detail = (await res.text().catch(() => '')).trim().slice(0, 200);
+      throw Object.assign(new Error(`HTTP ${res.status}`), { status: res.status, detail });
+    }
+    return res;
+  };
+
+  // Why a request failed, kept as data. The sentence is made when the page is drawn (statusText
+  // below), so it follows the language. AbortSignal.timeout() rejects with a 'TimeoutError', and
+  // fetch itself rejects with a TypeError when the request cannot be made or the connection breaks.
+  // リクエストが失敗した理由を、データとして持ちます。文章にするのは画面を描くとき (下の statusText) なので、
+  // 言語の切り替えに追従します。AbortSignal.timeout() は 'TimeoutError' で、fetch 自身は、リクエストを
+  // 送れなかったときや接続が切れたときに TypeError で失敗します。
+  const failure = (e, seconds) => {
+    if (e.status) return { state: 'error', why: 'http', status: e.status, detail: e.detail };
+    if (e.name === 'TimeoutError') return { state: 'error', why: 'timeout', seconds };
+    if (e instanceof TypeError) return { state: 'error', why: 'network' };
+    return { state: 'error', why: 'unexpected', detail: String(e.message || e) };
+  };
+
+  // The list of models: GET {endpoint}/models, given up after 5 seconds. Servers answer with
+  // { data: [{ id }] } or { models: [{ name }] }. When the Model typed so far is not in the list,
+  // the first model is chosen.
+  // モデルの一覧です。GET {endpoint}/models を送り、5 秒で打ち切ります。サーバーの応答は
+  // { data: [{ id }] } か { models: [{ name }] } の形です。入力済みの Model が一覧に無ければ、先頭のモデルを選びます。
+  const fetchModels = async (s, mode) => {
+    const conn = connection(s.cfg, mode);
+    if (!conn.baseURL) {
+      setStatus(s, 'modelStatus', mode, { state: 'error', why: 'noEndpoint' });
+      return;
+    }
+    setStatus(s, 'modelStatus', mode, { state: 'loading' });
+    try {
+      const res = await request(conn, '/models', { signal: AbortSignal.timeout(5000) });
+      const json = await res.json();
+      const list = Array.isArray(json?.data) ? json.data : Array.isArray(json?.models) ? json.models : [];
+      const models = list.map((m) => m?.id || m?.name).filter(Boolean);
+      s.models = { ...s.models, [mode]: models };
+      if (models.length > 0 && !models.includes(conn.model)) setField(s, mode, 'model', models[0]);
+      setStatus(s, 'modelStatus', mode, models.length > 0 ? { state: 'ok', why: 'models', count: models.length } : { state: 'error', why: 'noModels' });
+    } catch (e) {
+      setStatus(s, 'modelStatus', mode, failure(e, 5));
+    }
+  };
+
+  // The connection test: the smallest chat request (one word, at most 8 tokens, not streamed),
+  // given up after 20 seconds.
+  // 接続テストです。最小のチャットのリクエスト (1 語、最大 8 トークン、ストリーミングなし) を送り、20 秒で打ち切ります。
+  const testConnection = async (s, mode) => {
+    const conn = connection(s.cfg, mode);
+    if (!conn.baseURL || !conn.model) {
+      setStatus(s, 'testStatus', mode, { state: 'error', why: conn.baseURL ? 'noModel' : 'noEndpoint' });
+      return;
+    }
+    setStatus(s, 'testStatus', mode, { state: 'loading' });
+    const started = performance.now();
+    try {
+      const body = { model: conn.model, messages: [{ role: 'user', content: 'ping' }], max_tokens: 8, stream: false };
+      const res = await request(conn, '/chat/completions', { body, signal: AbortSignal.timeout(20000) });
+      await res.text();
+      setStatus(s, 'testStatus', mode, { state: 'ok', why: 'replied', ms: Math.round(performance.now() - started) });
+    } catch (e) {
+      setStatus(s, 'testStatus', mode, failure(e, 20));
+    }
+  };
+
+  // ── The reply, piece by piece ──
+  // Both functions below hand the reply to onChunk(text) a piece at a time, resolve when it is
+  // complete, and reject with an 'AbortError' when `signal` is aborted. The code that calls them
+  // (send, further down) cannot tell them apart.
+  // streamChat asks for a streamed reply (stream: true). The server answers with lines of the form
+  // `data: {json}`; each carries the next piece in choices[0].delta.content, and `data: [DONE]`
+  // ends the reply. Other lines (blank lines, keep-alive comments) are skipped. A network chunk can
+  // end in the middle of a line, so the unfinished last line waits in `buffer` for the rest.
+  // ── 応答を 1 かけらずつ ──
+  // 下の 2 つの関数は、どちらも応答を 1 かけらずつ onChunk(文字列) に渡し、最後まで届いたら完了し、
+  // `signal` が中断されたら 'AbortError' で失敗します。呼び出す側 (下の send) からは、区別がつきません。
+  // streamChat は、ストリーミングの応答 (stream: true) を頼みます。サーバーは `data: {json}` の形の行を返し、
+  // それぞれの choices[0].delta.content に次のかけらが入っています。`data: [DONE]` が応答の終わりです。
+  // それ以外の行 (空行、接続を保つためのコメント行) は読み飛ばします。ネットワークから届く 1 回分は行の途中で
+  // 切れることがあるので、終わっていない最後の行は、続きが届くまで `buffer` に残します。
+  const streamChat = async ({ conn, messages, signal, onChunk }) => {
+    const res = await request(conn, '/chat/completions', { body: { model: conn.model, messages, stream: true }, signal });
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) return;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith('data:')) continue;
+        const data = line.slice(5).trim();
+        if (data === '[DONE]') {
+          await reader.cancel();
+          return;
+        }
+        try {
+          const piece = JSON.parse(data).choices?.[0]?.delta?.content;
+          if (piece) onChunk(piece);
+        } catch {
+          // A data line that is not JSON: skip it.
+          // JSON ではない data 行は読み飛ばします。
+        }
+      }
+    }
+  };
+
+  // streamDemo makes no request. A timer hands out a prepared text four characters at a time.
+  // Array.from splits the text by code point, so an emoji that takes two code units is never cut in half.
+  // streamDemo はリクエストを送りません。用意した文章を、タイマーで 4 文字ずつ渡します。
+  // Array.from は文章をコードポイント単位に分けるので、符号単位 2 つ分の絵文字が途中で切れることはありません。
+  const streamDemo = ({ text, signal, onChunk }) =>
+    new Promise((resolve, reject) => {
+      const chars = Array.from(text);
+      let sent = 0;
+      const timer = setInterval(() => {
+        onChunk(chars.slice(sent, sent + 4).join(''));
+        sent += 4;
+        if (sent >= chars.length) {
+          clearInterval(timer);
+          resolve();
+        }
+      }, 30);
+      signal.addEventListener('abort', () => {
+        clearInterval(timer);
+        reject(signal.reason);
+      });
+    });
+
+  // The text the demo plays back, in both languages. It is Markdown: a heading, a quotation (the
+  // user's message goes in at {question}), a list, a code block and a table.
+  // デモが再生する文章です (2 つの言語分)。Markdown で書いてあり、見出し・引用 ({question} に利用者の
+  // メッセージが入ります)・リスト・コードブロック・表を含みます。
+  const DEMO_REPLY_EN = [
+    '## A reply from the demo',
+    '',
+    '> {question}',
+    '',
+    'No AI wrote this. The text was prepared in advance, and a timer hands it to the page a few characters at a time, along the same path as a reply streamed from a server. While it arrives, you can see:',
+    '',
+    '- **Markdown that grows**: `uiMdPre` draws the text received so far each time the page is drawn again.',
+    "- **The newest line in view**: `createScrollPane({ follow: 'bottom' })` scrolls along with the reply. Scroll up, and it stops following.",
+    '- **Stop**: the button ends the reply through an `AbortController`. What has arrived stays.',
+    '',
+    '### One assignment for each piece',
+    '',
+    '```',
+    'const last = s.messages.at(-1);',
+    's.messages = [...s.messages.slice(0, -1), { ...last, text: last.text + piece }];',
+    '```',
+    '',
+    'Replacing the array is what redraws the page. Pieces that arrive within one frame are drawn together.',
+    '',
+    '### The parts of this page',
+    '',
+    '| Part | Component |',
+    '|---|---|',
+    '| History | `createScrollPane` |',
+    '| Reply | `uiMdPre` |',
+    '| Input | `uiTextarea` with `autoResize` |',
+    '| Settings | `createDialog` and `createTabs` |',
+    '',
+    'To talk to a real model, open **Connection…** and choose a server.',
+  ].join('\n');
+  const DEMO_REPLY_JA = [
+    '## デモの応答',
+    '',
+    '> {question}',
+    '',
+    'この文章は AI が書いたものではありません。あらかじめ用意した文章を、タイマーが数文字ずつページに渡しています。通り道は、サーバーからストリーミングで届く応答と同じです。届いている間に、次のことが見えます。',
+    '',
+    '- **伸びていく Markdown**: `uiMdPre` が、画面を描き直すたびに、届いたところまでの文章を描きます。',
+    "- **最新の行を表示し続ける**: `createScrollPane({ follow: 'bottom' })` が、応答に合わせてスクロールします。上へスクロールすると、追従をやめます。",
+    '- **止める**: ボタンが `AbortController` で応答を打ち切ります。届いた分は残ります。',
+    '',
+    '### かけら 1 つにつき、代入 1 回',
+    '',
+    '```',
+    'const last = s.messages.at(-1);',
+    's.messages = [...s.messages.slice(0, -1), { ...last, text: last.text + piece }];',
+    '```',
+    '',
+    '配列を新しいものに置き換えると、画面が描き直されます。同じフレームの間に届いたかけらは、まとめて 1 回で描かれます。',
+    '',
+    '### このページの部品',
+    '',
+    '| 場所 | 部品 |',
+    '|---|---|',
+    '| 履歴 | `createScrollPane` |',
+    '| 応答 | `uiMdPre` |',
+    '| 入力 | `uiTextarea` と `autoResize` |',
+    '| 設定 | `createDialog` と `createTabs` |',
+    '',
+    '本物のモデルと話すには、**接続設定…** を開いてサーバーを選んでください。',
+  ].join('\n');
+  const demoReply = (question) => {
+    const oneLine = question.replace(/\s+/g, ' ');
+    const quoted = oneLine.length > 80 ? `${oneLine.slice(0, 80)}…` : oneLine;
+    return t(DEMO_REPLY_EN, { ja: DEMO_REPLY_JA }).replace('{question}', () => quoted);
+  };
+
+  // App state. `cfg` is the saved settings plus the API keys. `models`, `modelStatus` and
+  // `testStatus` hold, for each kind of server, the list of models and the result of the last
+  // request. `messages` is the conversation: { id, role: 'user' or 'assistant', text }.
+  // アプリの状態です。`cfg` は、保存した設定に API キーを加えたものです。`models`・`modelStatus`・`testStatus` は、
+  // サーバーの種類ごとの、モデルの一覧と最後のリクエストの結果です。`messages` が会話で、
+  // 1 件は { id, role: 'user' か 'assistant', text } です。
+  const state = {
+    cfg: loadCfg(),
+    models: {},
+    modelStatus: {},
+    testStatus: {},
+    settingsOpen: false,
+    messages: [],
+    input: '',
+    busy: false,
+    chatError: null,
+  };
+
+  // Two values that are not drawn, so they stay outside the state: the number for the next
+  // message's `key`, and the AbortController of the reply in progress (what "Stop" calls).
+  // 画面に描かない 2 つの値は、state の外に置きます。次のメッセージの `key` に使う番号と、
+  // 進行中の応答の AbortController (「止める」が呼ぶもの) です。
+  let nextId = 1;
+  let aborter = null;
+
+  // Components that keep state are registered with app.use(). They are assigned in `setup` at the
+  // bottom, which runs once before the first render.
+  // 状態を持つ部品は app.use() で登録します。登録は下の `setup` で行います。
+  // setup は最初の描画の前に 1 回だけ実行されます。
+  let settingsDlg, modeTabs, chatPane, focusWhen;
+
+  // ── Sending ──
+  // The user's message and an empty reply are added to the conversation, then each piece that
+  // arrives replaces s.messages with a new array whose last message is a little longer. That
+  // assignment is all it takes to redraw: ricdom draws once per frame however many pieces arrived
+  // in it. chatPane.scrollToBottom() jumps to the end once, at the start; after that the pane
+  // follows by itself, and only while the reader has not scrolled away.
+  // "Stop" aborts the signal, which makes either function above reject with an 'AbortError'. That
+  // is not shown as an error, and the text received so far stays in the conversation.
+  // ── 送信 ──
+  // 利用者のメッセージと空の応答を会話に追加し、あとは、かけらが届くたびに、最後のメッセージが少し長くなった
+  // 新しい配列で s.messages を置き換えます。描き直しに必要なのは、この代入だけです。1 フレームの間に
+  // かけらがいくつ届いても、ricdom が描くのは 1 回です。chatPane.scrollToBottom() は、最初に 1 回だけ末尾へ移動します。
+  // そのあとはペインが自分で追従し、読み手がスクロールして離れている間は追従しません。
+  // 「止める」は signal を中断します。すると、上のどちらの関数も 'AbortError' で失敗します。
+  // これはエラーとして表示せず、そこまでに届いた文章は会話に残します。
+  const send = async (s) => {
+    const text = s.input.trim();
+    if (!text || s.busy) return;
+    const mode = s.cfg.mode;
+    const conn = mode === 'demo' ? null : connection(s.cfg, mode);
+    if (conn && !(conn.baseURL && conn.model)) {
+      s.chatError = { state: 'error', why: 'notReady' };
+      s.settingsOpen = true;
+      return;
+    }
+
+    const conversation = [...s.messages, { id: nextId++, role: 'user', text }];
+    s.messages = [...conversation, { id: nextId++, role: 'assistant', text: '' }];
+    s.input = '';
+    s.busy = true;
+    s.chatError = null;
+    chatPane.scrollToBottom();
+
+    aborter = new AbortController();
+    const signal = aborter.signal;
+    const onChunk = (piece) => {
+      const last = s.messages.at(-1);
+      s.messages = [...s.messages.slice(0, -1), { ...last, text: last.text + piece }];
+    };
+    try {
+      if (conn) await streamChat({ conn, messages: conversation.map((m) => ({ role: m.role, content: m.text })), signal, onChunk });
+      else await streamDemo({ text: demoReply(text), signal, onChunk });
+    } catch (e) {
+      if (e.name !== 'AbortError') s.chatError = failure(e);
+    } finally {
+      aborter = null;
+      if (!s.messages.at(-1).text) s.messages = s.messages.slice(0, -1);
+      s.busy = false;
+    }
+  };
+
+  // The sentence for a result or a failure, in the current language.
+  // 結果や失敗の理由を、いまの言語の文章にします。
+  const statusText = (st) => {
+    switch (st.why) {
+      case 'noEndpoint':
+        return t('Enter the Endpoint first.', { ja: '先に Endpoint を入力してください。' });
+      case 'noModel':
+        return t('Choose or type a Model first.', { ja: '先に Model を選ぶか、入力してください。' });
+      case 'notReady':
+        return t('Set an Endpoint and a Model in "Connection…" first.', { ja: '先に「接続設定…」で Endpoint と Model を設定してください。' });
+      case 'http':
+        return st.detail ? `HTTP ${st.status} — ${st.detail}` : `HTTP ${st.status}`;
+      case 'timeout':
+        return t`No reply within ${st.seconds} seconds.`;
+      case 'network':
+        return t(
+          'The connection failed. The server may not be running, or it may not allow requests from this page (CORS): the browser does not say which.',
+          { ja: '通信に失敗しました。サーバーが起動していないか、このページからのリクエストを許可していない (CORS) 可能性があります。どちらなのかを、ブラウザは知らせません。' },
+        );
+      case 'noModels':
+        return t('The server returned no models.', { ja: 'サーバーはモデルを 1 つも返しませんでした。' });
+      case 'models':
+        return t`${st.count} models found`;
+      case 'replied':
+        return t`Reply received (${st.ms} ms)`;
+      default:
+        return t`Unexpected reply: ${st.detail}`;
+    }
+  };
+  const statusLine = (label, st) =>
+    U.uiText({
+      class: st.state === 'error' ? 'is-error' : 'is-ok',
+      children: [U.uiIcon(st.state === 'error' ? ICONS['triangle-alert'] : ICONS['circle-check'], { size: 14 }), ` ${label}: ${statusText(st)}`],
+    });
+
+  // ── The settings (the body of the dialog) ──
+  // The tabs choose the kind of server. They have no panels of their own (no item has `children`),
+  // so what is under them is drawn here: for the demo an explanation, for a server its fields.
+  // Each field writes its value through setField, which replaces s.cfg and saves it.
+  // While a request is running, its button is disabled and its icon turns into a spinning one.
+  // ── 設定 (ダイアログの本文) ──
+  // タブでサーバーの種類を選びます。このタブは自分のパネルを持たない (どの item にも `children` が無い) ので、
+  // その下に出すものはここで描きます。デモなら説明、サーバーなら入力欄です。
+  // 入力欄は、どれも setField を通して値を書き込みます。setField は s.cfg を置き換えて保存します。
+  // リクエストの実行中は、そのボタンを無効にし、アイコンを回るものに替えます。
+  const field = (id, label, control) =>
+    U.uiRow({
+      class: 'cfg__row',
+      children: [U.uiText({ variant: 'label', class: 'cfg__label', for: id, children: [label] }), { tag: 'div', class: 'cfg__field', children: [control] }],
+    });
+  const settingsBody = (s) => {
+    const mode = s.cfg.mode;
+    const tabs = {
+      tag: 'div',
+      class: 'cfg__modes',
+      children: [
+        modeTabs({
+          variant: 'pill',
+          active: mode,
+          onChange: (key) => setMode(s, key),
+          items: MODES.map((m) => ({ key: m, label: modeLabel(m) })),
+        }),
+      ],
+    };
+    if (mode === 'demo') {
+      return U.uiCol({
+        children: [
+          tabs,
+          U.uiText({
+            children: [
+              t(
+                'The demo contacts no server and needs no settings. It plays back a prepared text a few characters at a time, so you can watch a reply arrive, scroll and stop.',
+                { ja: 'デモはどのサーバーにも接続せず、設定も要りません。用意した文章を数文字ずつ再生するので、応答が届く様子・スクロール・「止める」を試せます。' },
+              ),
+            ],
+          }),
+        ],
+      });
+    }
+
+    const cfg = s.cfg[mode];
+    const models = s.models[mode] || [];
+    const listing = s.modelStatus[mode];
+    const testing = s.testStatus[mode];
+    const isListing = listing?.state === 'loading';
+    const isTesting = testing?.state === 'loading';
+    return U.uiCol({
+      children: [
+        tabs,
+        field(
+          'cfg-endpoint',
+          'Endpoint',
+          U.uiInput({ id: 'cfg-endpoint', value: cfg.baseURL, placeholder: DEFAULTS[mode].baseURL || 'https://…/v1', oninput: (e) => setField(s, mode, 'baseURL', e.target.value) }),
+        ),
+        needsKey(mode)
+          ? field(
+              'cfg-key',
+              'API Key',
+              U.uiInput({
+                id: 'cfg-key',
+                type: 'password',
+                autocomplete: 'off',
+                value: cfg.apiKey,
+                placeholder: t('sk-… (not saved)', { ja: 'sk-… (保存されません)' }),
+                oninput: (e) => setField(s, mode, 'apiKey', e.target.value),
+              }),
+            )
+          : null,
+        U.uiRow({
+          class: 'cfg__row',
+          children: [
+            U.uiText({ variant: 'label', class: 'cfg__label', for: 'cfg-model', children: ['Model'] }),
+            {
+              tag: 'div',
+              class: 'cfg__field',
+              children: [
+                // Once the list has been loaded the Model is chosen from it; until then it is typed.
+                // 一覧を読み込んだあとは、Model を一覧から選びます。それまでは手で入力します。
+                models.length > 0
+                  ? U.uiSelect({ id: 'cfg-model', value: cfg.model, options: models, onchange: (e) => setField(s, mode, 'model', e.target.value) })
+                  : U.uiInput({
+                      id: 'cfg-model',
+                      value: cfg.model,
+                      placeholder: t('"Get models", or type a name', { ja: '「一覧取得」か、名前を入力' }),
+                      oninput: (e) => setField(s, mode, 'model', e.target.value),
+                    }),
+              ],
+            },
+            U.uiButton({
+              disabled: isListing,
+              onclick: () => fetchModels(s, mode),
+              children: [U.uiIcon(isListing ? ICONS.loader : ICONS.search, { size: 14, spin: isListing }), t('Get models')],
+            }),
+            U.uiButton({
+              disabled: isTesting || !cfg.model.trim(),
+              onclick: () => testConnection(s, mode),
+              children: [U.uiIcon(isTesting ? ICONS.loader : ICONS.play, { size: 14, spin: isTesting }), t('Test')],
+            }),
+          ],
+        }),
+        // role="status" asks screen readers to read a result when it appears, without moving the focus.
+        // role="status" を付けると、結果が現れたときに、スクリーンリーダーがフォーカスを動かさずに読み上げます。
+        {
+          tag: 'div',
+          class: 'cfg__status',
+          role: 'status',
+          children: [
+            listing && !isListing ? statusLine(t('Get models'), listing) : U.uiText({ variant: 'muted', children: [modeHint(mode)] }),
+            testing && !isTesting ? statusLine(t('Test'), testing) : null,
+          ],
+        },
+        U.uiText({
+          variant: 'muted',
+          children: [
+            needsKey(mode)
+              ? t(
+                  'Requests go straight from your browser to this Endpoint, so the server must allow them (CORS). The API key is sent only there, and is never saved: reloading the page clears it.',
+                  { ja: 'リクエストは、ブラウザからこの Endpoint へ直接送ります。そのため、サーバー側の許可 (CORS) が必要です。API キーはそこにだけ送り、保存はしません。ページを読み込み直すと消えます。' },
+                )
+              : t('Requests go straight from your browser to this Endpoint, so the server must allow them (CORS).', { ja: 'リクエストは、ブラウザからこの Endpoint へ直接送ります。そのため、サーバー側の許可 (CORS) が必要です。' }),
+          ],
+        }),
+      ],
+    });
+  };
+
+  // ── The chat ──
+  // The top line: a dot that is green when the last "Get models" or "Test" for this server
+  // succeeded (the demo is always green), the server and model in use, and the button that opens
+  // the settings. The button is your own element, so the attribute that says "this opens a dialog"
+  // is yours to add.
+  // ── チャット ──
+  // いちばん上の行です。このサーバーへの直近の「一覧取得」か「接続テスト」が成功していれば緑になる点
+  // (デモは常に緑)、使っているサーバーとモデル、設定を開くボタンを並べます。このボタンは自分の要素なので、
+  // 「ダイアログを開く」ことを示す属性は自分で付けます。
+  const header = (s) => {
+    const mode = s.cfg.mode;
+    const checked = mode === 'demo' || s.modelStatus[mode]?.state === 'ok' || s.testStatus[mode]?.state === 'ok';
+    const dotLabel = checked ? t('Connection checked', { ja: '接続を確認済み' }) : t('Connection not checked yet', { ja: '接続は未確認' });
+    const where = mode === 'demo' ? modeLabel(mode) : `${modeLabel(mode)}: ${s.cfg[mode].model.trim() || t('no model chosen', { ja: 'モデル未設定' })}`;
+    return {
+      tag: 'div',
+      class: 'chat__head',
+      children: [
+        { tag: 'span', class: checked ? 'chat__dot chat__dot--on' : 'chat__dot', role: 'img', 'aria-label': dotLabel, title: dotLabel },
+        U.uiText({ variant: 'muted', class: 'chat__where', children: [where] }),
+        U.uiButton({ size: 'sm', 'aria-haspopup': 'dialog', children: [t('Connection…', { ja: '接続設定…' })], onclick: () => { s.settingsOpen = true; } }),
+      ],
+    };
+  };
+
+  // One message. `key` ties each message to its own element. A reply is drawn by uiMdPre from the
+  // text received so far; until the first piece arrives, a spinning icon stands in for it.
+  // メッセージ 1 件分です。`key` で、メッセージと要素を 1 対 1 に結び付けます。応答は、届いたところまでの
+  // 文章を uiMdPre で描きます。最初のかけらが届くまでは、代わりに回るアイコンを出します。
+  const bubble = (m) => {
+    if (m.role === 'user') return { tag: 'div', key: m.id, class: 'bubble bubble--user', children: [m.text] };
+    return {
+      tag: 'div',
+      key: m.id,
+      class: 'bubble bubble--assistant',
+      children: [
+        m.text
+          ? U.uiMdPre({ class: 'bubble__md', children: [m.text] })
+          : U.uiIcon(ICONS.loader, { spin: true, label: t('Waiting for the reply', { ja: '応答を待っています' }) }),
+      ],
+    };
+  };
+
+  // The history is a createScrollPane (follow: 'bottom', see `setup`): each time the page is drawn
+  // it goes to the end, but only if the view was already there. role="log" tells screen readers
+  // that messages are added here, and aria-busy asks them to wait until the reply is complete.
+  // 履歴は createScrollPane (follow: 'bottom'。`setup` を見てください) です。画面が描き直されるたびに末尾へ移動しますが、
+  // 移動するのは、表示位置がすでに末尾にあったときだけです。role="log" は、ここにメッセージが追加されていくことを
+  // スクリーンリーダーに伝え、aria-busy は、応答が終わるまで読み上げを待つように頼みます。
+  const historyPane = (s) =>
+    chatPane({
+      class: 'chat__log',
+      role: 'log',
+      'aria-label': t('Conversation', { ja: '会話' }),
+      'aria-busy': s.busy ? 'true' : 'false',
+      children: [
+        s.messages.length > 0
+          ? U.uiCol({ gap: 12, children: s.messages.map(bubble) })
+          : U.uiText({
+              variant: 'muted',
+              children: [
+                s.cfg.mode === 'demo'
+                  ? t('Send any message: Enter sends, Shift+Enter starts a new line. In demo mode the reply is a prepared text, and no server is contacted.', { ja: '何かメッセージを送ってみてください (Enter で送信、Shift+Enter で改行)。デモでは、用意した文章が応答として返ります。どのサーバーにも接続しません。' })
+                  : t('Send a message to start: Enter sends, Shift+Enter starts a new line. The reply is streamed from the server chosen in "Connection…".', { ja: 'メッセージを送ると始まります (Enter で送信、Shift+Enter で改行)。応答は、「接続設定…」で選んだサーバーからストリーミングで届きます。' }),
+              ],
+            }),
+      ],
+    });
+
+  // The input. autoResize lets the textarea grow from 1 row up to 6 with what is typed. Enter sends
+  // and Shift+Enter starts a new line; e.isComposing is true while a Japanese (or other IME)
+  // conversion is being confirmed with Enter, and that Enter must not send. While a reply is
+  // arriving the textarea is disabled and the button becomes "Stop".
+  // 入力欄です。autoResize を付けると、テキストエリアは入力に合わせて 1 行から 6 行まで伸びます。Enter で送信し、
+  // Shift+Enter で改行します。日本語などの変換を Enter で確定している間は e.isComposing が true になるので、
+  // その Enter では送信しません。応答が届いている間は、テキストエリアを無効にし、ボタンを「止める」に替えます。
+  const composer = (s) => ({
+    tag: 'div',
+    class: 'chat__foot',
+    children: [
+      s.chatError
+        ? U.uiText({ class: 'is-error', role: 'alert', children: [U.uiIcon(ICONS['triangle-alert'], { size: 14 }), ` ${statusText(s.chatError)}`] })
+        : null,
+      U.uiRow({
+        style: { alignItems: 'flex-end' },
+        children: [
+          {
+            tag: 'div',
+            class: 'chat__input',
+            children: [
+              U.uiTextarea({
+                ref: 'chatInput',
+                'aria-label': t('Message', { ja: 'メッセージ' }),
+                value: s.input,
+                placeholder: s.busy ? t('Replying…', { ja: '応答中…' }) : t('Type a message', { ja: 'メッセージを入力' }),
+                disabled: s.busy,
+                autoResize: { minRows: 1, maxRows: 6 },
+                oninput: (e) => { s.input = e.target.value; },
+                onkeydown: (e) => {
+                  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+                    e.preventDefault();
+                    send(s);
+                  }
+                },
+              }),
+            ],
+          },
+          s.busy
+            ? U.uiButton({ children: [U.uiIcon(ICONS.square, { size: 14 }), t('Stop', { ja: '止める' })], onclick: () => aborter?.abort() })
+            : U.uiButton({ variant: 'primary', disabled: !s.input.trim(), children: [U.uiIcon(ICONS.send, { size: 14 }), t('Send', { ja: '送信' })], onclick: () => send(s) }),
+        ],
+      }),
+    ],
+  });
+
+  const app = ricdom.createApp(
+    '#app',
+    state,
+    (s) =>
+      U.uiPanel({
+        class: 'page',
+        children: [
+          { tag: 'h1', children: [t('ricdom — AI chat', { ja: 'ricdom — AI チャット' })] },
+          {
+            tag: 'p',
+            children: [
+              t(
+                'A chat screen made of ricdom components. The reply arrives a few characters at a time and is drawn as Markdown while it grows. The page starts in demo mode, which needs no server; "Connection…" switches to a local or a hosted server that has an OpenAI-compatible API.',
+                { ja: 'ricdom の部品で組んだチャット画面です。応答は数文字ずつ届き、届いたところまでを Markdown として描きます。最初は、サーバーの要らないデモになっています。「接続設定…」で、OpenAI 互換の API を持つローカルや外部のサーバーに切り替えられます。' },
+              ),
+            ],
+          },
+          { tag: 'div', class: 'chat', children: [header(s), historyPane(s), composer(s)] },
+          U.uiText({
+            variant: 'muted',
+            children: [
+              t(
+                'Outside demo mode, this page sends its requests straight from your browser to the Endpoint you enter, so that server must allow requests from other origins (CORS). An API key is sent only to that Endpoint; it is kept in memory and never saved, so reloading the page clears it. The other settings are saved in this browser (localStorage).',
+                { ja: 'デモ以外では、このページは、入力した Endpoint へブラウザから直接リクエストを送ります。そのため、サーバーが別のオリジンからのリクエストを許可している (CORS) 必要があります。API キーはその Endpoint にだけ送り、メモリ上に持つだけで保存しません (ページを読み込み直すと消えます)。それ以外の設定は、このブラウザ (localStorage) に保存します。' },
+              ),
+            ],
+          }),
+
+          // Passing `open` puts the app's state in charge of the dialog: it is open exactly while
+          // s.settingsOpen is true, which is how send() can open it when a setting is missing.
+          // The ✕ button, Escape and a click on the backdrop call onClose. `width` replaces the
+          // default (at most 360px); min() keeps the dialog inside a narrow screen.
+          // `open` を渡すと、ダイアログの開閉をアプリの state で決められます。s.settingsOpen が true の間だけ開くので、
+          // 設定が足りないときに send() から開くこともできます。✕ ボタン・Escape・幕のクリックでは onClose が呼ばれます。
+          // `width` は既定の幅 (最大 360px) を置き換えます。min() で、幅の狭い画面でもダイアログが画面内に収まります。
+          settingsDlg({
+            open: s.settingsOpen,
+            onClose: () => { s.settingsOpen = false; },
+            title: t('Connection', { ja: '接続設定' }),
+            width: 'min(640px, 94vw)',
+            children: [settingsBody(s)],
+            actions: [U.uiButton({ variant: 'primary', children: [t('Close', { ja: '閉じる' })], onclick: () => { s.settingsOpen = false; } })],
+          }),
+
+          // The textarea is disabled during a reply, which takes the focus away from it. focusWhen
+          // gives it back once, at the moment the condition turns true: when the reply ends.
+          // The second half of the condition keeps the page from taking the focus when it loads.
+          // 応答の間はテキストエリアが無効になり、フォーカスが外れます。focusWhen は、条件が true に変わった瞬間
+          // (応答が終わったとき) に 1 回だけ、フォーカスを戻します。
+          // 条件の後半は、ページを開いた直後にフォーカスを奪わないためのものです。
+          focusWhen('chatInput', !s.busy && s.messages.length > 0),
+        ],
+      }),
+    {
+      setup: (a) => {
+        settingsDlg = a.use(U.createDialog());
+        modeTabs = a.use(U.createTabs());
+        chatPane = a.use(U.createScrollPane({ follow: 'bottom' }));
+        focusWhen = a.use(U.createFocusWhen());
+      },
+    },
+  );
+
+  // Site helper: t() returns a plain string, so draw again once when the language changes.
+  // サイトの補助: t() の戻り値はただの文字列なので、言語が変わったら 1 回描き直します。
+  onLangChange(() => app.renderNow());
+</script>
+</body>
+</html>

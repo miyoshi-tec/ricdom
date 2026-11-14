@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ricdom — 14 JSON editor (no build step)</title>
+<!-- ricdom-ui.css styles ricdom's UI components (load it before your own CSS). _fonts.css only sets this site's fonts.
+     ricdom-ui.css は ricdom の UI 部品の見た目です (自分の CSS より先に読み込みます)。_fonts.css はこのサイトのフォント設定だけです。 -->
+<link rel="stylesheet" href="../dist/ricdom-ui.css">
+<link rel="stylesheet" href="_fonts.css">
+<style>
+  /* The page's own layout. Every rule is limited to a class of this page, so none of them reaches
+     ricdom's components by accident. The colours come from the theme's CSS variables (--ric-*).
+     このページ自身のレイアウトです。どの規則もこのページのクラスに限定しているので、ricdom の部品に
+     意図せず当たることはありません。色はテーマの CSS 変数 (--ric-*) から取っています。 */
+  .page { box-sizing: border-box; width: calc(100% - 2rem); max-width: 720px; margin: 1.5rem auto; }
+  .page > h1 { font-size: 1.1rem; margin: 0; }
+
+  /* The editor is a box with a fixed height: the toolbar stays put and the tree scrolls inside.
+     エディタは高さを決めた箱です。ツールバーは動かず、木の部分だけが中でスクロールします。 */
+  .je-editor { display: flex; flex-direction: column; height: min(70vh, 640px); border: 1px solid var(--ric-color-border); border-radius: var(--ric-radius); overflow: hidden; }
+  .je-toolbar { display: flex; align-items: center; gap: 6px; padding: 8px; border-bottom: 1px solid var(--ric-color-border); }
+  .je-file { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .je-tree { flex: 1; min-height: 0; overflow-y: auto; }
+
+  /* One row: the main button takes the free width, the small action buttons follow it.
+     1 行ぶん: メインのボタンが空いた幅を使い、その後ろに小さな操作ボタンが並びます。 */
+  .je-row { display: flex; align-items: center; gap: 2px; min-height: 32px; padding-right: 6px; border-bottom: 1px solid var(--ric-color-border); }
+  .je-main { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; padding: 6px; border: 0; border-radius: 4px; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+  .je-main:hover:not(:disabled) { background: color-mix(in srgb, var(--ric-color-accent) 14%, transparent); }
+  .je-main:focus-visible { outline: 2px solid var(--ric-color-accent); outline-offset: -2px; }
+  .je-main:disabled { cursor: default; opacity: 0.6; }
+  .je-leaf { flex-shrink: 0; width: 14px; }
+  .je-key { flex-shrink: 0; max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; color: var(--ric-color-accent); }
+  .je-colon { color: var(--ric-color-fg-muted); }
+  .je-value { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .je-act { padding: 0 6px; }
+  .je-empty { margin-left: 26px; color: var(--ric-color-fg-muted); }
+
+  /* The row that is being edited: inputs and buttons on one line, wrapping when the row is narrow.
+     編集中の行: 入力欄とボタンを 1 行に並べ、幅が足りなければ折り返します。 */
+  .je-row--edit { flex-wrap: wrap; gap: 6px; padding-top: 6px; padding-bottom: 6px; box-shadow: inset 3px 0 0 var(--ric-color-accent); }
+  .je-key-input { width: 9em; }
+  .je-value-input { flex: 1 1 8em; width: 8em; }
+  .je-edit-buttons { display: flex; gap: 6px; margin-left: auto; }
+</style>
+</head>
+<body>
+<!--
+  14 JSON editor: a small but complete tool, built from the components of the earlier pages.
+  It shows a JSON document as a tree. Objects and arrays open and close, a row is edited in place,
+  rows are added and deleted, and a file can be opened, saved, or dropped onto the editor.
+  Three things to look for in the source:
+  1. The path model: a position in the document is an array of keys and indexes, and every change
+     builds a new document instead of changing the old one.
+  2. State is replaced, never changed in place. That is how ricdom notices a change.
+  3. The keyboard: everything you can click is a <button>, and after each action the focus is put
+     on a row that still exists, with `ref` and app.refs.
+  No build step: two scripts (ricdom, then ricdom/ui) and one stylesheet.
+
+  14 JSON エディタ: これまでのページの部品を組み合わせた、小さいけれど一通り動く道具です。
+  JSON 文書を木で表示します。オブジェクトと配列は開閉でき、行はその場で編集でき、行の追加と削除、
+  ファイルを開く・保存する・エディタにドロップして読み込む、ができます。
+  ソースで見てほしい点は 3 つです。
+  1. path モデル: 文書の中の位置を「キーと index の配列」で表します。変更のたびに、元の文書を
+     書き換えるのではなく、新しい文書を作ります。
+  2. 状態は書き換えずに差し替えます。ricdom はそれで変更に気づきます。
+  3. キーボード: クリックできるものはすべて <button> です。操作のあとは `ref` と app.refs を使って、
+     残っている行にフォーカスを移します。
+  ビルド不要: <script> 2 本 (ricdom → ricdom/ui) と CSS 1 本で動きます。
+-->
+<div id="app"></div>
+
+<!-- Optional: highlight.js colours the code in this site's Source view. ricdom does not need it.
+     任意: highlight.js はこのサイトの「ソース」表示を色分けします。ricdom 自体には不要です。 -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
+<!-- ricdom itself: the core first, then the UI components. They define the globals ricdom and ricdomUI.
+     ricdom 本体: コア → UI 部品の順に読み込みます。グローバル変数 ricdom と ricdomUI ができます。 -->
+<script src="../dist/ricdom.iife.min.js"></script>
+<script src="../dist/ricdom-ui.iife.min.js"></script>
+<!-- Docs-site helpers, not part of ricdom: the nav bar (theme, language, previous / next page) and t() for translations.
+     このサイト専用の補助で、ricdom の一部ではありません: ナビバー (テーマ・言語・前後のページ) と翻訳用の t() です。 -->
+<script src="_i18n.js"></script><script src="_samples.js"></script><script src="_nav.js"></script>
+<script>
+  // A short name for the UI components.
+  // UI 部品を短い名前で呼べるようにします。
+  const U = ricdomUI;
+
+  // Site helper: t(text, { ja: '...' }) returns the text in the chosen language, with the Japanese
+  // written where the string is used. addDict holds the strings used in several places, and the
+  // t`...${value}...` form, which puts values into the text and is always looked up in the dictionary.
+  // サイトの補助: t(文字列, { ja: '…' }) は選択中の言語の文字列を返します。日本語は使う場所に書きます。
+  // addDict には、何度も使う文字列と、値を差し込む t`…${値}…` の形 (常に辞書から訳を引きます) を登録します。
+  const { t, addDict, onLangChange } = ricdomI18n;
+  addDict('ja', {
+    'Cancel': 'キャンセル',
+    'Rename {0}': '{0} の名前を変更',
+    'Add a value to {0}': '{0} に値を追加',
+    'Add an object to {0}': '{0} にオブジェクトを追加',
+    'Add an array to {0}': '{0} に配列を追加',
+    'Delete {0}': '{0} を削除',
+    'The key "{0}" is already used in this object': 'キー "{0}" は、このオブジェクトで既に使われています',
+    'Opened {0}': '{0} を読み込みました',
+    'Saved {0}': '{0} を保存しました',
+    '{0} is not valid JSON: {1}': '{0} は JSON として読めません: {1}',
+  });
+
+  // Icon data (SVG paths). This block is the output of
+  // `npx ricdom-icon chevron-down chevron-right plus x pencil upload download`, pasted as it is.
+  // Copy icon data from that command; do not write the paths by hand.
+  // アイコンのデータ (SVG のパス) です。下のかたまりは
+  // `npx ricdom-icon chevron-down chevron-right plus x pencil upload download` の出力を、そのまま貼ったものです。
+  // アイコンのデータはこのコマンドから写し、パスを手で書かないでください。
+  const ICONS = {
+    "chevron-down": {"p":"m6 9 6 6 6-6"},
+    "chevron-right": {"p":"m9 18 6-6-6-6"},
+    plus: {"p":"M12 5v14M5 12h14"},
+    x: {"p":"M18 6 6 18M6 6l12 12"},
+    pencil: {"p":"M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"},
+    upload: {"p":"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"},
+    download: {"p":"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"},
+  };
+
+  // The document the editor starts with, and goes back to on "Reset".
+  // エディタが最初に表示する文書です。「リセット」でここに戻ります。
+  const DEMO = {
+    name: 'Alice',
+    age: 28,
+    active: true,
+    score: null,
+    tags: ['admin', 'editor'],
+    address: { city: 'Tokyo', zip: '100-0001' },
+    config: { theme: 'dark', fontSize: 14, autosave: false },
+  };
+
+  // ── The path model ───────────────────────────────────────────────────────────────────────────
+  // The idea this page is built on. A position in the document is written as an array of keys and
+  // indexes: the steps that lead from the root to a value. In the DEMO document above,
+  //   []                    is the whole document (the root)
+  //   ['name']              is 'Alice'
+  //   ['address', 'city']   is 'Tokyo'
+  //   ['tags', 0]           is 'admin' (a number is an index into an array)
+  // Every row of the tree knows its path, and every action (edit, add, delete) takes one.
+  // このページの土台になる考え方です。文書の中の位置を「キーと index の配列」で書きます。
+  // ルートからその値までにたどる道順です。上の DEMO の文書なら、
+  //   []                    は文書全体 (ルート)
+  //   ['name']              は 'Alice'
+  //   ['address', 'city']   は 'Tokyo'
+  //   ['tags', 0]           は 'admin' (数値は配列の index)
+  // 木のどの行も自分の path を知っていて、どの操作 (編集・追加・削除) も path を受け取ります。
+  const last = (path) => path[path.length - 1];
+  const parentOf = (path) => path.slice(0, -1);
+  const startsWith = (path, prefix) => prefix.every((k, i) => path[i] === k);
+
+  // idOf(path) is the path as a string, for example '["address","city"]'. One row uses it for
+  // everything that needs a name: its `key`, its `ref`, its entry in state.expanded and its
+  // collapse box.
+  // idOf(path) は path を文字列にしたものです (例: '["address","city"]')。1 つの行で名前が必要なもの
+  // すべてに、これを使います。`key`・`ref`・state.expanded の項目・折りたたみの箱です。
+  const idOf = (path) => JSON.stringify(path);
+
+  // Reading: follow the path from the root.
+  // 読み出し: ルートから path をたどります。
+  const getAt = (root, path) => path.reduce((node, k) => node[k], root);
+
+  // Writing: these functions are pure. They never change the document they are given; they return
+  // a new one. updateAt copies only the objects and arrays on the way down the path and puts
+  // change(old value) at the end. Everything beside the path is shared with the old document.
+  // 書き込み: ここの関数は純粋関数です。受け取った文書は変えず、新しい文書を返します。
+  // updateAt は、path の途中にあるオブジェクトと配列だけを複製し、行き着いた先に change(元の値) を入れます。
+  // path から外れた部分は、元の文書と共有します。
+  const updateAt = (node, path, change) => {
+    if (path.length === 0) return change(node);
+    const [head, ...rest] = path;
+    const copy = Array.isArray(node) ? [...node] : { ...node };
+    copy[head] = updateAt(node[head], rest, change);
+    return copy;
+  };
+  const setAt = (root, path, value) => updateAt(root, path, () => value);
+  const deleteAt = (root, path) =>
+    updateAt(root, parentOf(path), (parent) =>
+      Array.isArray(parent)
+        ? parent.filter((_, i) => i !== last(path))
+        : Object.fromEntries(Object.entries(parent).filter(([k]) => k !== last(path))),
+    );
+  // Renaming a key. An object keeps its keys in the order they were added, so assigning the new
+  // key and deleting the old one would move the entry to the end. Building the object again from
+  // its entries, with one name changed, keeps the entry where it was. (JavaScript itself makes one
+  // exception: keys that are whole numbers, such as "0" or "12", always come first, in numeric order.)
+  // キーの改名です。オブジェクトのキーは追加した順に並ぶので、新しいキーに代入して古いキーを消すと、
+  // その項目は末尾へ移ってしまいます。項目の並びから、名前を 1 つだけ変えてオブジェクトを作り直せば、
+  // 項目は元の位置に残ります。(JavaScript 自体の例外が 1 つあります。"0" や "12" のような整数のキーは、
+  // 必ず先頭に、数の順で並びます。)
+  const renameAt = (root, path, newKey) =>
+    updateAt(root, parentOf(path), (parent) => Object.fromEntries(Object.entries(parent).map(([k, v]) => [k === last(path) ? newKey : k, v])));
+
+  // Small helpers that only read. A "folder" is a value that has children: an object or an array.
+  // 読むだけの小さな補助です。「フォルダ」は、子を持つ値 (オブジェクトか配列) のことです。
+  const isFolder = (value) => typeof value === 'object' && value !== null;
+  const childKeys = (folder) => (Array.isArray(folder) ? folder.map((_, i) => i) : Object.keys(folder));
+  // What a row shows for its value: the number of children for an object or an array, and the
+  // JSON text for everything else (a long string is cut).
+  // 行に表示する値です。オブジェクトと配列は子の数、それ以外は JSON の表記です (長い文字列は切ります)。
+  const preview = (value) => {
+    if (Array.isArray(value)) return `[${value.length}]`;
+    if (isFolder(value)) return `{${Object.keys(value).length}}`;
+    return JSON.stringify(typeof value === 'string' && value.length > 40 ? `${value.slice(0, 40)}…` : value);
+  };
+  // A key for a new entry that the object does not have yet: key, key_1, key_2, ...
+  // 新しい項目のための、そのオブジェクトにまだ無いキーです: key、key_1、key_2、…
+  const uniqueKey = (obj) => {
+    let key = 'key';
+    for (let n = 1; Object.hasOwn(obj, key); n++) key = `key_${n}`;
+    return key;
+  };
+
+  // state.expanded remembers the open folders by path, so when paths change (a key is renamed, an
+  // array loses an element) the flags have to follow. movePaths builds the next map: `move`
+  // gets each open path and returns where it is now, or null when it is gone.
+  // state.expanded は、開いているフォルダを path で覚えています。そのため path が変わるとき (キーの改名、
+  // 配列の要素の削除) は、印も一緒に動かす必要があります。movePaths は次の対応表を作ります。
+  // `move` は開いている path を 1 つずつ受け取り、移動先の path を返します。無くなったものには null を返します。
+  const movePaths = (expanded, move) => {
+    const next = {};
+    for (const id of Object.keys(expanded)) {
+      const path = expanded[id] ? move(JSON.parse(id)) : null;
+      if (path) next[idOf(path)] = true;
+    }
+    return next;
+  };
+
+  // ── The state ────────────────────────────────────────────────────────────────────────────────
+  //   json      the document
+  //   fileName  the name used by "Save", and shown in the toolbar
+  //   expanded  which folders are open: { [idOf(path)]: true }. '[]' is the root, open from the start
+  //   editing   null, or the row being edited: { path, key, text, isNew }
+  //             key    the text in the key field; null when the row has no key to edit (an array
+  //                    element, or the root)
+  //             text   the text in the value field, a JSON literal; null for an object or an array
+  //                    (only its key can be edited)
+  //             isNew  true for a row that was just added: "Cancel" then removes the row again
+  //   json      文書
+  //   fileName  「保存」で使うファイル名。ツールバーにも表示します
+  //   expanded  開いているフォルダ: { [idOf(path)]: true }。'[]' はルートで、最初から開いています
+  //   editing   null か、編集中の行: { path, key, text, isNew }
+  //             key    キーの入力欄の文字列。編集できるキーが無い行 (配列の要素とルート) では null
+  //             text   値の入力欄の文字列 (JSON のリテラル)。オブジェクトと配列では null
+  //                    (キーだけを編集できます)
+  //             isNew  追加したばかりの行なら true。そのとき「キャンセル」は行ごと取り消します
+  const state = {
+    json: DEMO,
+    fileName: 'demo.json',
+    expanded: { '[]': true },
+    editing: null,
+  };
+
+  // Components that keep state are registered with app.use(). They are assigned in `setup` at the
+  // bottom, which runs once before the first render, so render can call them from its first run.
+  // 状態を持つ部品は app.use() で登録します。登録は下の `setup` で行います。setup は最初の描画の前に
+  // 1 回だけ実行されるので、render は初回から呼び出せます。
+  let box, resetDlg, toast, focusWhen;
+
+  // ── Actions ──────────────────────────────────────────────────────────────────────────────────
+  // Each action takes `s`, the state that render receives, and assigns to its top-level properties:
+  // s.json = ..., s.expanded = ..., s.editing = .... ricdom notices an assignment to the state
+  // itself and one level below it, and nothing deeper. The document is deeper than that, so every
+  // change builds a new value (the pure functions above, or a spread) and assigns it.
+  // どの操作も `s` (render が受け取る state) を受け取り、その直下のプロパティに代入します:
+  // s.json = …、s.expanded = …、s.editing = …。ricdom が気づくのは、状態そのものへの代入と、その 1 つ下への
+  // 代入までで、それより深い変更には気づきません。文書はそれより深いので、変更のたびに新しい値を作って
+  // (上の純粋関数か、スプレッドで) 代入します。
+
+  // Put the keyboard focus on the main button of the row at `path`. The state has just changed and
+  // the DOM has not: renderNow() draws at once, and after it s.refs maps every `ref` name to its
+  // element. Without this, the focus would fall back to <body> whenever the focused element is
+  // removed (the OK button, the row that was deleted), and a keyboard user would lose their place.
+  // `path` の行のメインのボタンへ、キーボードのフォーカスを移します。この時点では state だけが変わっていて、
+  // DOM はまだ変わっていません。renderNow() でその場で描き直すと、s.refs で `ref` の名前から要素を引けます。
+  // これをしないと、フォーカスのあった要素 (OK ボタンや、削除した行) が消えるたびにフォーカスが <body> に落ち、
+  // キーボードで操作している人は、どこにいたのかを見失います。
+  const focusRow = (s, path) => {
+    s.renderNow();
+    s.refs.get(idOf(path))?.focus();
+  };
+
+  const toggle = (s, path) => {
+    const id = idOf(path);
+    s.expanded = { ...s.expanded, [id]: !s.expanded[id] };
+  };
+
+  // Start editing a row. `keyed` says whether the row has a key that can be edited: an entry of an
+  // object has one, an element of an array and the root do not.
+  // 行の編集を始めます。`keyed` は、編集できるキーがその行にあるかどうかです。オブジェクトの項目には
+  // あり、配列の要素とルートにはありません。
+  const beginEdit = (s, path, isNew = false) => {
+    const value = getAt(s.json, path);
+    const keyed = path.length > 0 && !Array.isArray(getAt(s.json, parentOf(path)));
+    s.editing = { path, key: keyed ? last(path) : null, text: isFolder(value) ? null : JSON.stringify(value), isNew };
+  };
+
+  // OK. Both fields are checked before anything is changed, so a mistake in one of them never
+  // leaves the row half updated; the row stays in edit mode and a toast says what is wrong.
+  // OK の処理です。何かを変える前に両方の入力欄を調べるので、片方の間違いで行が半分だけ更新されることは
+  // ありません。行は編集中のまま残り、何が間違っているかをトーストで知らせます。
+  const commitEdit = (s) => {
+    const { path, key, text } = s.editing;
+    let value;
+    if (text !== null) {
+      try {
+        value = JSON.parse(text);
+      } catch {
+        toast.show(t('The value is not valid JSON. Text needs double quotes: "text"', { ja: '値が JSON として正しくありません。文字列は二重引用符で囲みます: "text"' }), { type: 'error' });
+        return;
+      }
+    }
+    const renamed = key !== null && key !== last(path);
+    if (renamed && Object.hasOwn(getAt(s.json, parentOf(path)), key)) {
+      toast.show(t`The key "${key}" is already used in this object`, { type: 'error' });
+      return;
+    }
+    const newPath = renamed ? [...parentOf(path), key] : path;
+    let json = s.json;
+    if (renamed) {
+      json = renameAt(json, path, key);
+      // The folder itself and every open folder inside it now have a path that starts with the new key.
+      // このフォルダ自身と、その中の開いているフォルダの path は、新しいキーで始まるものに変わります。
+      s.expanded = movePaths(s.expanded, (p) => (startsWith(p, path) ? [...newPath, ...p.slice(path.length)] : p));
+    }
+    if (text !== null) json = setAt(json, newPath, value);
+    s.json = json;
+    s.editing = null;
+    focusRow(s, newPath);
+  };
+
+  // Remove the value at `path` from the document, and keep state.expanded in step: the flags
+  // inside the removed value go away, and in an array the elements after it move up by one.
+  // `path` の値を文書から取り除き、state.expanded も合わせます。取り除いた値の中の印は消え、
+  // 配列では、後ろの要素が 1 つずつ前に詰まります。
+  const removeAt = (s, path) => {
+    const n = path.length - 1;
+    const inArray = Array.isArray(getAt(s.json, parentOf(path)));
+    s.json = deleteAt(s.json, path);
+    s.expanded = movePaths(s.expanded, (p) => {
+      if (startsWith(p, path)) return null;
+      if (inArray && startsWith(p, parentOf(path)) && p[n] > path[n]) return p.map((k, i) => (i === n ? k - 1 : k));
+      return p;
+    });
+  };
+
+  // Cancel. For a row that was just added, cancelling takes the row out again.
+  // キャンセルの処理です。追加したばかりの行なら、行そのものを取り消します。
+  const cancelEdit = (s) => {
+    const { path, isNew } = s.editing;
+    s.editing = null;
+    if (isNew) removeAt(s, path);
+    focusRow(s, isNew ? parentOf(path) : path);
+  };
+
+  // Delete a row. The focus goes to the row that takes its place, or to the one before it, or,
+  // when the folder is now empty, to the folder's own row.
+  // 行を削除します。フォーカスは、その位置に来た行へ移します。無ければ 1 つ前の行へ、
+  // フォルダが空になったら、そのフォルダの行へ移します。
+  const deleteRow = (s, path) => {
+    const index = childKeys(getAt(s.json, parentOf(path))).indexOf(last(path));
+    removeAt(s, path);
+    toast.show(t('Deleted', { ja: '削除しました' }), { type: 'success' });
+    const keys = childKeys(getAt(s.json, parentOf(path)));
+    focusRow(s, keys.length === 0 ? parentOf(path) : [...parentOf(path), keys[Math.min(index, keys.length - 1)]]);
+  };
+
+  // Add a child to a folder: `initial` is '' (a value), {} or []. The folder is opened so that the
+  // new row can be seen. In an object the new entry needs a name, so it goes straight into edit
+  // mode. In an array there is no key: only a plain value is edited, {} and [] are just added.
+  // フォルダに子を追加します。`initial` は '' (値)・{}・[] のどれかです。新しい行が見えるように、フォルダを開きます。
+  // オブジェクトでは新しい項目に名前が必要なので、そのまま編集に入ります。配列にはキーが無いので、
+  // 編集に入るのはただの値のときだけで、{} と [] は追加するだけです。
+  const addRow = (s, parentPath, initial) => {
+    const parent = getAt(s.json, parentPath);
+    const path = [...parentPath, Array.isArray(parent) ? parent.length : uniqueKey(parent)];
+    s.json = setAt(s.json, path, initial);
+    s.expanded = { ...s.expanded, [idOf(parentPath)]: true, ...(isFolder(initial) ? { [idOf(path)]: true } : {}) };
+    if (Array.isArray(parent) && isFolder(initial)) focusRow(s, path);
+    else beginEdit(s, path, true);
+  };
+
+  // Files. "Save" downloads the document as a file. "Open" and a drop both end in loadFile.
+  // ファイルの処理です。「保存」は文書をファイルとしてダウンロードします。「開く」とドロップは、
+  // どちらも loadFile に行き着きます。
+  const saveFile = (s) => {
+    const url = URL.createObjectURL(new Blob([JSON.stringify(s.json, null, 2)], { type: 'application/json' }));
+    Object.assign(document.createElement('a'), { href: url, download: s.fileName }).click();
+    URL.revokeObjectURL(url);
+    toast.show(t`Saved ${s.fileName}`, { type: 'success' });
+  };
+  const loadFile = async (s, file) => {
+    let json;
+    try {
+      json = JSON.parse(await file.text());
+    } catch (err) {
+      toast.show(t`${file.name} is not valid JSON: ${err.message}`, { type: 'error' });
+      return;
+    }
+    s.json = json;
+    s.fileName = file.name;
+    s.expanded = { '[]': true };
+    s.editing = null;
+    toast.show(t`Opened ${file.name}`, { type: 'success' });
+  };
+  const openFile = (s) => {
+    const input = Object.assign(document.createElement('input'), { type: 'file', accept: '.json,application/json' });
+    input.onchange = () => {
+      if (input.files[0]) loadFile(s, input.files[0]);
+    };
+    input.click();
+  };
+  const resetAll = (s) => {
+    s.json = DEMO;
+    s.fileName = 'demo.json';
+    s.expanded = { '[]': true };
+    s.editing = null;
+    resetDlg.close();
+    toast.show(t('Back to the demo data', { ja: 'デモデータに戻しました' }), { type: 'success' });
+  };
+
+  // ── The tree ─────────────────────────────────────────────────────────────────────────────────
+  // tree(s) turns the document into rows. It is called from render, so it runs again on every draw.
+  // tree(s) は文書を行に変えます。render から呼ぶので、描くたびに実行されます。
+  const tree = (s) => {
+    // While one row is being edited, the buttons of the other rows are disabled. An edit holds a
+    // path, and adding, deleting or renaming somewhere else could change what that path points to.
+    // どれかの行を編集している間は、ほかの行のボタンを無効にします。編集は path を持っているので、
+    // 別の場所で追加・削除・改名をすると、その path の指す先が変わってしまうことがあるからです。
+    const busy = s.editing !== null;
+    const editingId = busy ? idOf(s.editing.path) : null;
+    const indent = (depth) => ({ paddingLeft: `${depth * 16 + 4}px` });
+
+    // A small icon button. An icon alone says nothing to a screen reader, so the button gets its
+    // name from aria-label; `title` shows the same text on hover.
+    // アイコンの小さなボタンです。アイコンだけではスクリーンリーダーに何も伝わらないので、ボタンの名前は
+    // aria-label で付けます。`title` は、ホバーしたときに同じ文字を表示します。
+    const act = (label, children, onclick) =>
+      U.uiButton({ variant: 'ghost', size: 'sm', class: 'je-act', disabled: busy, 'aria-label': label, title: label, onclick, children });
+
+    // An ordinary row. Its main button does the row's main job: it opens or closes a folder, and
+    // starts editing anything else. It is a real <button>, so Tab reaches it and Enter or Space
+    // presses it. `ref` gives it a name that focusRow can look up.
+    // On a folder's button, aria-expanded tells a screen reader whether the folder is open, and
+    // aria-controls points at the element that holds its children (box.idFor gives that id).
+    // 通常の行です。メインのボタンが、その行の主な操作を受け持ちます。フォルダなら開閉、それ以外なら編集の開始です。
+    // 本物の <button> なので、Tab で届き、Enter か Space で押せます。`ref` は、focusRow が探すための名前です。
+    // フォルダのボタンでは、aria-expanded が「開いているか」をスクリーンリーダーに伝え、
+    // aria-controls が子を入れている要素を指します (その id は box.idFor で取れます)。
+    const viewRow = (value, path, name, keyed) => {
+      const id = idOf(path);
+      const folder = isFolder(value);
+      const open = folder && !!s.expanded[id];
+      return {
+        tag: 'div',
+        class: 'je-row',
+        style: indent(path.length),
+        children: [
+          {
+            tag: 'button',
+            class: 'je-main',
+            ref: id,
+            disabled: busy,
+            ...(folder ? { 'aria-expanded': String(open), 'aria-controls': box.idFor(id) } : {}),
+            onclick: () => (folder ? toggle(s, path) : beginEdit(s, path)),
+            children: [
+              folder ? U.uiIcon(ICONS[open ? 'chevron-down' : 'chevron-right'], { size: 14 }) : { tag: 'span', class: 'je-leaf' },
+              { tag: 'code', class: 'je-key', children: [name] },
+              { tag: 'span', class: 'je-colon', children: [':'] },
+              { tag: 'code', class: 'je-value', children: [preview(value)] },
+            ],
+          },
+          folder && keyed ? act(t`Rename ${name}`, [U.uiIcon(ICONS.pencil, { size: 14 })], () => beginEdit(s, path)) : null,
+          folder ? act(t`Add a value to ${name}`, [U.uiIcon(ICONS.plus, { size: 14 })], () => addRow(s, path, '')) : null,
+          folder ? act(t`Add an object to ${name}`, [U.uiIcon(ICONS.plus, { size: 14 }), { tag: 'code', children: ['{}'] }], () => addRow(s, path, {})) : null,
+          folder ? act(t`Add an array to ${name}`, [U.uiIcon(ICONS.plus, { size: 14 }), { tag: 'code', children: ['[]'] }], () => addRow(s, path, [])) : null,
+          path.length > 0 ? act(t`Delete ${name}`, [U.uiIcon(ICONS.x, { size: 14 })], () => deleteRow(s, path)) : null,
+        ],
+      };
+    };
+
+    // The row that is being edited: a field for the key, a field for the value, OK and Cancel.
+    // Each keystroke assigns a new object to s.editing (a spread with one field changed) and the
+    // page is drawn again. That does not disturb the typing: while an input has the focus, ricdom
+    // leaves its text alone.
+    // 編集中の行です。キーの入力欄、値の入力欄、OK とキャンセルを並べます。
+    // 1 文字ごとに、s.editing へ新しいオブジェクト (1 か所だけ変えたスプレッド) を代入して、画面を描き直します。
+    // それでも入力のじゃまにはなりません。フォーカスのある入力欄の文字に、ricdom は手を出さないからです。
+    const editRow = (path, name) => {
+      const e = s.editing;
+      // Enter confirms and Escape cancels. While an input method is still composing text (Japanese,
+      // for example), Enter belongs to it: isComposing is true then, and the key is left alone.
+      // preventDefault matters for Enter: commitEdit moves the focus to a button, and without it the
+      // same key press would go on to press that button.
+      // Enter で確定、Escape でキャンセルです。日本語などの変換中は、Enter は変換の確定に使われます。
+      // そのとき isComposing が true なので、何もしません。
+      // Enter では preventDefault が必要です。commitEdit がフォーカスをボタンへ移すので、これが無いと、
+      // 同じキー入力がそのままそのボタンを押してしまいます。
+      const onkeydown = (ev) => {
+        if (ev.isComposing || (ev.key !== 'Enter' && ev.key !== 'Escape')) return;
+        ev.preventDefault();
+        if (ev.key === 'Enter') commitEdit(s);
+        else cancelEdit(s);
+      };
+      return {
+        tag: 'div',
+        class: 'je-row je-row--edit',
+        style: indent(path.length),
+        children: [
+          e.key === null
+            ? { tag: 'code', class: 'je-key', children: [name] }
+            : U.uiInput({
+                class: 'je-key-input',
+                ref: 'editKey',
+                'aria-label': t('Key', { ja: 'キー' }),
+                value: e.key,
+                oninput: (ev) => { s.editing = { ...s.editing, key: ev.target.value }; },
+                onkeydown,
+              }),
+          e.text === null
+            ? null
+            : U.uiInput({
+                class: 'je-value-input',
+                ref: 'editValue',
+                'aria-label': t('Value, as JSON', { ja: '値 (JSON の表記)' }),
+                placeholder: '"text" / 42 / true / null / {} / []',
+                value: e.text,
+                oninput: (ev) => { s.editing = { ...s.editing, text: ev.target.value }; },
+                onkeydown,
+              }),
+          {
+            tag: 'span',
+            class: 'je-edit-buttons',
+            children: [
+              U.uiButton({ variant: 'primary', children: [t('OK', { ja: 'OK' })], onclick: () => commitEdit(s) }),
+              U.uiButton({ children: [t('Cancel')], onclick: () => cancelEdit(s) }),
+            ],
+          },
+        ],
+      };
+    };
+
+    // One node of the tree: its row, and for a folder a collapse box with the rows of its children
+    // (the function calls itself). `key` ties the DOM elements to this node, so when a row is added
+    // or removed above it, the node keeps its own elements, including an input being typed in.
+    // A single collapse box serves every folder: its own `key` prop tells the folders apart.
+    // The box animates opening and closing, and draws nothing while it is closed.
+    // 木のノード 1 つ分です。自分の行と、フォルダなら子の行を入れた折りたたみの箱を描きます (この関数は自分自身を呼びます)。
+    // `key` が DOM 要素をこのノードに結び付けるので、上の行が増えたり減ったりしても、このノードは自分の要素
+    // (入力中の入力欄を含みます) を保ちます。
+    // 折りたたみの箱は 1 つで、すべてのフォルダをまかないます。箱の `key` プロパティでフォルダを区別します。
+    // 箱は開閉をアニメーションし、閉じている間は何も描きません。
+    // An empty folder gets one line that says so: an open folder then always has something to show.
+    // 空のフォルダには、空であることを示す 1 行を入れます。開いたフォルダに、必ず何かが表示されるようにするためです。
+    const node = (value, path, inArray) => {
+      const id = idOf(path);
+      const name = path.length === 0 ? 'root' : inArray ? `[${last(path)}]` : last(path);
+      const keys = isFolder(value) ? childKeys(value) : null;
+      const emptyRow = () => ({ tag: 'div', class: 'je-row', style: indent(path.length + 1), children: [{ tag: 'span', class: 'je-empty', children: [t('(empty)', { ja: '(空)' })] }] });
+      return {
+        tag: 'div',
+        key: id,
+        children: [
+          id === editingId ? editRow(path, name) : viewRow(value, path, name, path.length > 0 && !inArray),
+          keys === null
+            ? null
+            : box({
+                key: id,
+                visible: !!s.expanded[id],
+                children: keys.length === 0 ? [emptyRow()] : keys.map((k) => node(value[k], [...path, k], Array.isArray(value))),
+              }),
+        ],
+      };
+    };
+
+    return node(s.json, [], false);
+  };
+
+  // ── The page ─────────────────────────────────────────────────────────────────────────────────
+  // A heading, a sentence that says what to try, and the editor: a toolbar above the tree.
+  // 見出し、試すことを書いた文、そしてエディタ (ツールバーと、その下の木) です。
+  const app = ricdom.createApp(
+    '#app',
+    state,
+    (s) =>
+      U.uiPanel({
+        class: 'page',
+        children: [
+          { tag: 'h1', children: [t('ricdom — JSON editor', { ja: 'ricdom — JSON エディタ' })] },
+          U.uiText({
+            children: [
+              t(
+                'Click a row to edit its key and value. A value is written as JSON: "text", 42, true, null. Enter confirms, Escape cancels. On an object or an array, the buttons on the right rename it, add a value, an object or an array, and delete it. To open a file, use Open or drop a .json file onto the editor.',
+                { ja: '行をクリックすると、キーと値を編集できます。値は JSON の表記で書きます: "text"、42、true、null。Enter で確定、Escape でキャンセルです。オブジェクトと配列の行では、右のボタンで名前の変更、値・オブジェクト・配列の追加、削除ができます。ファイルを開くには、「開く」を押すか、.json ファイルをエディタにドロップします。' },
+              ),
+            ],
+          }),
+          {
+            tag: 'div',
+            class: 'je-editor',
+            // Dropping a file. A browser only delivers `drop` to an element that cancelled `dragover`.
+            // ファイルのドロップです。ブラウザが `drop` を届けるのは、`dragover` をキャンセルした要素だけです。
+            ondragover: (ev) => ev.preventDefault(),
+            ondrop: (ev) => {
+              ev.preventDefault();
+              if (ev.dataTransfer.files[0]) loadFile(s, ev.dataTransfer.files[0]);
+            },
+            children: [
+              {
+                tag: 'div',
+                class: 'je-toolbar',
+                children: [
+                  U.uiButton({ children: [U.uiIcon(ICONS.upload, { size: 16 }), t('Open', { ja: '開く' })], onclick: () => openFile(s) }),
+                  U.uiText({ variant: 'muted', class: 'je-file', children: [s.fileName] }),
+                  U.uiButton({ children: [U.uiIcon(ICONS.download, { size: 16 }), t('Save', { ja: '保存' })], onclick: () => saveFile(s) }),
+                  // With triggerChildren the dialog draws its own button, and gives the focus back to
+                  // it when it closes.
+                  // triggerChildren を渡すと、ダイアログが自分のボタンを描きます。閉じると、フォーカスは
+                  // そのボタンに戻ります。
+                  resetDlg({
+                    triggerChildren: [t('Reset…', { ja: 'リセット…' })],
+                    triggerVariant: 'default',
+                    title: t('Go back to the demo data?', { ja: 'デモデータに戻しますか？' }),
+                    children: [t('Your edits will be lost.', { ja: '編集した内容は失われます。' })],
+                    actions: [
+                      U.uiButton({ children: [t('Cancel')], onclick: () => resetDlg.close() }),
+                      U.uiButton({ variant: 'primary', children: [t('Reset', { ja: 'リセット' })], onclick: () => resetAll(s) }),
+                    ],
+                  }),
+                ],
+              },
+              { tag: 'div', class: 'je-tree', children: [tree(s)] },
+            ],
+          },
+          // When editing starts, put the focus into the first field of the row: the key field, or
+          // the value field when the row has no key to edit. focusWhen acts once, at the moment its
+          // condition turns from false to true.
+          // 編集が始まったら、その行の最初の入力欄にフォーカスを入れます。キーの入力欄か、編集できるキーの無い行では
+          // 値の入力欄です。focusWhen は、条件が false から true に変わった瞬間に 1 回だけ働きます。
+          focusWhen('editKey', s.editing !== null && s.editing.key !== null),
+          focusWhen('editValue', s.editing !== null && s.editing.key === null),
+        ],
+      }),
+    {
+      setup: (a) => {
+        box = a.use(U.createCollapseBox({ duration: 180 }));
+        resetDlg = a.use(U.createDialog());
+        toast = a.use(U.createToast());
+        focusWhen = a.use(U.createFocusWhen());
+      },
+    },
+  );
+
+  // Site helper: t() returns a plain string, so draw again once when the language changes.
+  // サイトの補助: t() の戻り値はただの文字列なので、言語が変わったら 1 回描き直します。
+  onLangChange(() => app.renderNow());
+</script>
+</body>
+</html>

@@ -7,7 +7,8 @@
 //
 // The order is "most used first, then by difficulty": the basics (01-04), components that keep
 // state (05-07), themes and the larger components (08-10), then how ricdom fits into a page and
-// how lists are reconciled (11-12), and the less common floating components (13).
+// how lists are reconciled (11-12), the less common floating components (13), and two small but
+// complete tools built from all of the above (14-15).
 window.RICDOM_SAMPLES = [
   {
     file: '01-hello.html',
@@ -111,6 +112,22 @@ window.RICDOM_SAMPLES = [
     blurb: {
       en: 'Menus (on every row and on right-click too), dropdown panels, tooltips and a collapsing box.',
       ja: 'メニュー (行ごと・右クリックも)、ドロップダウンのパネル、ツールチップ、折りたたむ箱。',
+    },
+  },
+  {
+    file: '14-json-editor.html',
+    title: { en: 'JSON editor', ja: 'JSON エディタ' },
+    blurb: {
+      en: 'A small complete tool: a JSON tree edited in place, with a path model, state that is replaced instead of changed, and full keyboard use.',
+      ja: '小さいけれど一通り動く道具: JSON の木をその場で編集。path モデル、書き換えずに差し替える状態、キーボードだけでの操作。',
+    },
+  },
+  {
+    file: '15-ai-chat.html',
+    title: { en: 'AI chat', ja: 'AI チャット' },
+    blurb: {
+      en: 'A chat that draws a streamed reply as Markdown while it arrives: a demo mode that needs no server, and a settings dialog for OpenAI-compatible servers.',
+      ja: '届いている途中の応答を Markdown で描くチャット。サーバー不要のデモと、OpenAI 互換サーバーの接続設定ダイアログつき。',
     },
   },
 ];
