@@ -8,7 +8,7 @@ import { createApp } from '../../src/app.js';
 import { createFocusWhen } from '../../src/ui/focusWhen.js';
 import { createDialog } from '../../src/ui/dialog.js';
 import { injectStyles } from '../../src/ui/injectStyles.js';
-import { flush, setupApp } from '../_helpers/dom.js';
+import { dialogOpened, flush, pastDialogBackstop, setupApp } from '../_helpers/dom.js';
 import type { UsePart } from '../../src/types.js';
 
 injectStyles(document);
@@ -71,7 +71,8 @@ describe('実ブラウザ: createFocusWhen', () => {
     // 発火した「後」でも、fw が先に移した textarea へのフォーカスが保たれているかを見る —
     // これが #12 の核心 (バックストップ/animationend のどちらが先に来ても、dialog は
     // 「既に内部にフォーカスがある」ことを検知して何もしないはず)。
-    await new Promise((r) => setTimeout(r, 800));
+    await dialogOpened();
+    await pastDialogBackstop();
 
     const textarea = app.querySelector('textarea');
     expect(textarea).not.toBeNull();

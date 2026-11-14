@@ -27,6 +27,47 @@ export const flushMicrotasks = (): Promise<void> => new Promise((r) => queueMicr
  * 途中 = 実寸より小さい瞬間を測っていたローカルのテストが見逃し、遅い CI だけが検出していた)。
  * 実ブラウザ専用 (jsdom には getAnimations が無いので、呼べば要素が現れた時点で返る)。
  */
+/**
+ * 条件が成り立つまで待つ (16ms ごとに確かめる)。固定時間待ちの代わりに使う。
+ * 成り立たなければ `what` を含むメッセージで throw する (= テストはそこで落ちる)。
+ */
+export const until = async (cond: () => boolean, what = '条件', timeout = 3000): Promise<void> => {
+  const t0 = performance.now();
+  while (!cond()) {
+    if (performance.now() - t0 > timeout) throw new Error(`until: ${timeout}ms 待っても成り立たなかった: ${what}`);
+    await new Promise((r) => setTimeout(r, 16));
+  }
+};
+
+const dialogEl = (): HTMLElement | null => document.querySelector('[role="dialog"]');
+
+/**
+ * ダイアログが **開ききる** まで待って、その要素を返す: 要素がある / 開くアニメーションが終わった /
+ * 初期フォーカスがダイアログの中に入った (createDialog は `animationend` を合図にフォーカスを移す)。
+ * `setTimeout(300)` で待つと、遅い環境ではアニメーションが終わる前に assert して落ちる
+ * (背景が inert になった直後で、フォーカスは body にある。2026-11-14 の CI で実際に起きた)。
+ */
+export const dialogOpened = async (timeout = 3000): Promise<HTMLElement> => {
+  const el = await settled(dialogEl, timeout);
+  await until(() => el.contains(document.activeElement), '初期フォーカスがダイアログの中に入る', timeout);
+  return el;
+};
+
+/**
+ * ダイアログが **閉じきる** まで待つ: 閉じるアニメーションが終わり、要素が DOM から消えるまで。
+ * createDialog は「背景の inert 解除 → フォーカス復帰 → 再描画で要素を外す」の順に片付けるので、
+ * 要素が消えた時点でフォーカスと inert も片付いている。
+ */
+export const dialogClosed = (timeout = 3000): Promise<void> => until(() => dialogEl() === null, 'ダイアログが DOM から消える', timeout);
+
+/**
+ * createDialog のバックストップ (`ANIMATION_FALLBACK_MS` = 700ms、animationend が来ないときの保険)
+ * が発火し終わるまで待つ。「バックストップが後から発火してもフォーカスを奪わない」を確かめる
+ * テスト用で、準備待ちではなく **時間そのものが検証対象**。必ず dialogOpened() の後に呼ぶ
+ * (開いた時点から数えれば、遅い環境でも確実にタイマーより後になる)。
+ */
+export const pastDialogBackstop = (): Promise<void> => new Promise((r) => setTimeout(r, 750));
+
 export const settled = async (get: () => HTMLElement | null, timeout = 3000): Promise<HTMLElement> => {
   const t0 = performance.now();
   for (;;) {
