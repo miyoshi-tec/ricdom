@@ -26,10 +26,10 @@
 //   → 戻り値はトリガーボタンの RicNode。
 
 import type { RicNode } from '../types.js';
-import { ANIMATION_FALLBACK_MS, type AttachGuard, type Component, createAttachGuard, type Host } from './internal/component.js';
+import { type AttachGuard, type Component, createAttachGuard, type Host } from './internal/component.js';
 import { UI_ROLE } from './internal/pureHelpers.js';
-import { computeAnchoredLeft, computeFlipDir, fitHeight, measuringLeft, type Pos, posToStyle, shouldCloseOnScroll } from './internal/popupPosition.js';
-import { closeOthers, registerExclusive, unregisterExclusive } from './internal/exclusiveRegistry.js';
+import { registerExclusive, unregisterExclusive } from './internal/exclusiveRegistry.js';
+import { createFloatingMenu } from './internal/floatingMenu.js';
 import { uiIcon } from './icon.js';
 
 // 開閉インジケータ (chevron-down)。閉=下向き、開=CSS で 180° 回転して上向き
@@ -70,116 +70,28 @@ export const createDropdown = (): DropdownInstance => {
   const id = ++nextDropdownId;
   const bodyMarker = `ricdom-dropdown-${id}`;
   const guard: AttachGuard = createAttachGuard('createDropdown', { topLayer: true });
-  const exclusiveSelf = { close: () => doClose() };
 
-  let isOpen = false;
-  let isClosing = false;
-  let isMeasuring = false;
-  let dir: 'below' | 'above' = 'below';
-  let pos: Pos = {};
-  let escBound = false;
-  let lightDismissBound = false;
   let bodyChildrenLast: RicNode | RicNode[] = [];
-  let restoreFocusEl: HTMLElement | null = null;
 
   const getBodyEl = (): HTMLElement | null => (typeof document === 'undefined' ? null : document.querySelector(`[data-ricdom-dropdown-id="${bodyMarker}"]`));
-  // light dismiss (#A、2.0.0-alpha.12、createPopup と同じ理由 — popup.ts のコメント参照)。
   const getTriggerEl = (): HTMLElement | null => (typeof document === 'undefined' ? null : document.querySelector(`[data-ricdom-dropdown-trigger-id="${bodyMarker}"]`));
 
-  const handleAnimEnd = (): void => {
-    if (!isClosing) return;
-    isOpen = false;
-    isClosing = false;
-    guard.host?.notify();
-  };
-
-  function doClose(): void {
-    if (isClosing || !isOpen) return;
-    isClosing = true;
-    guard.host?.notify();
-    if (typeof setTimeout !== 'undefined') setTimeout(handleAnimEnd, ANIMATION_FALLBACK_MS);
-  }
-
-  const closeAndRestoreFocus = (): void => {
-    doClose();
-    if (restoreFocusEl && typeof restoreFocusEl.focus === 'function') restoreFocusEl.focus();
-  };
-
-  const handleKeydown = (ev: KeyboardEvent): void => {
-    if (ev.key === 'Escape') closeAndRestoreFocus();
-  };
-
-  const bindKeydownIfNeeded = (): void => {
-    if (typeof document === 'undefined') return;
-    if (isOpen && !escBound) {
-      document.addEventListener('keydown', handleKeydown);
-      escBound = true;
-    }
-    if (!isOpen && escBound) {
-      document.removeEventListener('keydown', handleKeydown);
-      escBound = false;
-    }
-  };
-
-  // light dismiss (#A、2.0.0-alpha.12): createPopup と同じ実装 (popup.ts のコメント参照)。
-  const handleOutsidePointerDown = (ev: PointerEvent): void => {
-    if (!isOpen || isClosing) return;
-    const target = ev.target as Node | null;
-    if (!target) return;
-    const body = getBodyEl();
-    if (body && body.contains(target)) return; // 本体内クリックでは閉じない
-    const triggerEl = getTriggerEl();
-    if (triggerEl && triggerEl.contains(target)) return; // トリガー上は既存の toggle に任せる (二重に閉じない)
-    doClose(); // 外側クリックはフォーカス復帰しない (Esc は closeAndRestoreFocus のまま)
-  };
-
-  // トリガーを含む領域 (またはページ) のスクロールで閉じる (alpha.28、popupPosition.ts の
-  // shouldCloseOnScroll 参照)。scroll はバブリングしないので document の capture で受ける。
-  const handleScroll = (ev: Event): void => {
-    if (!isOpen || isClosing) return;
-    if (shouldCloseOnScroll(ev.target, getTriggerEl(), getBodyEl())) doClose();
-  };
-
-  const bindLightDismissIfNeeded = (): void => {
-    if (typeof document === 'undefined') return;
-    if (isOpen && !lightDismissBound) {
-      document.addEventListener('pointerdown', handleOutsidePointerDown, true);
-      document.addEventListener('scroll', handleScroll, { capture: true, passive: true });
-      lightDismissBound = true;
-    }
-    if (!isOpen && lightDismissBound) {
-      document.removeEventListener('pointerdown', handleOutsidePointerDown, true);
-      document.removeEventListener('scroll', handleScroll, true);
-      lightDismissBound = false;
-    }
-  };
-
-  // #14 (2.0.0-alpha.5): 実測前 (measuredWidth undefined、= 実測 render の間) は
-  // `measuringLeft()` で本体を viewport マージン位置に仮置きし、実測を横幅制約なしで
-  // 行う (popupPosition.ts の `measuringLeft` コメント参照)。実測後は従来どおり
-  // `computeAnchoredLeft` で最終位置を決める。
-  // measuredH (実測後のみ) を渡すと、上下どちらにも入りきらないときに maxHeight で画面内に収める
-  // (alpha.28、popup.ts と同じ fitHeight を共有)。
-  const computePos = (rect: DOMRect, chosenDir: 'below' | 'above', isLabel: boolean, measuredWidth: number | undefined, measuredH?: number): Pos => ({
-    top: chosenDir === 'below' ? rect.bottom + 4 : undefined,
-    bottom: chosenDir === 'above' ? window.innerHeight - rect.top + 4 : undefined,
-    left: measuredWidth === undefined ? measuringLeft() : computeAnchoredLeft(rect, measuredWidth),
-    ...(isLabel ? { minWidth: rect.width } : {}),
-    maxHeight: measuredH === undefined ? undefined : fitHeight(chosenDir, chosenDir === 'below' ? rect.bottom + 4 : rect.top - 4, measuredH),
-  });
+  // 開閉の状態・外側の操作で閉じる処理・実測して置く処理は createPopup と共有する
+  // (internal/floatingMenu.ts)。スクロールで閉じる判定の基準は、常に今のトリガー要素にする。
+  const menu = createFloatingMenu({ host: () => guard.host, bodyEl: getBodyEl, triggerEl: getTriggerEl, scrollAnchor: getTriggerEl });
 
   const inst = ((props: DropdownProps): RicNode => {
     const host = guard.ensure();
     if (!host) return null;
 
+    const isOpen = menu.isOpen();
     const isLabel = !!props.label && !props.icon;
     // label は RicNode | RicNode[] (2.0.0-alpha.12、PopupTriggerObject.label と型を揃えた —
     // 線茶からの報告。旧 string 限定では uiIcon() 等を混ぜたラベルが組めなかった)。
     // 配列ならそのまま展開、単体ならこれまでどおり 1 要素の配列に包む。
     const triggerContent: RicNode | RicNode[] = isLabel ? [{ tag: 'span', children: Array.isArray(props.label) ? props.label : [props.label as RicNode] }] : (props.icon ?? '≡');
     bodyChildrenLast = props.children ?? [];
-    bindKeydownIfNeeded();
-    bindLightDismissIfNeeded();
+    menu.syncListeners();
 
     const triggerChildren: RicNode[] = isLabel
       ? [
@@ -194,66 +106,36 @@ export const createDropdown = (): DropdownInstance => {
         .filter(Boolean)
         .join(' '),
       'data-ricdom-role': UI_ROLE.dropdownTrigger,
-      // light dismiss (#A) の getTriggerEl が問い合わせる安定セレクタ (popup.ts と対称)。
+      // getTriggerEl が問い合わせる安定セレクタ (popup.ts と対称)。
       'data-ricdom-dropdown-trigger-id': bodyMarker,
       'aria-haspopup': 'dialog',
       'aria-expanded': isOpen ? 'true' : 'false',
       onclick: (ev: MouseEvent) => {
-        if (isClosing) return;
-        if (isOpen) {
-          closeAndRestoreFocus();
+        if (menu.isClosing()) return;
+        if (menu.isOpen()) {
+          menu.closeAndRestoreFocus();
           return;
         }
-        if (host.app) closeOthers(host.app, exclusiveSelf);
-        const triggerEl = ev.currentTarget as HTMLElement;
-        restoreFocusEl = triggerEl;
-        const rect = triggerEl.getBoundingClientRect();
-        const initialDir = computeFlipDir(rect, 160);
-        dir = initialDir;
-        pos = computePos(rect, initialDir, isLabel, undefined);
-        const canMeasure = typeof requestAnimationFrame !== 'undefined' && typeof document !== 'undefined';
-        isMeasuring = canMeasure;
-        isClosing = false;
-        isOpen = true;
-        guard.host?.notify();
-        if (!canMeasure) return;
-        requestAnimationFrame(() => {
-          if (!isOpen || isClosing) {
-            isMeasuring = false;
-            return;
-          }
-          const body = getBodyEl();
-          if (!body) {
-            isMeasuring = false;
-            guard.host?.notify();
-            return;
-          }
-          const measuredW = body.offsetWidth;
-          const measuredH = body.offsetHeight;
-          const newDir = computeFlipDir(rect, measuredH);
-          dir = newDir;
-          pos = computePos(rect, newDir, isLabel, measuredW, measuredH);
-          isMeasuring = false;
-          guard.host?.notify();
-        });
+        // ラベル形は、本体の最小幅をトリガーの幅にする
+        menu.openFromElement(ev.currentTarget as HTMLElement, { minWidthFromElement: isLabel });
       },
       children: triggerChildren,
     } as unknown as RicNode;
   }) as DropdownInstance;
 
   inst.renderPortal = (): RicNode => {
-    if (!guard.host || !isOpen) return null;
+    if (!guard.host || !menu.isOpen()) return null;
     return [
-      // light dismiss (#A、2.0.0-alpha.12): overlay は視覚・role 用に残すが pointer-events:
-      // none (cssTemplates.ts) で onclick は持たない。popup.ts のコメント参照。
+      // overlay は視覚・role 用に残すが pointer-events: none (cssTemplates.ts) で onclick は持たない。
+      // 外側クリックで閉じる処理は floatingMenu.ts が document で受ける (2.0.0-alpha.12)。
       { tag: 'div', class: 'ric-popup__overlay', 'data-ricdom-role': UI_ROLE.popupOverlay },
       {
         tag: 'div',
-        class: `ric-dropdown__body ric-popup__body--${dir}${isClosing ? ' ric-popup__body--out' : ''}`,
+        class: `ric-dropdown__body ric-popup__body--${menu.dir()}${menu.isClosing() ? ' ric-popup__body--out' : ''}`,
         'data-ricdom-role': UI_ROLE.dropdown,
         'data-ricdom-dropdown-id': bodyMarker,
-        style: { ...posToStyle(pos), ...(isMeasuring ? { visibility: 'hidden' } : {}) },
-        onanimationend: handleAnimEnd,
+        style: menu.bodyStyle(),
+        onanimationend: menu.handleAnimEnd,
         children: bodyChildrenLast,
       },
     ] as unknown as RicNode;
@@ -261,24 +143,16 @@ export const createDropdown = (): DropdownInstance => {
 
   inst.attach = (host: Host) => {
     guard.attach(host);
-    registerExclusive(host.app, exclusiveSelf);
+    registerExclusive(host.app, menu.exclusiveSelf);
   };
   inst.dispose = (): void => {
-    if (escBound && typeof document !== 'undefined') {
-      document.removeEventListener('keydown', handleKeydown);
-      escBound = false;
-    }
-    if (lightDismissBound && typeof document !== 'undefined') {
-      document.removeEventListener('pointerdown', handleOutsidePointerDown, true);
-      document.removeEventListener('scroll', handleScroll, true);
-      lightDismissBound = false;
-    }
-    if (guard.host) unregisterExclusive(guard.host.app, exclusiveSelf);
+    menu.dispose();
+    if (guard.host) unregisterExclusive(guard.host.app, menu.exclusiveSelf);
     guard.dispose();
   };
 
-  inst.close = (): void => doClose();
-  inst.isOpen = (): boolean => isOpen;
+  inst.close = (): void => menu.close();
+  inst.isOpen = (): boolean => menu.isOpen();
 
   return inst;
 };
