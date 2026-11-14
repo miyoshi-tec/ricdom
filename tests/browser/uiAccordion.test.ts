@@ -41,16 +41,19 @@ describe('実ブラウザ: createAccordion (controlled)', () => {
     expect(header().getAttribute('aria-expanded')).toBe('false');
     expect(panel().inert).toBe(true);
 
-    // ヘッダクリック (実ブラウザの click イベント) → onToggle 経由で親 state を更新
+    // ヘッダクリック (実ブラウザの click イベント) → onToggle 経由で親 state を更新。
+    // 再描画は rAF (止まっていれば 200ms のバックストップ) で走るので、固定時間ではなく
+    // nextRender() で「その描画が終わった」ことを待つ (alpha.31: flush(30) は遅い CI で
+    // 描画より先に assert して落ちた)。
     header().click();
-    await flush();
+    await handle.nextRender();
 
     expect(header().getAttribute('aria-expanded')).toBe('true');
     expect(panel().inert).toBe(false);
 
     // 外部 (アプリ側) からも open を直接書き換えて閉じられる (これが controlled の要件)
     handle.acc = { a: false, b: false };
-    await flush();
+    await handle.nextRender();
 
     expect(header().getAttribute('aria-expanded')).toBe('false');
     expect(panel().inert).toBe(true);

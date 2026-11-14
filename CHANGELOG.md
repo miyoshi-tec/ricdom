@@ -5,6 +5,49 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.0.0-alpha.31] — not yet published
+
+Maintenance pass (`2026-11-14`): one small bug found while fixing alpha.30, and a real bug that a
+"flaky" CI failure from October turned out to be.
+
+### Fixed
+
+- **A height-limited popup or dropdown ended past the edge of the window.** alpha.28 gives a menu
+  that fits neither above nor below a `max-height` that should leave 8px to the viewport edge, but
+  `.ric-popup__body` and `.ric-dropdown__body` were `content-box`, so padding and border were
+  added on top: the popup ended 2px and the dropdown 18px beyond the edge (light theme, 896px-high
+  viewport: bottom at 898px / 914px instead of 888px). Both are now `box-sizing: border-box`.
+  SPEC §10.3.1g.
+- **`{ value: 'x' }` without `label` displayed "undefined"** in `uiSelect` and `uiRadiobutton`
+  (`label` is optional in the types, and a tweak panel `options` list goes through the same code).
+  A missing label now shows the value, like `<option value="x">` does. `label: 0` and `label: ''`
+  are shown as given.
+
+### Changed
+
+- **Visible change**: the minimum width of popup and dropdown bodies is 160px *including* padding
+  and border (it was 160px plus 10px for a popup, plus `2 × --ric-gap-md + 2px` for a dropdown).
+  v1 had the outer meaning through its universal `border-box` reset; this is the same v1→v2 gap as
+  alpha.25, on rules that alpha.25's audit did not cover because it looked for `width: 100%`.
+
+### Tests
+
+- The max-height test passed locally only because of its fixed `setTimeout(150)`: it measured the
+  menu during the `scaleY(0.6 → 1)` opening animation, when it is shorter than its final size. A
+  slow CI runner waited long enough to see the final state and failed (run of `2026-10-16`,
+  dismissed as timing at first). The test now waits for the final state and asserts the 8px
+  margin on the outer box; cases for an upward menu and for a dropdown were added. Red first:
+  898 and 914 against a limit of 888.5.
+- New helper `settled(getElement)` in `tests/_helpers/dom.ts`: resolves when the element exists,
+  has left the hidden measuring render and has no running animation. Geometry assertions on
+  floating surfaces should use it instead of a fixed wait.
+- `tests/browser/uiAccordion.test.ts` waits with `app.nextRender()` instead of `flush(30)` (the
+  other test that failed in that CI run; a pure timing failure).
+- One-off check: the whole browser suite also passes with every keyframe animation forced to 1ms,
+  so no other test depends on measuring mid-animation.
+- Unit: one case each in `tests/ui/select.test.ts` and `tests/ui/radiobutton.test.ts` for the
+  missing label (red first).
+
 ## [2.0.0-alpha.30] — not yet published
 
 Reported by the gear DXF generator (`2026-11-13`), with a reproduction page and a proposed fix.

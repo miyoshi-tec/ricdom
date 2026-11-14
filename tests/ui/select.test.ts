@@ -40,6 +40,15 @@ describe('uiSelect', () => {
     expect(optionsOf(node)[0]!.children).toEqual(['日本語']);
   });
 
+  // label は型の上で省略できるのに、省略すると String(undefined) で「undefined」と表示されていた
+  // (2.0.0-alpha.31)。HTML の <option value="x"> と同じく、値をそのまま表示する。
+  it('label を省略した { value } は、value を表示する (「undefined」と出さない)', () => {
+    const node = uiSelect({ options: [{ value: 'x' }, { value: 'y', label: 0 }, { value: 'z', label: '' }] }) as unknown as TestSelectNode;
+    expect(optionsOf(node)[0]!.children).toEqual(['x']);
+    expect(optionsOf(node)[1]!.children).toEqual(['0']); // 0 は有効なラベル
+    expect(optionsOf(node)[2]!.children).toEqual(['']); // 空文字も指定どおり
+  });
+
   it('placeholder があると先頭に選択不可オプションが追加される', () => {
     const node = uiSelect({ options: ['a'], placeholder: '選んでください' }) as unknown as TestSelectNode;
     expect(optionsOf(node).length).toBe(2);

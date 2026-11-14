@@ -290,6 +290,7 @@ const POPUP_CSS = `
 .ric-popup__overlay { position: fixed; inset: 0; z-index: 401; pointer-events: none; }
 
 .ric-popup__body {
+  box-sizing: border-box;
   position: fixed;
   z-index: 401;
   min-width: 160px;
@@ -1234,6 +1235,7 @@ const DROPDOWN_CSS = `
      を当てていたため static のまま無視され、本体が portal 内の通常フローに並んでいた —
      target が display:flex; flex-direction:column だとページ本体がその分押し込まれる
      実機バグ (#9)。alpha.3 で .ric-popup__body と揃えて修正。 */
+  box-sizing: border-box;
   position: fixed;
   z-index: 401; /* LCP #1、2.0.0-alpha.9: .ric-popup__body/overlay と同じ序列に揃える */
   min-width: 160px;

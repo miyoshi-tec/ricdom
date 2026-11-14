@@ -1339,8 +1339,8 @@ the accessibility contract, which is FACT that is easy to miss by reading types 
 | `uiInput(props)` | Text input, controlled. `value` is always emitted (even `''`) so it participates in `FORCE_REAPPLY`/the editing guard |
 | `uiTextarea(props)` | `autoResize?: { minRows?, maxRows? }` grows/shrinks height to content, clamped, with overflow scrolling past `maxRows`. **IME note**: a controlled textarea can have its value overwritten mid-composition before IME confirmation — consider driving updates from `onchange` instead of `oninput` for CJK-heavy input |
 | `uiCheckbox(props)` | Renders `<label><input type=checkbox>…</label>`; `checked`/`onchange` are isolated to the inner `<input>` (rest props go on the outer `<label>`) |
-| `uiRadiobutton(props)` | `options: (string \| { value, label, ...attrs })[]`. Per-option extra attributes are forwarded to that option's `<label>`. **Known browser constraint**: `name` groups radios natively — give every independent group its own `name`, or they will merge |
-| `uiSelect(props)` | Native `<select>`; `options: (string \| { value, label })[]`, optional non-selectable `placeholder` option. A long selected label is cut with "…" on one line (FACT below) |
+| `uiRadiobutton(props)` | `options: (string \| { value, label, ...attrs })[]` (`label` defaults to `value`). Per-option extra attributes are forwarded to that option's `<label>`. **Known browser constraint**: `name` groups radios natively — give every independent group its own `name`, or they will merge |
+| `uiSelect(props)` | Native `<select>`; `options: (string \| { value, label })[]` (`label` defaults to `value`), optional non-selectable `placeholder` option. A long selected label is cut with "…" on one line (FACT below) |
 | `uiRange(props)` | Slider + live value display; mouse wheel over the control steps the value by `step` |
 | `uiColor(props)` | Accepts and emits either `#rrggbb` hex or `rgba(r,g,b,a)`, auto-detected from `value`; rgba mode adds an alpha slider |
 | `uiSeparator(props)` | `<hr>` |
@@ -1738,6 +1738,12 @@ them in the wrong place:
   it 8px inside the viewport on the chosen side and scrolls internally (`overflow-y: auto`), so
   every item stays reachable. Before `2.0.0-alpha.28` it overflowed the viewport (in a 100px-tall
   window, 6 of 7 items of an upward theme menu were above the top edge).
+- **The 8px is measured to the outer edge.** `.ric-popup__body` and `.ric-dropdown__body` are
+  `box-sizing: border-box`, so `max-height` (and their `min-width: 160px`) include padding and
+  border. In `2.0.0-alpha.28`–`30` they were `content-box`: the limited body was taller than its
+  `max-height` by its padding and border and ended past the viewport edge (popup 2px, dropdown
+  18px in the light theme), and the minimum width was 160px plus padding and border. If your CSS
+  sets a `width`/`min-width`/`max-height` on these bodies, it now means the outer size.
 
 ### 10.3.2 Stateful — `createFocusWhen`
 

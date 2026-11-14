@@ -33,7 +33,9 @@ export interface UiSelectProps {
   [key: string]: unknown;
 }
 
-const normalizeOption = (opt: string | UiSelectOption): UiSelectOption => (typeof opt === 'string' ? { value: opt, label: opt } : opt);
+// label を省略した { value } は value を表示する (HTML の <option value="x"> と同じ。
+// 2.0.0-alpha.30 までは String(undefined) で「undefined」と表示されていた)。
+const normalizeOption = (opt: string | UiSelectOption): UiSelectOption => (typeof opt === 'string' ? { value: opt, label: opt } : { ...opt, label: opt.label ?? opt.value });
 
 /**
  * ネイティブ `<select>`。状態を持たない純粋関数 (双方向バインドは `bindSelect` 参照)。
