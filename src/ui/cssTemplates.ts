@@ -559,6 +559,17 @@ const SCROLLBAR_CSS = `
   scrollbar-color: ${sbt} transparent;
 }`;
 
+// `.ric-textarea--auto` (autoResize を指定した textarea、2.0.0-alpha.36、設計書 §55):
+//   - `field-sizing: content` で「中身の大きさ = 欄の大きさ」にする。値がどこから変わっても
+//     (入力・状態からの代入・初期値) ブラウザが高さを決め直す。対応は Chromium 123 以降。
+//     対応していないブラウザはこの宣言を無視し、textarea.ts の input イベントでの計算が働く
+//   - 下限と上限は行数で指定する。`1lh` はその要素の行の高さ。`+ 2 * 余白 + 2px` は、外形
+//     (border-box) の高さにそろえるための上下の余白と枠 (枠は .ric-textarea の 1px × 2)
+//   - 余白の変数には 0px の代替値を付ける: テーマを当てていない (--ric-pad-y が無い) と calc 全体が
+//     無効になり、max-height が効かず上限なしに伸びてしまうため (テストで実際に起きた)
+//   - 上限の行数は inline の `--ric-textarea-max-rows`。渡されなければ `var()` が無効になり、
+//     max-height は初期値 (none = 上限なし) になる
+//   - 手動リサイズのつまみは出さない: 高さは中身で決まるので、つまみで変えても次の入力で戻る
 const TEXTAREA_CSS = `
 .ric-textarea {
   display: block;
@@ -585,6 +596,13 @@ const TEXTAREA_CSS = `
 }
 .ric-textarea::placeholder {
   color: ${fm};
+}
+.ric-textarea--auto {
+  field-sizing: content;
+  min-height: calc(var(--ric-textarea-min-rows, 1) * 1lh + 2 * var(--ric-pad-y, 0px) + 2px);
+  max-height: calc(var(--ric-textarea-max-rows) * 1lh + 2 * var(--ric-pad-y, 0px) + 2px);
+  overflow-y: auto;
+  resize: none;
 }`;
 
 const CHECKBOX_CSS = `
@@ -1270,6 +1288,7 @@ const TABS_CSS = `
 .ric-tabs { display: flex; flex-direction: column; gap: ${g}; width: 100%; }
 .ric-tabs__bar {
   display: flex;
+  flex-wrap: wrap;
   flex-shrink: 0;
   border-bottom: ${b1};
 }
@@ -1302,6 +1321,8 @@ const TABS_CSS = `
   padding: 3px;
   gap: 2px;
   align-self: flex-start;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 .ric-tabs--pill .ric-tabs__tab {
   border-bottom: none;

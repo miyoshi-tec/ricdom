@@ -1355,7 +1355,7 @@ the accessibility contract, which is FACT that is easy to miss by reading types 
 |---|---|
 | `uiButton(props)` | `variant`: `'default' \| 'primary' \| 'ghost' \| 'link'` (`'link'` restored from v1 in 2.0.0-alpha.8, pilots 5-7/Rancha — strips background/border/height-constraint for a text-like button, e.g. breadcrumbs/inline links). `size`: `'sm' \| 'md' \| 'lg'`, default `'md'` (`'md'` adds no size class — it *is* the core `.ric-button` size; `'link'` with no `size` has no fixed height at all, not even the density's; an explicit `size` applies to `'link'` exactly as to any other variant — corrected in `2.0.0-alpha.36`, earlier versions of this table said `'link'` ignores `size`, which neither v1 nor v2 ever did). Rest-spread contract (§10.5) |
 | `uiInput(props)` | Text input, controlled. `value` is always emitted (even `''`) so it participates in `FORCE_REAPPLY`/the editing guard |
-| `uiTextarea(props)` | `autoResize?: { minRows?, maxRows? }` grows/shrinks height to content, clamped, with overflow scrolling past `maxRows`. **The height is recomputed on `input` events only**: a long initial `value`, or a `value` changed from state, keeps the previous height (`minRows` at first) until the user next types. **IME note**: a controlled textarea can have its value overwritten mid-composition before IME confirmation — consider driving updates from `onchange` instead of `oninput` for CJK-heavy input |
+| `uiTextarea(props)` | `autoResize?: { minRows?, maxRows? }` grows/shrinks height to content, clamped, with overflow scrolling past `maxRows`. The height follows the value however it changes — typing, an assignment from state, a long initial `value` (`2.0.0-alpha.36`; FACT below). **IME note**: a controlled textarea can have its value overwritten mid-composition before IME confirmation — consider driving updates from `onchange` instead of `oninput` for CJK-heavy input |
 | `uiCheckbox(props)` | Renders `<label><input type=checkbox>…</label>`; `checked`/`onchange` are isolated to the inner `<input>` (rest props go on the outer `<label>`) |
 | `uiRadiobutton(props)` | `options: (string \| { value, label, ...attrs })[]` (`label` defaults to `value`). Per-option extra attributes are forwarded to that option's `<label>`. **Known browser constraint**: `name` groups radios natively — give every independent group its own `name`, or they will merge |
 | `uiSelect(props)` | Native `<select>`; `options: (string \| { value, label })[]` (`label` defaults to `value`), optional non-selectable `placeholder` option. A long selected label is cut with "…" on one line (FACT below) |
@@ -1373,6 +1373,24 @@ are two-way-binding sugar: `bindInput(s, 'name', options)` is exactly
 `uiInput({ ...options, value: s.name, oninput: (ev) => { s.name = ev.target.value; } })`
 — `options` is applied *before* the computed `value`/`on*` so it can never accidentally
 override the binding.
+
+### FACT: `uiTextarea` `autoResize` sizes the field with CSS (`2.0.0-alpha.36`)
+
+A textarea with `autoResize` gets the class `ric-textarea--auto`, which sets
+`field-sizing: content`: the browser makes the field as tall as its content, so the height is
+right in the same render whenever the value changes — typing, a value assigned from state
+(a chat input emptied after sending shrinks back), or a long initial value.
+
+- `minRows`/`maxRows` become the inline custom properties `--ric-textarea-min-rows` /
+  `--ric-textarea-max-rows`, used by `min-height`/`max-height` in `lh` units. Past `maxRows` the
+  field scrolls. The heights are outer (border-box) heights: rows × line height + vertical
+  padding + border.
+- The manual resize handle is off (`resize: none`): the height belongs to the content, a
+  dragged height would be undone by the next change.
+- **Browsers without `field-sizing`** (Chromium before 123, e.g. Electron 28 and older; check
+  yours with `CSS.supports('field-sizing', 'content')`) keep the previous behavior: the height
+  is recomputed in script on `input` events only, so a value changed from state keeps the old
+  height until the user next types. That was the behavior everywhere before `2.0.0-alpha.36`.
 
 ### FACT: every control inherits the page's font (`2.0.0-alpha.24`)
 
@@ -1758,6 +1776,12 @@ to its tabs, so use `.ric-tabs--pill .ric-tabs__bar { align-self: center; }` the
 `justify-content` on an element *around* the tabs has no effect, because `.ric-tabs` already
 fills that element.
 
+**Tabs wrap (`2.0.0-alpha.36`).** When the tabs do not fit the width of `.ric-tabs`, the bar
+wraps them onto further rows (both variants; the pill bar is also limited to the available
+width). Before `2.0.0-alpha.36` the bar never wrapped and the tabs ran out of their container —
+inside a dialog, which clips its content, the last tabs could not be reached. When they fit,
+nothing changes.
+
 ### 10.3.1d FACT: `createPopup`'s `closeOnSelect` (menu close-on-activate)
 
 By default (`closeOnSelect` omitted or `true`), activating a menuitem closes the menu and
@@ -1929,6 +1953,33 @@ treatment as the rest of this table.
 | `createCollapseBox(options)` | Headless animated show/hide container (`options.direction: 'v' \| 'h' \| 'both'`) with **no trigger of its own** — unlike `createAccordion`, it has no button to hang `aria-expanded` on, so *you* put `aria-expanded={visible}` + `aria-controls={box.idFor(key)}` on your own trigger to satisfy the APG disclosure pattern (`idFor(key)`, key optional, gives the stable `id` the box renders with). Supports multiple concurrent instances distinguished by a `key` prop (sparse list animation). Completion is detected via `transitionend` (not `animationend` — height/width targets are per-instance dynamic values, not expressible as fixed `@keyframes`) with the same 700ms fallback as the rest of §10.3 |
 | `createAccordion(options)` | Each item's header is a real `<button aria-expanded aria-controls>` (so `Enter`/`Space` activation is native, no extra keydown handling needed); its panel is `role="region"` + `aria-labelledby`, and gets the `inert` attribute while closed (excluding it from keyboard focus and the accessibility tree — the CSS `grid-template-rows` close animation still runs visually, since `inert` does not affect rendering; see §10.3.3b). It does **not** get `hidden` (as of `2.0.0-alpha.23`). `options.defaultOpen: Record<id, boolean>` seeds initial state (uncontrolled only); `multi: false` on props makes it single-open (exclusive, closes any other open panel) instead of the default multi-open. Controlled (`open` prop given) or uncontrolled (internal state) — see §10.3.3a |
 
+### FACT: `createScrollPane` stops following as soon as the user scrolls away (`2.0.0-alpha.36`)
+
+"Following" means: when a render adds content and the pane was at its `follow` edge, the pane is
+scrolled to that edge again one frame later.
+
+- **Any scroll away from the edge stops following, at once** — one wheel notch, one `ArrowUp`
+  (40px), a drag of the scrollbar. The pane watches its own `scroll` events for movement away
+  from the edge; it does not only compare the position with `threshold` at render time.
+- **Scrolling back to within `threshold` px of the edge resumes following**, as do
+  `scrollToBottom()` (for `follow: 'bottom'`) and `scrollToTop()` (for `follow: 'top'`).
+- Content that shrinks, so that the browser pushes the scroll position back to the edge, does
+  not count as scrolling away.
+- An `onscroll` you pass is still called.
+- **Before `2.0.0-alpha.36`** the pane decided at render time ("within `threshold` of the edge?")
+  and wrote the scroll position a frame later. While content kept arriving — a streamed chat
+  reply — a slow scroll was undone every frame: a wheel notch landed between the measurement
+  and the write, and steps smaller than `threshold` always measured as "still at the edge".
+  The user could only get away with a large jump (`PageUp`, dragging the scrollbar).
+
+### FACT: `createCollapseBox` opened with no content shows content added later at once (`2.0.0-alpha.36`)
+
+When a box opens and its measured content size is 0 (no children yet), there is nothing to
+animate; the box is open immediately and children added in a later render are visible in that
+render. Before `2.0.0-alpha.36` the box stayed in its "opening" state with `height: 0px` until a
+700ms safety timer, because a `0px → 0px` change fires no `transitionend` — content added in
+that window was invisible (opening an empty folder, then adding an item to it).
+
 ### 10.3.3a FACT: `createAccordion` controlled / uncontrolled (2.0.0-alpha.7)
 
 Same two-mode contract as `createTabs` (§10.3.3's row above) — one `AccordionProps.open`
@@ -1996,6 +2047,12 @@ bodies (`.ric-tweak-folder__body`), both `role="region"`. While closed, the body
 |---|---|
 | `uiMdPre(props)` | Renders a practical Markdown subset (headings, bold/italic, inline code, fenced code blocks with `` ``` ``/`~~~`, bullet and ordered lists with a `start` attribute, blockquotes, tables with alignment, horizontal rules, links, images) to a `RicNode` tree — no external parser dependency. `href` values with a `javascript:`/`data:`/`vbscript:` scheme (case-insensitively, after stripping control characters) are rendered without an `href` attribute at all; every other scheme (including custom ones like `app://`) passes through unmodified — this is a blocklist, not a whitelist, by design. `transformText(str)` post-processes plain-prose text nodes only (never code); `transformImageSrc(src, alt)` rewrites image sources before they're used. Both hooks fall back to the untransformed input and log `console.error` if they throw or return the wrong type — a broken hook degrades the rendered output, it does not break the page |
 | `uiCodePre(props)` | `<pre><code>` for a code string or (`obj` prop) a `JSON.stringify`'d object. Colored by the theme's `--ric-code-bg`/`--ric-code-fg`, which every bundled theme defines (light themes use a light code background, e.g. `#f6f8fa` in `light`). If `window.hljs` (highlight.js) is present, output is syntax-highlighted; if not, one `console.warn` per session explains how to enable it, and plain text is shown |
+
+**Unknown fence languages (`2.0.0-alpha.36`).** `uiMdPre` (the language after `` ``` ``) and
+`uiCodePre` (`lang`) ask `hljs.getLanguage(name)` first and show plain text when highlight.js
+does not know the name. Before `2.0.0-alpha.36` they called `hljs.highlight()` and caught its
+exception, but highlight.js writes a `console.error` before it throws — once per render, and
+also for every partial name while a reply is streamed (`` ```js `` passes through `` ```j ``).
 
 ### 10.5 Rest-spread contract
 

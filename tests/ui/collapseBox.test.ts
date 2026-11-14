@@ -64,6 +64,9 @@ describe('createCollapseBox: 基本の開閉', () => {
 
 describe('createCollapseBox: 複数インスタンス (key)', () => {
   it('key ごとに独立した状態を持つ', async () => {
+    // jsdom にはレイアウトが無く scrollHeight は常に 0。2.0.0-alpha.36 から、測った大きさが 0 の箱は
+    // 「動かすものが無い」として開いている途中をすぐ終えるので、ここでは中身に高さがあることにする。
+    const heightSpy = vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockReturnValue(40);
     const app = setupApp();
     let box: ReturnType<typeof createCollapseBox>;
     const visible: Record<string, boolean> = { a: true, b: false };
@@ -82,6 +85,7 @@ describe('createCollapseBox: 複数インスタンス (key)', () => {
     expect(app.querySelector('#box-b')).toBeNull();
     expect(box!.isAnimating('a')).toBe(true); // entering 中
     expect(box!.isAnimating('b')).toBe(false); // 未マウント
+    heightSpy.mockRestore();
   });
 });
 

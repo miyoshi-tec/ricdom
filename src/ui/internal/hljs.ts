@@ -11,6 +11,8 @@
 export interface HljsLike {
   highlight: (code: string, opts: { language: string }) => { value: string };
   highlightAuto: (code: string) => { value: string };
+  /** 言語名を知っていればその定義、知らなければ undefined (本物の highlight.js にある) */
+  getLanguage?: (name: string) => unknown;
 }
 
 declare global {
@@ -18,6 +20,17 @@ declare global {
     hljs?: HljsLike;
   }
 }
+
+// その言語名を window.hljs が知っているか (2.0.0-alpha.36)。
+// 本物の highlight.js は、知らない言語名で highlight() を呼ばれると、例外を投げる前に
+// console.error を出す。部品は例外を受けてプレーン表示に落とすが、エラーの出力は止められず、
+// 描画のたびに出ていた (流れてくる応答では ```js が ```j まで届いた瞬間にも出る)。
+// 先に getLanguage() で確かめ、知らなければ highlight() を呼ばない。getLanguage を持たない
+// 実装 (window.hljs を自前で差し替えた場合) は「知っている」とみなし、従来どおり試す。
+export const hljsKnows = (lang: string): boolean => {
+  const hljs = typeof window === 'undefined' ? undefined : window.hljs;
+  return typeof hljs?.getLanguage !== 'function' || !!hljs.getLanguage(lang);
+};
 
 let hljsWarned = false;
 export const warnHljsMissing = (): void => {

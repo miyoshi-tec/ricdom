@@ -104,6 +104,11 @@ export const createCollapseBox = (options: CreateCollapseBoxOptions = {}): Colla
     if (!el) return;
     if (doW) st.tw = el.scrollWidth;
     if (doH) st.th = el.scrollHeight;
+    // 測った大きさが 0 (中身が空) なら、動かすものが無い: `0px → 0px` では transition が起きず
+    // transitionend も来ないので、ここで「開いている途中」を終える。終えないと保険のタイマー
+    // (ANIMATION_FALLBACK_MS) まで height: 0px が付いたままになり、その間に足された中身が
+    // 見えない (2.0.0-alpha.36、空のフォルダを開いてから値を足す操作で実際に起きた)。
+    if ((!doH || st.th === 0) && (!doW || st.tw === 0)) st.entering = false;
     guard.host?.notify();
   };
 

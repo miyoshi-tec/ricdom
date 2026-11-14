@@ -39,7 +39,21 @@ export interface UiTextareaProps {
   [key: string]: unknown;
 }
 
-// DOM 要素に対して自動リサイズを適用する。render の oninput ハンドラ内から呼ばれる。
+// CSS の `field-sizing: content` に対応しているか (Chromium 123 以降)。対応していれば、高さは
+// CSS (.ric-textarea--auto、cssTemplates.ts) がブラウザに決めさせるので、下の applyAutoResize は
+// 呼ばない。2.0.0-alpha.35 までは input イベントのときだけ JS で高さを計算していて、状態から値を
+// 変えたとき (チャットで送信して欄を空にした、長い初期値を入れた) に高さが追従しなかった
+// (設計書 §55)。
+let fieldSizingSupported: boolean | null = null;
+const hasFieldSizing = (): boolean => {
+  if (fieldSizingSupported === null) {
+    fieldSizingSupported = typeof CSS !== 'undefined' && typeof CSS.supports === 'function' && CSS.supports('field-sizing', 'content');
+  }
+  return fieldSizingSupported;
+};
+
+// DOM 要素に対して自動リサイズを適用する (field-sizing に対応していないブラウザ用)。
+// render の oninput ハンドラ内から呼ばれる。
 // line-height / padding を computed style から取得して scrollHeight と min/max 行数でクランプする。
 //
 // 高さの単位に注意: scrollHeight と minH / maxH は「中身 + 上下 padding」(= padding box) の高さ。
@@ -85,14 +99,25 @@ export const uiTextarea = ({
   // autoResize 指定時は oninput で高さを再計算してから本来のハンドラを呼ぶ。
   // oninput / autoResize のどちらかが指定されていれば合成ハンドラを付ける。
   const handleInput = oninput || autoResize ? (ev: Event) => {
-    applyAutoResize(ev.target as HTMLTextAreaElement, autoResize);
+    if (!hasFieldSizing()) applyAutoResize(ev.target as HTMLTextAreaElement, autoResize);
     oninput?.(ev);
   } : undefined;
 
+  // autoResize: 行数の下限と上限を CSS 変数で渡す (.ric-textarea--auto が min/max-height に使う)。
+  // 利用者の style は残し、同じ名前の変数を利用者が書いていればそちらを優先する。
+  const autoStyle: StyleValue | undefined = autoResize
+    ? {
+        '--ric-textarea-min-rows': autoResize.minRows ?? 1,
+        ...(autoResize.maxRows != null ? { '--ric-textarea-max-rows': autoResize.maxRows } : {}),
+        ...((rest.style as StyleValue | undefined) ?? {}),
+      }
+    : undefined;
+
   return {
     ...rest,
+    ...(autoStyle ? { style: autoStyle } : {}),
     tag: 'textarea',
-    class: mergeClass('ric-textarea', extraClass),
+    class: mergeClass(autoResize ? 'ric-textarea ric-textarea--auto' : 'ric-textarea', extraClass),
     'data-ricdom-role': UI_ROLE.textarea,
     rows: autoResize ? (autoResize.minRows ?? 1) : rows,
     value, // 常に含める (FORCE_REAPPLY 対象キーとして反映されるよう)

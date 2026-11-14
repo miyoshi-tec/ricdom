@@ -12,7 +12,7 @@
 //   uiCodePre({ obj: s, maxHeight: '200px' })                  // 高さ制限 (超えるとスクロール)
 
 import type { ClassValue, RicElementNode, RicNode, StyleValue } from '../types.js';
-import { warnHljsMissing } from './internal/hljs.js';
+import { hljsKnows, warnHljsMissing } from './internal/hljs.js';
 import { UI_ROLE, mergeClass } from './internal/pureHelpers.js';
 
 export interface UiCodePreProps {
@@ -35,6 +35,7 @@ const tryHighlight = (raw: string, lang: string): string | null => {
     warnHljsMissing(); // dev hint (一度だけ)
     return null;
   }
+  if (lang !== 'auto' && !hljsKnows(lang)) return null;
   try {
     const result = lang === 'auto' ? window.hljs.highlightAuto(raw) : window.hljs.highlight(raw, { language: lang });
     return result.value;

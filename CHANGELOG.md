@@ -7,8 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [2.0.0-alpha.36] — not yet published
 
-Fixes found while writing the sample pages and in a pre-freeze review of the public API
-(`2026-11-14`). No API was renamed or removed.
+Fixes found while writing the sample pages (including the two application-sized ones, a JSON
+editor and an AI chat) and in a pre-freeze review of the public API (`2026-11-14`). No API was
+renamed or removed.
 
 ### Fixed
 
@@ -30,6 +31,29 @@ Fixes found while writing the sample pages and in a pre-freeze review of the pub
   opened it; when focus is elsewhere, `close()` leaves it alone.
 - **`createDropdown` label trigger with `chevron`: the text touched the chevron** ("Sort: name⌄").
   The label trigger now has the theme's `--ric-gap` between its children.
+
+- **`createScrollPane`: while content kept arriving, a slow scroll away from the edge was pulled
+  back.** In a chat with a streamed reply, one wheel notch or the arrow keys could not leave the
+  bottom (measured: 0 of 6 attempts); only a large jump could. The pane measured "at the edge?"
+  at render time and wrote the scroll position a frame later, so a scroll in between was
+  overwritten, and steps smaller than `threshold` always counted as "at the edge". It now
+  watches its `scroll` events and stops following on any movement away from the edge; scrolling
+  back to within `threshold` resumes.
+- **`uiTextarea` `autoResize` did not follow a value changed from state.** A chat input emptied
+  after sending a three-line message stayed three lines tall (81px instead of 39px) until the
+  next keystroke; a long initial value was not grown at all. `autoResize` now uses CSS
+  `field-sizing: content` (class `ric-textarea--auto`, `min-height`/`max-height` from
+  `minRows`/`maxRows`), so the height is right however the value changes. Browsers without
+  `field-sizing` (Chromium before 123) keep the script path, on `input` only. The manual resize
+  handle of an `autoResize` textarea is gone (`resize: none`).
+- **`uiMdPre` / `uiCodePre` with highlight.js: an unknown language name logged a
+  `console.error` on every render** (highlight.js logs before it throws), including every
+  partial name of a fence that is still being streamed. They now ask `hljs.getLanguage()` first.
+- **`createCollapseBox` opened with no content hid content added within 700ms.** With a measured
+  size of 0 no transition runs, so the box waited for its safety timer with `height: 0px`. It is
+  now open at once when there is nothing to animate.
+- **`createTabs`: tabs that did not fit ran out of their container** (and were clipped inside a
+  dialog). The bar now wraps; nothing changes when the tabs fit.
 
 ### Added (types and packaging; nothing changes at runtime)
 
@@ -65,11 +89,16 @@ Fixes found while writing the sample pages and in a pre-freeze review of the pub
   except two guards. The jsdom tooltip test dispatched a synthetic `focus` on the wrapper — a
   path no browser takes — which is how the bug went unnoticed; it now dispatches `focusin` on the
   child.
-- 740 unit and 242 browser tests pass (3 consecutive full browser runs).
+- Scroll pane (6, scrolling between the measurement and the write, 40px steps, resuming,
+  shrinking content, `follow: 'top'`), textarea (6, heights compared with rows × line height +
+  padding + border), collapse box (4), tabs (3), highlight.js (4, with a stand-in that logs and
+  throws like the real one). All red first except guards.
+- 744 unit and 261 browser tests pass (3 consecutive full browser runs).
 
 ### Sizes
 
-- `dist/ricdom.iife.min.js` 4,958B gzip (unchanged). `ricdom-ui.iife.min.js` 27,749 → 28,087B.
+- `dist/ricdom.iife.min.js` 4,958B gzip (unchanged). `ricdom-ui.iife.min.js` 27,749 → 28,469B.
+  `ricdom-md-editor.iife.min.js` 4,729 → 4,858B (it bundles `uiTextarea`).
 
 ## [2.0.0-alpha.35] — not yet published
 
