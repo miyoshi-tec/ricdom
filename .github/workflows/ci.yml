@@ -6,7 +6,11 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    # ubuntu-latest ではなく版を固定する: 2026-11 に ubuntu-latest が 26.04 に切り替わり、
+    # Playwright 1.55.1 が `playwright install --with-deps chromium` で
+    # "does not support chromium on ubuntu26.04-x64" と失敗した (コードは無変更で CI が赤に)。
+    # 上げる条件: Playwright を 26.04 対応の版に上げたとき、または 24.04 のイメージが廃止予告されたとき。
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
 
