@@ -633,6 +633,14 @@ const CHECKBOX_CSS = `
   cursor: not-allowed;
 }`;
 
+// `.ric-select > button` の `!important` について (2.0.0-alpha.35):
+// 中の <button> は <selectedcontent> を置くために HTML が要求する入れ物で、見た目を持たない
+// (display: contents)。ただし継承されるプロパティ (font-size / font-family / color …) は
+// ボタンを経由して枠の中の文字に届くので、ページの `button { font-size: 1.2rem; }` や
+// `.toolbar button { … }` が当たると、枠の中の文字だけがその見た目になる。
+// ブラウザの既定スタイルも同じ `all: unset; display: contents` を持つが、ページの規則のほうが
+// 強いので負ける。ここは装飾する場所ではない (枠の中の文字は `.ric-select` に従い、個別に
+// 変えるなら `.ric-select selectedcontent` を指す) ので、詳細度の競争にせず !important で固定する。
 const SELECT_CSS = `
 .ric-select,
 .ric-select::picker(select) {
@@ -667,7 +675,8 @@ const SELECT_CSS = `
   cursor: not-allowed;
 }
 .ric-select > button {
-  display: contents;
+  all: unset !important;
+  display: contents !important;
 }
 .ric-select selectedcontent {
   flex: 1 1 0;

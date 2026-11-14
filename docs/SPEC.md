@@ -263,6 +263,22 @@ Consumers never need to work around option/value construction order themselves, 
 path. As with any other `value` write, this re-apply still honors the editing guard (§3.2):
 while the `<select>` is `document.activeElement`, it is not force-corrected.
 
+**`<selectedcontent>` is kept current (`2.0.0-alpha.35`).** `<selectedcontent>` is the standard
+HTML element into which the browser copies the content of the selected `<option>` (the content
+of the closed box of an `appearance: base-select` select; `uiSelect` uses it, §10.1). The
+browser copies when the selection changes and when `value`/`selectedIndex` is assigned — *not*
+when the content of the selected option is changed afterwards. Where ricdom re-assigns `value`
+(above), that assignment makes the browser copy again. Where it does not — the select has focus
+(editing guard), or the node has no `value` key — ricdom compares the copy with the selected
+option after patching the children and, **only if they differ**, assigns
+`select.selectedIndex = select.selectedIndex`. That assignment makes the browser copy again and
+changes nothing else: the selection stays where it is (also with several options sharing one
+`value`, where re-assigning `value` would move it to the first), no event fires, focus and an
+open list are left alone. A render that does not change the selected option's content assigns
+nothing. `multiple` selects are skipped (the assignment would collapse a multiple selection),
+and so are browsers that do not know the element (Chromium before 135, Firefox, Safari — there
+is nothing to refresh).
+
 ### 2.7 SVG
 
 An element whose tag is `svg` establishes the SVG namespace for itself and is inherited by
@@ -1500,15 +1516,20 @@ select is cut with "…" and the arrow stays visible. The outer height is always
 - **Browsers without `base-select`** (Chromium before 135 — e.g. Electron 32 — Firefox,
   Safari) ignore non-option children of `<select>` and draw the native control as before, which
   already clips to one line.
-- **Known limit — a focused select does not follow a label change.** The browser copies into
-  `<selectedcontent>` when the selection changes, when `value`/`selectedIndex` is assigned and
-  when the element is inserted, but *not* when the selected option's text changes afterwards.
-  ricdom re-assigns `select.value` after patching the options on every render, so the shown text
-  follows a label change in that same render — except while the select has focus, where the
-  editing guard (§3.2) skips the assignment. If your render changes the label of the selected
-  option while that select is focused (typically a language picker that translates its own
-  option labels), the closed box keeps the old label until a render after focus has left.
-  `select.value` and the options themselves are correct throughout.
+- **The shown text follows `.ric-select`, not your page's `button` rules** (`2.0.0-alpha.35`).
+  The inner `<button>` is a container the HTML standard requires; it draws nothing
+  (`display: contents`), but inherited properties (font size, family, weight, color, letter
+  spacing, …) would still pass through it to the shown text. A page rule such as
+  `button { font-size: 1.2rem; }` or `.toolbar button { … }` therefore changed the text in the
+  closed box — and only there, not in the opened list (`2.0.0-alpha.30`–`34`). ricdom-ui now
+  pins that button with `all: unset !important; display: contents !important`, so the shown text
+  inherits from the `<select>` whatever the page says about buttons. To style the shown text on
+  its own, target the text box: `.ric-select selectedcontent { … }`.
+- **A label change of the selected option shows in the same render, focused or not**
+  (`2.0.0-alpha.35`; a known limit in `2.0.0-alpha.30`–`34`, where a focused select kept the old
+  label until a render after focus had left). Typical case: a language picker that translates
+  its own option labels. The core does this (§2.6); `select.value`, the selection and focus are
+  not touched.
 
 ### FACT: `uiProgress` — a stateless progress bar (`2.0.0-alpha.33`)
 

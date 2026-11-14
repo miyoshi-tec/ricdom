@@ -114,10 +114,34 @@ const removeStyleProp = (el: HTMLElement | SVGElement, key: string): void => {
 // パイロット第 5 号、alpha.14 報告。options が後から増える描画で value が反映されない)。
 // 編集中ガード (shouldSkipValueReapply) は build 経路には無かった通常の value 代入と
 // 同じ扱いにするため、ここでも同じガードを通す。
+//
+// value を入れ直さなかったとき (フォーカス中、または value を渡していない select) の
+// `<selectedcontent>` (2.0.0-alpha.35、設計書 §54):
+// `<selectedcontent>` は「いま選ばれている option の中身」をブラウザが写して入れる HTML 標準の
+// 要素 (`appearance: base-select` のセレクトの枠の中身)。ブラウザが写し直すのは選択が変わった
+// とき・value / selectedIndex が代入されたときだけで、**選ばれている option の中身が patch で
+// 変わっても写し直さない**。value を入れ直す経路ではその代入で追従するが、入れ直さない経路では
+// 古い中身が残る (言語を選ぶセレクトが自分の選択肢を訳し直す構成で、枠の中だけ前の言語のまま)。
+// そこで「写した中身が、選ばれている option の中身と違うとき」だけ `selectedIndex` に同じ値を
+// 代入して写し直させる。この代入は選択を変えない (同じ value の option が複数あっても動かない。
+// `value` の再代入だと先頭へ移る)。条件を絞る理由:
+//   - 中身が変わっていない render では何も代入しない = 編集中ガードが守っている「利用者が
+//     いま選んでいる途中の状態」に触る機会を、中身が実際に変わった render だけにする
+//   - multiple は除く (selectedIndex の代入で複数の選択が 1 つに潰れる)
+//   - `<selectedcontent>` を知らないブラウザ (HTMLUnknownElement になる。Chromium 134 以前・
+//     jsdom) では何もしない (写す仕組みが無いので常に「違う」と判定されてしまうため)
 const reapplySelectValue = (el: HTMLElement | SVGElement, normalized: NormalizedElement): void => {
-  if (normalized.tag !== 'select' || !('value' in normalized.attrs)) return;
-  if (shouldSkipValueReapply(el)) return; // 編集中ガード (設計書 §3.2)
-  (el as HTMLSelectElement).value = normalized.attrs.value as string;
+  if (normalized.tag !== 'select') return;
+  const select = el as HTMLSelectElement;
+  if ('value' in normalized.attrs && !shouldSkipValueReapply(el)) {
+    select.value = normalized.attrs.value as string; // フォーカス中は入れ直さない (編集中ガード、設計書 §3.2)
+    return;
+  }
+  const shown = select.querySelector('selectedcontent');
+  const chosen = select.selectedOptions[0];
+  if (shown && chosen && !select.multiple && !(shown instanceof HTMLUnknownElement) && shown.innerHTML !== chosen.innerHTML) {
+    select.selectedIndex = select.selectedIndex;
+  }
 };
 
 // =====================================================================
