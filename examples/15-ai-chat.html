@@ -23,7 +23,6 @@
   .chat__log { flex: 1; padding: 12px; }
   .chat__foot { flex: none; display: flex; flex-direction: column; gap: 6px; padding: 8px 12px; border-top: 1px solid var(--ric-color-border); }
   .chat__input { flex: 1; min-width: 0; }
-  .chat__input .ric-textarea { resize: none; }
 
   /* One message. The user's text is shown as typed; a reply is Markdown, so wide tables and code scroll sideways inside it.
      メッセージ 1 件分です。利用者の文章は入力したとおりに表示します。応答は Markdown なので、幅の広い表やコードはその中で横にスクロールします。 */
@@ -39,9 +38,8 @@
   .is-error { color: color-mix(in srgb, #dc2626 70%, var(--ric-color-fg)); }
   .is-ok { color: color-mix(in srgb, #16a34a 70%, var(--ric-color-fg)); }
 
-  /* The settings dialog. Eight tabs do not fit on one line of a phone, so the row of tabs is allowed to wrap.
-     設定ダイアログです。8 個のタブはスマートフォンの 1 行に収まらないので、タブの列を折り返せるようにしています。 */
-  .cfg__modes .ric-tabs__bar { flex-wrap: wrap; }
+  /* The settings dialog. A label and its field go onto two lines when the dialog is narrow. (The eight tabs wrap by themselves.)
+     設定ダイアログです。ダイアログが狭いときは、ラベルと欄が 2 行に分かれます。(8 個のタブは、何もしなくても折り返します。) */
   .cfg__row { flex-wrap: wrap; }
   .cfg__label { flex: 0 0 5em; }
   .cfg__field { flex: 1 1 180px; min-width: 0; }
@@ -395,7 +393,7 @@
     '',
     '### One assignment for each piece',
     '',
-    '```',
+    '```js',
     'const last = s.messages.at(-1);',
     's.messages = [...s.messages.slice(0, -1), { ...last, text: last.text + piece }];',
     '```',
@@ -426,7 +424,7 @@
     '',
     '### かけら 1 つにつき、代入 1 回',
     '',
-    '```',
+    '```js',
     'const last = s.messages.at(-1);',
     's.messages = [...s.messages.slice(0, -1), { ...last, text: last.text + piece }];',
     '```',

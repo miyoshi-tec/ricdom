@@ -210,7 +210,6 @@ const app = createApp(
   '#app',
   {},
   () => {
-    toast(); // registers this render cycle's portal content — call it every render
     return uiButton({
       children: ['Save'],
       onclick: () => toast.show('Saved!', { type: 'success' }),
@@ -219,6 +218,11 @@ const app = createApp(
   { setup: (a) => { toast = a.use(createToast()); } },
 );
 ```
+
+A toast draws nothing at the place where you would call it, so this `render` does not call
+`toast()` at all: registering it and calling `toast.show()` is enough. Components that do draw
+something in place — a dialog with its trigger button, a tooltip around a button — are called
+inside `render`, as chapter 7 shows.
 
 (Without `setup`, you'd have to make `render` return a placeholder until `use()` has run,
 then trigger another render — `setup` exists so you don't have to.)

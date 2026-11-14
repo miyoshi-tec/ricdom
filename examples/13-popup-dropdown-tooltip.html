@@ -26,13 +26,13 @@
 <!--
   13 Popup, dropdown, tooltip, collapse box: small surfaces that open next to the thing you clicked.
   createPopup is a menu, createDropdown a panel for any content, createTooltip a hint shown on
-  hover. All three are drawn in the browser's top layer, above the rest of the page; menus and
+  hover or keyboard focus. All three are drawn in the browser's top layer, above the rest of the page; menus and
   panels are placed so that they stay inside the window. createCollapseBox opens and closes
   content in place.
   No build step: two scripts (ricdom, then ricdom/ui) and one stylesheet.
 
   13 ポップアップ・ドロップダウン・ツールチップ・折りたたみ: クリックした場所のそばに開く、小さな面の部品です。
-  createPopup はメニュー、createDropdown は好きな内容を入れられるパネル、createTooltip はホバーで出るヒントです。
+  createPopup はメニュー、createDropdown は好きな内容を入れられるパネル、createTooltip はホバーやキーボードのフォーカスで出るヒントです。
   3 つともブラウザの最前面の層 (top layer) に、ページのほかの部分より手前に描かれます。メニューとパネルは、ウィンドウの中に収まる位置に置かれます。
   createCollapseBox は、その場で内容を開閉します。
   ビルド不要: <script> 2 本 (ricdom → ricdom/ui) と CSS 1 本で動きます。
@@ -287,17 +287,21 @@
     );
 
   // Demo 5. createTooltip wraps the element it describes and shows `content` while the pointer is
-  // over it. `dir` is where the tooltip goes; 'auto' (the default) picks a side with enough room.
+  // over it or the keyboard focus is on it; Escape hides it. The element is also told that the
+  // tooltip describes it (aria-describedby), so a screen reader reads the hint after its name.
+  // `dir` is where the tooltip goes; 'auto' (the default) picks a side with enough room.
   // A tooltip keeps its own state, so register one per element.
-  // 実演 5。createTooltip は説明したい要素を包み、ポインターが乗っている間、`content` を表示します。
+  // 実演 5。createTooltip は説明したい要素を包み、ポインターが乗っている間と、キーボードのフォーカスが
+  // ある間、`content` を表示します。Escape で消えます。その要素には「このツールチップが説明している」
+  // という印 (aria-describedby) も付くので、読み上げでは名前の後にヒントが読まれます。
   // `dir` はツールチップを出す向きです。'auto' (既定) は、余地のある側を選びます。
   // ツールチップは自分の状態を持つので、要素 1 つにつき 1 つ登録します。
   const tooltipDemo = (s) =>
     demo(
       'createTooltip',
       t(
-        'Choose a direction, then move the pointer over the button.',
-        { ja: '向きを選んでから、ボタンにポインターを乗せてください。' },
+        'Choose a direction, then move the pointer over the button, or move to it with Tab. Escape hides the tooltip.',
+        { ja: '向きを選んでから、ボタンにポインターを乗せるか、Tab でボタンへ移動してください。Escape で消えます。' },
       ),
       U.uiRow({
         children: [
