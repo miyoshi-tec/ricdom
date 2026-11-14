@@ -5,6 +5,52 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.0.0-alpha.35] — not yet published
+
+Two fixes to the text shown in the closed box of `uiSelect` (`2026-11-14`). The first was found
+by the owner on the sample site; the second is the known limit of `2.0.0-alpha.30`, fixed in the
+core on the owner's decision.
+
+### Fixed
+
+- **A page rule for `button` changed the text shown in a `uiSelect`** (since `2.0.0-alpha.30`).
+  The select's inner `<button>` (the container for `<selectedcontent>`) draws nothing, but
+  inherited properties passed through it: with `button { font-size: 1.2rem; }` on the page, the
+  selected text in the closed box — and only that text — was drawn at 1.2rem (sample
+  `01-hello`: 19.2px instead of 12.8px). The same happened with font family, weight, color,
+  letter spacing, text transform and cursor, and with stronger selectors such as
+  `.toolbar button`. ricdom-ui now pins that button with
+  `all: unset !important; display: contents !important`; the shown text inherits from the
+  `<select>`. To style the shown text on its own, target `.ric-select selectedcontent`.
+- **A focused `<select>` did not show a label change of its selected option** (the known limit
+  documented in `2.0.0-alpha.30`; typical case: a language picker that translates its own option
+  labels kept the previous language in the closed box until focus left). **Core change**: after
+  patching a `<select>`'s children, where `value` is not re-assigned (the select has focus, or
+  the node has no `value` key), ricdom compares `<selectedcontent>` with the selected option and,
+  only if they differ, assigns `selectedIndex` to itself — which makes the browser copy again
+  and changes nothing else. The selection is not moved (also with duplicate `value`s), no event
+  fires, focus and an open list are left alone, and a render that does not change the selected
+  option's content assigns nothing. `multiple` selects and browsers without `<selectedcontent>`
+  are skipped. This also covers a hand-written `<select>` with `<selectedcontent>` and no
+  `value` key, which did not follow a label change at all. SPEC §2.6 / §10.1.
+
+### Tests
+
+- `tests/browser/uiSelectOverflow.test.ts` 7 → 16 (all new cases red first): page `button` rules
+  by element name and by stronger selectors, styling through `selectedcontent`; label change
+  while focused, no assignment when nothing changed (counted), the user's own not-yet-committed
+  choice is kept, duplicate `value`s, an open list being navigated by keyboard, a select without
+  `value`, `multiple`.
+- `uiButtonVariant` asserted a resting background while the pointer left by an earlier test file
+  could be over the button (`:hover` color, 1–2 failures in 4 full runs once the file order
+  changed; passes alone). New helper `tests/_helpers/pointer.ts` `parkPointer()`.
+- 740 unit and 229 browser tests pass (6 consecutive full browser runs).
+
+### Sizes
+
+- `dist/ricdom.iife.min.js` 4,877 → 4,958B gzip (+81B, ceiling 5,200B). `ricdom-ui.iife.min.js`
+  27,737 → 27,749B.
+
 ## [2.0.0-alpha.34] — not yet published
 
 Internal refactoring (`2026-11-14`, owner-approved). No API or behavior change.
