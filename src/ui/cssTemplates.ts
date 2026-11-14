@@ -85,9 +85,41 @@ const mdmeta = 'var(--ric-md-meta)';
 const b1 = `1px solid ${bd}`;
 const da = `${dur} ${eas}`;
 
+// フォーム部品の共通の土台 (2.0.0-alpha.32、設計書 §51)。ブラウザは <button> / <input> / <select> /
+// <textarea> に独自の既定 (UA スタイルシート) を当てる: 書体・太さ・斜体・字間は親から継承せず
+// (Windows の Chromium では Arial 13.33px / 400 / normal)、box-sizing は要素ごとに違う
+// (input / textarea は content-box、button / select は border-box)。ricdom-ui が描く「文字を持つ
+// フォーム要素」は、ここで一度だけ「ページの指定に従う・大きさは外形で数える」に揃える。
+//   - alpha.24 / 25 / 29 では同じ宣言を規則ごとに書いていて、書き忘れた部品が報告で見つかった。
+//     **新しい部品が <button> などを自前のクラスで描くときは、このセレクタに足すこと**
+//     (足し忘れは tests/browser/uiControlFont.test.ts の全数走査が落ちて分かる)
+//   - 各部品の規則より前に置く (buildStylesheet の先頭)。詳細度は同じなので、部品が
+//     font-weight などを自分で決めていれば後勝ちでそちらが効く
+//   - line-height は揃えない: 見出しやタブは line-height: normal のままのほうがページの書体に
+//     合い、継承させるとページの行間で部品の高さが変わってしまう (設計書 §48)
+//   - text-transform / text-indent / text-align / text-shadow / word-spacing も揃えない: 段落向けの
+//     指定が入力欄やボタンに及ぶのを UA の既定が防いでいて、そのほうが望ましい
+const CONTROL_BASE_CSS = `
+.ric-button,
+.ric-input,
+.ric-textarea,
+.ric-select,
+.ric-accordion__header,
+.ric-tabs__tab,
+.ric-dropdown__trigger,
+.ric-splitter__collapse-btn,
+.ric-dialog__close,
+.ric-toast__close,
+.ric-tweak-folder__header {
+  box-sizing: border-box;
+  font-family: inherit;
+  font-weight: inherit;
+  font-style: inherit;
+  letter-spacing: inherit;
+}`;
+
 const BUTTON_CSS = `
 .ric-button {
-  box-sizing: border-box;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -98,7 +130,6 @@ const BUTTON_CSS = `
   border-radius: ${r};
   background: ${ct};
   color: ${fg};
-  font-family: inherit;
   font-size: 1em;
   font-weight: 500;
   cursor: pointer;
@@ -180,7 +211,6 @@ const BUTTON_CSS = `
 
 const INPUT_CSS = `
 .ric-input {
-  box-sizing: border-box;
   display: block;
   width: 100%;
   height: ${ch};
@@ -189,7 +219,6 @@ const INPUT_CSS = `
   border-radius: ${r};
   background: ${ct};
   color: ${fg};
-  font-family: inherit;
   font-size: 1em;
   outline: none;
   appearance: none;
@@ -233,6 +262,7 @@ const DIALOG_CSS = `
 .ric-dialog__overlay { position: fixed; inset: 0; z-index: 500; background: color-mix(in srgb, ${tb} 10%, transparent); animation: ric-ovl-in ${da}; }
 .ric-dialog__overlay--out { animation: ric-ovl-out ${da} forwards; pointer-events: none; }
 .ric-dialog {
+  box-sizing: border-box;
   position: fixed;
   z-index: 501;
   top: 50%; left: 50%;
@@ -255,10 +285,11 @@ const DIALOG_CSS = `
 }
 .ric-dialog__title { font-weight: 700; font-size: 1em; color: ${fg}; }
 .ric-dialog__close {
+  padding: 0;
   display: flex; align-items: center; justify-content: center;
   width: 24px; height: 24px;
   border: none; background: transparent; cursor: pointer;
-  color: ${fm}; font-size: 14px; font-family: inherit;
+  color: ${fm}; font-size: 14px;
   border-radius: ${r};
   transition: background 0.1s, color 0.1s;
 }
@@ -340,6 +371,7 @@ const TOAST_CSS = `
   pointer-events: none;
 }
 .ric-toast__item {
+  box-sizing: border-box;
   display: flex; align-items: center; gap: ${g};
   min-width: 220px; max-width: 360px;
   padding: ${py} ${px};
@@ -359,29 +391,39 @@ const TOAST_CSS = `
 .ric-toast__item--out { animation: ric-toast-out ${da} forwards; pointer-events: none; }
 .ric-toast__msg { flex: 1; font-size: 1em; color: ${fg}; line-height: 1.4; }
 .ric-toast__close {
+  padding: 0;
   flex-shrink: 0; width: 20px; height: 20px;
   border: none; background: transparent; cursor: pointer;
-  color: ${fm}; font-size: 11px; font-family: inherit;
+  color: ${fm}; font-size: 11px;
   border-radius: ${r};
   display: flex; align-items: center; justify-content: center;
   transition: background 0.1s, color 0.1s;
 }
 .ric-toast__close:hover { background: ${bd}; color: ${fg}; }`;
 
+// `.ric-tooltip { display: inline-flex }` は v1 にあって v2 への移植で落ちていた (2.0.0-alpha.32 で
+// 復活)。包む側の <span> が inline のままだと、その矩形は「行の箱」になり、中のボタンより
+// 上端が低い。ツールチップは包む側の矩形を基準に置くので、ボタンに重なっていた (8px 空ける
+// はずが 2px 重なる)。inline-flex なら包む側の箱が中身の箱と一致する。
+// `.ric-tooltip__popup` は `width: max-content` + `max-width` で、短い文は 1 行、長い文は最大幅で
+// 折り返す (alpha.31 までは nowrap で、最大幅を超えた文字が枠の外にはみ出していた。v1 も同じ)。
 const TOOLTIP_CSS = `
+.ric-tooltip { display: inline-flex; }
 @keyframes ric-tip-h { from { opacity:0; transform:translateX(-50%) scale(0.85); } to { opacity:1; transform:translateX(-50%) scale(1); } }
 @keyframes ric-tip-v { from { opacity:0; transform:translateY(-50%) scale(0.85); } to { opacity:1; transform:translateY(-50%) scale(1); } }
 
 .ric-tooltip__popup {
+  box-sizing: border-box;
   position: fixed;
   background: ${tb};
   color: ${tf};
   font-size: 0.85em;
   padding: 4px 10px;
   border-radius: ${r};
-  white-space: nowrap;
   pointer-events: none;
+  width: max-content;
   max-width: 200px;
+  overflow-wrap: anywhere;
   z-index: 401;
   backdrop-filter: ${sbf};
   -webkit-backdrop-filter: ${sbf};
@@ -519,7 +561,6 @@ const SCROLLBAR_CSS = `
 
 const TEXTAREA_CSS = `
 .ric-textarea {
-  box-sizing: border-box;
   display: block;
   width: 100%;
   padding: ${py} ${px};
@@ -527,7 +568,6 @@ const TEXTAREA_CSS = `
   border-radius: ${r};
   background: ${ct};
   color: ${fg};
-  font-family: inherit;
   font-size: 1em;
   line-height: 1.5;
   outline: none;
@@ -599,7 +639,6 @@ const SELECT_CSS = `
   appearance: base-select;
 }
 .ric-select {
-  box-sizing: border-box;
   display: flex;
   align-items: center;
   width: 100%;
@@ -610,7 +649,6 @@ const SELECT_CSS = `
   background: ${ct};
   color: ${fg};
   font-size: 1em;
-  font-family: inherit;
   cursor: pointer;
   outline: none;
   transition: background 0.1s, border-color 0.15s, box-shadow 0.15s, filter 0.1s;
@@ -744,6 +782,7 @@ const RANGE_CSS = `
   min-width: 0;
 }
 .ric-range input[type="range"] {
+  margin: 0;
   flex: 1;
   min-width: 0;
   cursor: pointer;
@@ -793,6 +832,7 @@ const COLOR_CSS = `
   min-width: 0;
 }
 .ric-color__alpha {
+  margin: 0;
   flex: 1;
   min-width: 0;
   height: 20px;
@@ -969,6 +1009,7 @@ const MD_PRE_CSS = `
 }
 .ric-md-pre__fence > code {
   display: block;
+  font-family: inherit;
 }
 .ric-md-pre__fence > code.hljs {
   background: transparent; padding: 0; overflow: visible;
@@ -1006,6 +1047,7 @@ const MD_PRE_CSS = `
 
 const CODE_PRE_CSS = `
 .ric-code-pre {
+  box-sizing: border-box;
   margin: 0;
   padding: ${gm};
   background: ${cb};
@@ -1023,6 +1065,7 @@ const CODE_PRE_CSS = `
 }
 .ric-code-pre > code {
   display: block;
+  font-family: inherit;
 }
 .ric-code-pre > code.hljs {
   background: transparent;
@@ -1084,7 +1127,7 @@ const SPLITTER_CSS = `
   background: ${bg};
   border: ${b1};
   border-radius: 10px;
-  cursor: pointer; font-family: inherit;
+  cursor: pointer;
   display: flex; align-items: center; justify-content: center;
   font-size: 9px; color: ${fm};
   z-index: 2;
@@ -1117,12 +1160,11 @@ const ACCORDION_CSS = `
   border-top: ${b1};
 }
 .ric-accordion__header {
-  box-sizing: border-box;
   display: flex; align-items: center; justify-content: space-between;
   width: 100%; padding: ${py} ${px};
   background: ${bg};
   border: none; cursor: pointer;
-  font-size: 1em; font-family: inherit; color: ${fg}; font-weight: 500;
+  font-size: 1em; color: ${fg}; font-weight: 500;
   text-align: left; user-select: none;
   transition: background ${da};
 }
@@ -1165,7 +1207,6 @@ const TABS_CSS = `
   margin-bottom: -1px;
   cursor: pointer;
   font-size: 1em;
-  font-family: inherit;
   color: ${fm};
   white-space: nowrap;
   transition: color 0.15s, border-bottom-color 0.15s, background 0.15s;
@@ -1208,10 +1249,11 @@ const TABS_CSS = `
 // ため、同じスタイルシート内で参照できる。重複定義しない)。
 const DROPDOWN_CSS = `
 .ric-dropdown__trigger {
+  padding: 0;
   width: ${ch}; height: ${ch};
   border-radius: ${r};
   background: ${ct}; border: ${b1};
-  cursor: pointer; font-size: 18px; font-family: inherit; color: ${fg};
+  cursor: pointer; font-size: 18px; color: ${fg};
   display: flex; align-items: center; justify-content: center;
   transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
@@ -1342,12 +1384,11 @@ const TWEAK_CSS = `
   border-top: ${b1};
 }
 .ric-tweak-folder__header {
-  box-sizing: border-box;
   display: flex; align-items: center; justify-content: space-between;
   width: 100%; padding: ${g} ${gm};
   background: ${bg};
   border: none; cursor: pointer;
-  font-size: 0.9em; font-family: inherit; font-weight: 600; color: ${fg};
+  font-size: 0.9em; font-weight: 600; color: ${fg};
   text-align: left; user-select: none;
   transition: background ${da};
 }
@@ -1478,6 +1519,7 @@ const STYLESHEET_MARKER_COMMENT = '/*! ricdom-ui */';
 export const buildStylesheet = (): string =>
   [
     STYLESHEET_MARKER_COMMENT,
+    CONTROL_BASE_CSS,
     BUTTON_CSS,
     INPUT_CSS,
     DIALOG_CSS,

@@ -176,6 +176,25 @@ v1 は 5 か月・46 リリース・社内 11 アプリの実戦で API が磨�
 - **追報 4 (alpha.4 取り込み) で第 2 号は完了**: 再現スクリプト 5→5→5→5→5、E2E 10/10、回避策ゼロ。初報 10 + 追報 5 = 15 件が同日中に公式 API で閉じた
 - ~~観察 (対応なし)~~ → **§23 で実バグ (#14) と判明**。DPI 150% の実機で右端密着トリガーの dropdown body の `right` が `innerWidth` を 0.33px 超えた件、統括は「`clampLeft` が右端も収めるので最終位置では起き得ない、実測フェーズの rect を拾ったのでは」と判断したが誤り。consumer が再計測後 (200ms / 600ms) の inline `left` / `offsetWidth` / 本来幅を取り直し、**測った幅そのものが位置依存で過小**になっていることを示した (§23)。教訓: 「式は正しい」で止めず、式に入る実測値の取り方まで疑う
 
+## 51. UA 既定スタイルへの依存を一括で監査する (2026-11-14、2.0.0-alpha.32、ユーザー承認の順番の 2 番目)
+
+- **動機**: alpha.24 (書体) / 25 (box-sizing) / 29 (書体の取りこぼし) / 30 (select の折り返し) / 31 (max-height) は、どれも「ブラウザ既定 (UA スタイルシート) に見た目を預けていた箇所」が、利用側の報告か偶然で 1 つずつ見つかったもの。報告を待たずに全数を洗う
+- **監査の道具 (コミットしない)**: 全部品を 1 画面に描き (状態を持つ部品は開いた状態で)、テーマの根に「ありえない継承値」(Courier New / 19px / 300 / italic / 行間 31px / 字間 1.5px / uppercase …) を立てる。各要素について、同じ親の下に **同じタグの素の要素** と **中立の div** を一時的に挿し、computed style を 3 者で比べる。「部品の値 = 素のタグの値 ≠ 中立の値」なら UA 既定がそのまま出ている。198 要素、候補 46 グループ
+- **道具の偽陽性 (覚え書き)**: ①部品が明示した値が UA 既定とたまたま同じ (入力欄の白背景、枠線 1px、見出しの 700) ②子孫セレクタの規則が挿した素の要素にも当たる (`.ric-md-pre__list li`) ③修飾クラス違いを同じ署名にまとめるので、`--link` の padding が `.ric-button` の漏れに見える。候補は人が読んで仕分ける前提で、常設のテストにはしない
+- **仕分けの結果と判断**:
+  - **フォーム部品の太さ・斜体・字間 (ユーザー決定「ページの指定に従わせる」)**: UA は button / input / textarea に `font-weight: 400` / `font-style: normal` / `letter-spacing: normal` を当てる。base-select の select は字間を継承するので、同じ行の入力欄とセレクトで字間が違っていた。書体 (§43) と同じ理由で inherit に揃える。**揃えないもの**: `line-height` (§48 の判断を維持。継承させるとページの行間でタブや見出しの高さが変わる)、`text-transform` / `text-indent` / `text-align` / `text-shadow` / `word-spacing` (段落向けの指定が入力欄やボタンに及ぶのを UA の既定が防いでいて、そのほうが望ましい。normalize.css や Bootstrap も `text-transform: none` は残す)
+  - **共通の規則に一本化 (リファクタリング)**: 11 個のセレクタ (button / input / textarea / select / accordion・tweak の見出し / tab / dropdown トリガー / splitter の折りたたみ / dialog・toast の ✕) を 1 つの規則 `CONTROL_BASE_CSS` にまとめ、`buildStylesheet` の先頭に置く。各規則にあった `font-family: inherit` 11 個と `box-sizing` 6 個は削除。詳細度は従来と同じ (0,1,0) のまま = 部品の規則が後勝ちで自分の太さを保ち、アプリの `button { … }` のような要素セレクタには従来どおり勝つ。**`:where()` で詳細度 0 にする案は採らない** (アプリの要素セレクタに負けるようになり、既存アプリの見た目が変わる)
+  - **コードのフォント (実バグ)**: `<pre>` の中の `<code>` が UA の `font-family: monospace` のまま。`.ric-code-pre` に書いたフォントの並びも、アプリの上書きも届いていなかった。Windows の Chromium では既定の monospace が Consolas なので見た目が同じで気づけない
+  - **range の margin 2px・固定サイズのボタンの padding**: UA 既定を 0 に
+  - **box-sizing の残り**: 静的な走査 (規則の中に「寸法 + padding か枠線」があり box-sizing が無い) で 5 件。dialog / toast / tooltip を border-box に。`uiCodePre` の `maxHeight` はインラインで付くので静的走査には出ないが、同じ型 (100px 指定で 126px) なので `.ric-code-pre` も border-box に。v1 は全称リセットで全部 border-box だった = §44・§50 と同じ v1→v2 の取りこぼし
+- **監査の途中で見つかった別件 2 つ (どちらも tooltip)**:
+  - 長い文が枠からはみ出す: `white-space: nowrap` + `max-width: 200px` で、200px を超えた文字が暗い枠の外に明るい文字のまま出て読めない (v1 も同じ)。`width: max-content` + `max-width` + `overflow-wrap: anywhere` で、短い文は 1 行・長い文は折り返し
+  - ボタンに 2px 重なる: 上の修正のテストで「下端がトリガーの上端より下」と出て発覚。包む側の `<span class="ric-tooltip">` が inline で、矩形が行の箱になっていた。**v1 にあった `.ric-tooltip { display: inline-flex }` が v2 に無い = 移植漏れ**。監査の道具は「span.ric-tooltip の display が inline」を出していたのに、統括は雑音として読み飛ばしていた
+- **v1 との突き合わせ (上の移植漏れを受けて)**: v1 の `.ric-*` クラス 127 個のうち v2 の CSS に無いのは 11 個で、すべて意図した廃止・改名 (`.ric-page`、`.ric-inline-menu`、dropdown に移った popup のトリガー系、`.ric-button--md`、`.ric-collapse-box--entering`、包む側の `.ric-popup`)。popup / dropdown は包む要素を持たずトリガー自身を基準にするので、tooltip と同じ問題は無い。§32 のパリティ監査は部品の props と inline style を比べたもので、**クラス単位の CSS の有無は見ていなかった**
+- **テスト (常設)**: `tests/ui/cssBoxSizing.test.ts` (unit、スタイルシート全体の静的走査)、`tests/browser/uiBrowserDefaults.test.ts` 5 件、`uiControlFont.test.ts` に字間・斜体・太さの全数走査、`uiTabs.test.ts` に帯の中央寄せ (SPEC に書いた CSS が効くことの固定、Paper Bridge の問い合わせ)。すべて red first。browser 216 / unit 732
+- **作業中の事故 (2026-11-14)**: PC が落ち、編集中だった `src/ui/cssTemplates.ts` の作業コピーが全バイト NUL になった (git の版は無事、テスト 3 本も無事)。CSS は書き直し、テストを赤から確かめ直した。以後は区切りごとに `git add` する (index に入れておけば、作業コピーが壊れても `git checkout -- <file>` で戻せる)
+- **教訓**: ①「同じ宣言を規則ごとに書く」形は、書き忘れが検出されない。共通の規則 + 全数走査のテストにする ②監査の出力を「雑音」と読み飛ばす前に、v1 に同じ指定があったかを確かめる (v1 にあって v2 に無いなら移植漏れ) ③UA 既定と同じ値になる環境 (Windows の Consolas) では、UA 依存のバグは見た目で見つからない
+
 ## 50. 「CI の単発失敗」は本物のバグだった = 高さ制限つきメニューが画面をはみ出す + ラベルなし選択肢の undefined (2026-11-14、2.0.0-alpha.31、ユーザー指示「おすすめの順番で」の 1 番目)
 
 - **着手の位置づけ**: 残件整理 (alpha.30 の後) でユーザーが承認した順番 = ①小修正 2 つ ②UA 既定依存の一括監査 ③popup / dropdown の重複解消 ④v2.0.0 準備。本節は ①

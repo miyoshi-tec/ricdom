@@ -1385,8 +1385,58 @@ and font *size* — no font family, on purpose.
   (tweak folder headers, accordion headers, tabs, dropdown triggers, the splitter's collapse
   button and the ✕ of dialogs and toasts). A browser contract test now walks every form
   element ricdom-ui renders (in the app and in the portal), so a new component cannot miss it.
+- **Changed in `2.0.0-alpha.32` — weight, style and letter spacing follow the page too.** The
+  user-agent stylesheet also gives form controls `font-weight: 400`, `font-style: normal` and
+  `letter-spacing: normal`, so a page that sets `letter-spacing` or a weight on `<body>` reached
+  ricdom-ui's text but not its inputs and buttons — and a `base-select` `<select>` *does* inherit
+  letter spacing, so an input and the select next to it differed. All the controls listed above
+  now share one rule (`font-family`, `font-weight`, `font-style`, `letter-spacing`: `inherit`;
+  `box-sizing: border-box`), placed before the component rules. A component that sets its own
+  weight keeps it (`.ric-button` 500, accordion and tweak folder headers, the active tab).
+  **Not inherited, on purpose**: `line-height` (it stays `normal`; inheriting it would change
+  the height of tabs and headers with the page's line height), and `text-transform`,
+  `text-indent`, `text-align`, `text-shadow`, `word-spacing` (the user-agent reset keeps
+  paragraph styling out of inputs and buttons, which is what you want).
+- **Code blocks.** The `<code>` inside `uiCodePre` and inside a Markdown fence inherits the font
+  of its `<pre>` (`.ric-code-pre`, `.ric-md-pre__fence`). Before `2.0.0-alpha.32` it kept the
+  user-agent `font-family: monospace`, so the font list declared on the `<pre>` — and an app
+  override such as `.ric-code-pre { font-family: "JetBrains Mono" }` — never reached the text.
 - **Opting out** is one line of app CSS after `ricdom-ui.css`: `.ric-button { font-family:
   ...; }` — same single-class specificity, later wins (see the base-layer FACT in §8).
+
+### FACT: a size you set is the outer size (`2.0.0-alpha.32`)
+
+Every ricdom-ui rule that sets a width or height (including `min-*`/`max-*`) on an element that
+also has padding or a border is `box-sizing: border-box`. A unit test scans the whole stylesheet
+for the combination, so a new rule cannot miss it. In practice:
+
+- `createDialog`'s `width` (default `min(360px, 90vw)`) is the width of the card including its
+  border — `width: 300` gives a 300px card, not 302px.
+- `uiCodePre({ maxHeight })` limits the outer height (it used to add padding and border on top:
+  `maxHeight: '100px'` gave 126px).
+- A toast is between 220px and 360px wide, a tooltip at most 200px wide, a popup or dropdown body
+  at least 160px wide — all measured at the border.
+- The same holds for sizes you set yourself on these elements in app CSS.
+
+Earlier releases fixed this one report at a time (alpha.25: full-width controls; alpha.31:
+height-limited menus); v1 had it for free through a universal `border-box` reset that v2
+deliberately does not ship (it would style elements ricdom did not create).
+
+### FACT: ricdom-ui does not leave its look to browser defaults (`2.0.0-alpha.32`)
+
+Besides the two FACTs above, the alpha.32 audit rendered every component and compared each
+element's computed style with a bare element of the same tag and with a neutral `<div>`, to find
+values that were only the user-agent default. What it changed:
+
+- Range inputs (`uiRange`, the alpha slider of `uiColor`) have `margin: 0` (the user-agent 2px
+  made them 2px smaller than their slot on every side).
+- Fixed-size icon buttons (dialog and toast ✕, the icon form of a dropdown trigger) have
+  `padding: 0` instead of the user-agent `1px 6px` (Chromium), which ate into the 20–24px box.
+- `createTooltip`: the wrapper `<span class="ric-tooltip">` is `display: inline-flex`, so its box
+  is the box of what it wraps and the popup keeps its 8px gap from it (v1 had this rule; it was
+  lost in the port, and the popup overlapped a button by 2px because an inline `<span>`'s box is
+  the line box). The popup wraps at its maximum width instead of `white-space: nowrap`, which
+  let text longer than 200px run out of the box.
 
 ### FACT: controls that stretch to `width: 100%` are `border-box` (`2.0.0-alpha.25`)
 
@@ -1614,6 +1664,13 @@ If no `TabItem` in `items` has a `children` field, `createTabs` renders only the
 usage where selecting a tab doesn't reveal an associated content panel. If even one item in
 `items` has `children`, the panel is rendered as before (for every item — items without
 `children` simply show an empty panel when active).
+
+**Aligning the tabs in the bar.** `.ric-tabs` is `width: 100%` and `.ric-tabs__bar` is a flex row
+that fills it, with the tabs at the start. To centre them, set it on the bar in app CSS after
+`ricdom-ui.css`: `.ric-tabs__bar { justify-content: center; }` (the pill variant's bar shrinks
+to its tabs, so use `.ric-tabs--pill .ric-tabs__bar { align-self: center; }` there). Setting
+`justify-content` on an element *around* the tabs has no effect, because `.ric-tabs` already
+fills that element.
 
 ### 10.3.1d FACT: `createPopup`'s `closeOnSelect` (menu close-on-activate)
 
