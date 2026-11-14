@@ -164,6 +164,81 @@ describe('実ブラウザ: フォームコントロールはページの書体�
     }
   });
 
+  // 2.0.0-alpha.32 (UA 既定依存の一括監査): UA は <button> / <input> / <textarea> に、書体だけでなく
+  // font-weight: 400 / font-style: normal / letter-spacing: normal も当てる。ページが字間や太さを
+  // 決めていても部品に届かず、base-select の <select> だけは字間を継承するので、同じ行の
+  // 入力欄とセレクトで字間が違っていた。書体と同じく「ページの指定に従う」に揃える。
+  it('字間・斜体・太さも、部品を問わずページの指定に従う (部品が自分で太さを決めている見出し類を除く)', async () => {
+    const app = setupApp();
+    const prev = document.body.getAttribute('style');
+    Object.assign(document.body.style, { letterSpacing: '1.5px', fontStyle: 'italic', fontWeight: '300' });
+    try {
+      let acc: ReturnType<typeof createAccordion>;
+      let tabs: ReturnType<typeof createTabs>;
+      let ddLabel: ReturnType<typeof createDropdown>;
+      let ddIcon: ReturnType<typeof createDropdown>;
+      let split: ReturnType<typeof createSplitter>;
+      let dlg: ReturnType<typeof createDialog>;
+      let toast: ReturnType<typeof createToast>;
+      let tweak: ReturnType<typeof createTweakPanel>;
+      const handle = createApp('#app', {}, () => {
+        if (!acc) return null;
+        toast();
+        return {
+          tag: 'div',
+          children: [
+            uiButton({ children: ['Button'] }),
+            uiInput({ value: 'Input' }),
+            uiTextarea({ value: 'Textarea' }),
+            uiSelect({ value: 'a', options: ['a', 'b'] }),
+            acc({ items: [{ id: 'a', title: 'Header', children: ['a'] }] }),
+            tabs({ items: [{ key: 'a', label: 'Tab A', children: ['a'] }, { key: 'b', label: 'Tab B', children: ['b'] }] }),
+            ddLabel({ label: 'Choose', children: [{ tag: 'div', children: ['x'] }] }),
+            ddIcon({ children: [{ tag: 'div', children: ['x'] }] }),
+            split({ side: [{ tag: 'div', children: ['side'] }], main: [{ tag: 'div', children: ['main'] }] }),
+            dlg({ title: 't', children: ['Body'] }),
+            tweak({ data: { gear: { teeth: 20 } } }),
+          ],
+        };
+      });
+      acc = handle.use(createAccordion());
+      tabs = handle.use(createTabs());
+      ddLabel = handle.use(createDropdown());
+      ddIcon = handle.use(createDropdown());
+      split = handle.use(createSplitter());
+      dlg = handle.use(createDialog());
+      toast = handle.use(createToast());
+      tweak = handle.use(createTweakPanel());
+      handle.renderNow();
+      dlg.open();
+      toast.show('Saved');
+      await flush();
+
+      const name = (el: Element): string => `${el.tagName.toLowerCase()}.${String(el.getAttribute('class') ?? '').trim().split(/\s+/)[0]}`;
+      const textControls = Array.from(
+        app.querySelectorAll<HTMLElement>('button, select, textarea, input:not([type="range"]):not([type="checkbox"]):not([type="radio"]):not([type="color"])'),
+      ).filter((el) => !el.closest('select') || el.tagName === 'SELECT'); // select の中の表示用 <button> は select と同じ
+      expect(textControls.length).toBeGreaterThan(12);
+
+      const wrongSpacing = textControls.filter((el) => getComputedStyle(el).letterSpacing !== '1.5px').map((el) => `${name(el)} = ${getComputedStyle(el).letterSpacing}`);
+      expect(wrongSpacing, 'letter-spacing').toEqual([]);
+      const wrongStyle = textControls.filter((el) => getComputedStyle(el).fontStyle !== 'italic').map((el) => `${name(el)} = ${getComputedStyle(el).fontStyle}`);
+      expect(wrongStyle, 'font-style').toEqual([]);
+
+      // 太さは、部品が意図して決めているもの (ボタン・見出し・選択中のタブ) を除いて従う
+      const OWN_WEIGHT = '.ric-button, .ric-accordion__header, .ric-tweak-folder__header, .ric-tabs__tab--active';
+      const followWeight = textControls.filter((el) => !el.matches(OWN_WEIGHT));
+      for (const sel of ['.ric-input', '.ric-textarea', '.ric-select', '.ric-tabs__tab', '.ric-dropdown__trigger', '.ric-dialog__close', '.ric-toast__close']) {
+        expect(followWeight.some((el) => el.matches(sel)), `前提: ${sel} が対象に入っている`).toBe(true);
+      }
+      const wrongWeight = followWeight.filter((el) => getComputedStyle(el).fontWeight !== '300').map((el) => `${name(el)} = ${getComputedStyle(el).fontWeight}`);
+      expect(wrongWeight, 'font-weight').toEqual([]);
+    } finally {
+      if (prev === null) document.body.removeAttribute('style');
+      else document.body.setAttribute('style', prev);
+    }
+  });
+
   it('アプリ側の 1 行で部品だけ別書体にできる (inherit は既定であって強制ではない)', async () => {
     const app = setupApp();
     app.style.fontFamily = PAGE_FONT;

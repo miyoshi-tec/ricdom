@@ -5,6 +5,70 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.0.0-alpha.32] — not yet published
+
+An audit instead of waiting for reports (`2026-11-14`, owner-approved). alpha.24, 25, 29, 30 and
+31 each fixed one place where a component's look was only the browser's default. This release
+rendered every component, compared each element's computed style with a bare element of the same
+tag and with a neutral `<div>`, and fixed what that turned up.
+
+### Changed
+
+- **Form controls follow the page's font weight, font style and letter spacing**, as they already
+  did for the font family. The user-agent stylesheet resets these on `<button>`, `<input>` and
+  `<textarea>`, so a `letter-spacing` or weight set on `<body>` reached ricdom-ui's text but not
+  its controls; a `base-select` `<select>` does inherit letter spacing, so an input and the
+  select beside it differed. Components that choose a weight keep it (`.ric-button`, accordion
+  and tweak folder headers, the active tab). `line-height`, `text-transform`, `text-indent`,
+  `text-align`, `text-shadow` and `word-spacing` are deliberately left alone. SPEC §10.1.
+  **Visible** only in apps that set one of these on an ancestor.
+- The eleven rules for native text controls now share one rule (`font-family`, `font-weight`,
+  `font-style`, `letter-spacing`: `inherit`; `box-sizing: border-box`) instead of repeating the
+  declarations — the repetition is how alpha.29's seven rules were missed.
+
+### Fixed
+
+- **Code blocks ignored their own font list.** The `<code>` inside `uiCodePre` and inside a
+  Markdown fence kept the user-agent `font-family: monospace`, so the list declared on the
+  `<pre>` — and an app override on `.ric-code-pre` — never reached the text. It now inherits.
+  (On Windows the result is the same Consolas as before; elsewhere the declared list applies.)
+- **Sizes are outer sizes.** `box-sizing: border-box` on `.ric-dialog`, `.ric-toast__item`,
+  `.ric-tooltip__popup` and `.ric-code-pre`: `createDialog({ width: 300 })` is 300px wide (was
+  302), `uiCodePre({ maxHeight: '100px' })` is 100px high (was 126), a toast is at most 360px and
+  a tooltip at most 200px wide including padding and border. v1 had this through its universal
+  reset; same gap as alpha.25 and alpha.31. SPEC §10.1.
+- **Long tooltips ran out of their box.** `.ric-tooltip__popup` was `white-space: nowrap` with
+  `max-width: 200px`, so text longer than that continued outside the dark box, unreadable on the
+  page (same in v1). It now wraps at the maximum width; short tooltips stay on one line.
+- **A tooltip overlapped the button it describes by 2px** instead of leaving 8px. The wrapper
+  `<span class="ric-tooltip">` was inline, so its box was the line box, not the button's.
+  `.ric-tooltip { display: inline-flex }` existed in v1 and was lost in the port.
+- Range inputs (`uiRange`, `uiColor`'s alpha slider) no longer keep the user-agent 2px margin.
+- The ✕ of dialogs and toasts and the icon form of a dropdown trigger set `padding: 0` instead of
+  inheriting the user-agent `1px 6px` inside their fixed 20–24px box (no visible change expected).
+
+### Docs
+
+- SPEC §10.3.1b: how to centre the tabs in the bar (`.ric-tabs__bar { justify-content: center; }`;
+  setting it on an element around the tabs has no effect). Asked by Paper Bridge; pinned by a
+  browser test for both variants.
+
+### Tests
+
+- `tests/ui/cssBoxSizing.test.ts` (unit): scans every rule of the stylesheet for "a size plus
+  padding or border" without `box-sizing: border-box`. Red first with 5 selectors.
+- `tests/browser/uiBrowserDefaults.test.ts`, 5 cases, all red first: code font and app override;
+  range margin; icon button padding; tooltip wrapping and its 8px gap; outer sizes of the dialog,
+  code block, toast and tooltip.
+- `tests/browser/uiControlFont.test.ts`: letter spacing and font style for every text control,
+  weight for those that do not set their own (red first: 13 elements).
+- The audit tool itself is not committed (it is a heuristic with false positives); the cases above
+  pin what it found. After the fixes, its remaining differences are all intended (bold headings,
+  inputs that draw no text) or artefacts of the probe.
+- Checked that no other v1 CSS class was dropped: of v1's 127 `.ric-*` classes, the 11 missing
+  from v2 are all intentional (`.ric-page`, `.ric-inline-menu`, the popup trigger classes that
+  became dropdown classes, `.ric-button--md`, `.ric-collapse-box--entering`).
+
 ## [2.0.0-alpha.31] — not yet published
 
 Maintenance pass (`2026-11-14`): one small bug found while fixing alpha.30, and a real bug that a
