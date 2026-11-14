@@ -82,6 +82,7 @@ export const UI_ROLE = {
   range: 'range',
   color: 'color',
   separator: 'separator',
+  progress: 'progress',
   text: 'text',
   icon: 'icon',
   col: 'col',

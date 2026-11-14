@@ -46,6 +46,9 @@ export type { UiColorProps } from './color.js';
 export { uiSeparator } from './separator.js';
 export type { UiSeparatorProps } from './separator.js';
 
+export { uiProgress } from './progress.js';
+export type { UiProgressProps } from './progress.js';
+
 export { uiText } from './text.js';
 export type { UiTextProps, UiTextVariant } from './text.js';
 

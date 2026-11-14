@@ -5,6 +5,47 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.0.0-alpha.33] — not yet published
+
+Requested by Paper Bridge (`2026-11-14`): a progress bar for computations that take seconds to
+minutes. ricdom-ui had no progress, meter or spinner component.
+
+### Added
+
+- **`uiProgress(props)`** — a stateless progress bar (`ricdom/ui`).
+  `value` is 0–1 (clamped); omit it, or pass `null`/`NaN`, for an indeterminate bar. `label` says
+  what is happening, `children` is an optional detail line under the bar (elapsed time, …),
+  `action` an optional control at the bottom right (a cancel button), `showPercent: false` hides
+  the number, `barLabel` names the bar for screen readers when `label` is not a string.
+  - Drawn by ricdom-ui, not a `<progress>` element, so the look, the indeterminate animation and
+    `prefers-reduced-motion` behave the same everywhere: the indeterminate fill slides; with reduced
+    motion it stays still and the track is filled at half opacity.
+  - Accessible as a WAI-ARIA `progressbar` (`aria-valuenow` 0–100, absent when indeterminate). The
+    label is a `role="status"` live region; the percentage is `aria-hidden` and outside it, so a
+    screen reader is not interrupted on every step; the detail line is not announced.
+  - Colors follow the theme (`--ric-color-accent` on `--ric-color-border`); override with
+    `--ric-progress-bar` / `--ric-progress-track`.
+  - SPEC §10.1 FACT.
+
+### Not added (decided with the owner)
+
+- **A built-in clock** (elapsed / remaining time updated inside the component). ricdom re-renders
+  an app as a whole, so a self-ticking component would cost what a one-line `setInterval` in the
+  app costs, and the estimate rule is app-specific. Pass the text as `children`. Revisit on
+  feedback from using `uiProgress`, or a second app asking.
+- **`createCarousel`** (the other half of the request). One app, already working there as an
+  app-side component through `app.use()`, and its two open design questions (relation to
+  `createTabs`, how hidden slides are rendered) are not settled. If a second app needs sliding
+  panels, design it as a panel mode of `createTabs` rather than a separate component.
+
+### Tests
+
+- `tests/ui/progress.test.ts` (8 cases): percentage, clamping and rounding, indeterminate, live
+  region and `aria-hidden`, accessible name, optional rows, rest props.
+- `tests/browser/uiProgress.test.ts` (4 cases): fill width follows `value`; theme colors and the two
+  override variables, including the dark theme; indeterminate animation and its reduced-motion
+  form (emulated through CDP); nothing overflows in a 180px-wide container.
+
 ## [2.0.0-alpha.32] — not yet published
 
 An audit instead of waiting for reports (`2026-11-14`, owner-approved). alpha.24, 25, 29, 30 and

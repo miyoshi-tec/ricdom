@@ -1344,6 +1344,7 @@ the accessibility contract, which is FACT that is easy to miss by reading types 
 | `uiRange(props)` | Slider + live value display; mouse wheel over the control steps the value by `step` |
 | `uiColor(props)` | Accepts and emits either `#rrggbb` hex or `rgba(r,g,b,a)`, auto-detected from `value`; rgba mode adds an alpha slider |
 | `uiSeparator(props)` | `<hr>` |
+| `uiProgress(props)` | Progress bar: `value` 0–1 (omit for indeterminate), `label`, `children` (detail line), `action`. FACT below (`2.0.0-alpha.33`) |
 | `uiText(props)` | `variant`: `'default' \| 'muted' \| 'title' (h2) \| 'label' (<label>)` |
 | `uiIcon(descriptor, opts?)` | See §12 |
 | `uiMdPre(props)` | See §10.4 |
@@ -1508,6 +1509,42 @@ select is cut with "…" and the arrow stays visible. The outer height is always
   option while that select is focused (typically a language picker that translates its own
   option labels), the closed box keeps the old label until a render after focus has left.
   `select.value` and the options themselves are correct throughout.
+
+### FACT: `uiProgress` — a stateless progress bar (`2.0.0-alpha.33`)
+
+```js
+uiProgress({
+  value: s.done / s.total,          // 0–1, clamped. Omit (or null / NaN) for "indeterminate"
+  label: 'Analysing…',              // what is happening; announced when it changes
+  children: [`${s.elapsed}s elapsed`], // optional detail line under the bar; not announced
+  action: uiButton({ children: ['Cancel'], onclick: cancel }), // optional, bottom right
+})
+```
+
+- **Markup**: `div.ric-progress` → an optional head row (`.ric-progress__label` with
+  `role="status"`, and `.ric-progress__percent`), the bar (`.ric-progress__track` with
+  `role="progressbar"`, `aria-valuemin="0"`, `aria-valuemax="100"` and `aria-valuenow`, containing
+  `.ric-progress__fill`), and an optional foot row (`.ric-progress__detail` for `children`,
+  `.ric-progress__action`). Rest props, `class` and `style` go to the outer `div`.
+- **Not a `<progress>` element.** Its look is the browser's, and so is its indeterminate animation
+  and whether that respects `prefers-reduced-motion`. ricdom-ui draws the bar itself (see the
+  "browser defaults" FACT above) and follows the WAI-ARIA progressbar pattern.
+- **Indeterminate**: no `aria-valuenow`, no percentage, `.ric-progress__track--indeterminate`; the
+  fill slides across the track. Under `prefers-reduced-motion: reduce` nothing moves: the whole
+  track is filled at half opacity, and the width transition of a determinate bar is off too.
+- **Screen readers**: the label is a live region (`role="status"`), so a new label is read once.
+  The percentage is `aria-hidden` and outside that region — progress is exposed through
+  `aria-valuenow`, which assistive technology reads at its own pace; putting the number in the
+  live region would interrupt on every step. The detail line has no role, so it can change every
+  second without being read. The bar's accessible name is `barLabel`, or `label` when that is a
+  string.
+- **Colors** come from the theme: fill `--ric-color-accent`, track `--ric-color-border`. Override
+  with `--ric-progress-bar` / `--ric-progress-track` (in `createTheme` overrides or app CSS);
+  they are not palette keys, so themes that do not set them use the defaults.
+- **No built-in clock.** `uiProgress` does not count elapsed or remaining time. ricdom re-renders
+  an app as a whole, so a component ticking every second would cost exactly what a one-line
+  `setInterval` updating your state costs, and how to estimate the remaining time differs per
+  app. Compute the text and pass it as `children`.
 
 ### 10.2 Stateless — layout
 
@@ -2037,7 +2074,7 @@ names or DOM structure. Portal-root elements of dialog/popup/toast/tooltip/dropd
 this too, distinct from their trigger element's role (if any). As of 2.0.0-alpha.2 this
 extends to sub-parts of the portal-mounted components, not just their root:
 
-`button` `input` `textarea` `checkbox` `radiogroup` `select` `range` `color` `separator`
+`button` `input` `textarea` `checkbox` `radiogroup` `select` `range` `color` `separator` `progress`
 `text` `icon` `col` `row` `grid` `panel` `md-pre` `code-pre` — `dialog` `dialog-overlay`
 `dialog-header` `dialog-title` `dialog-body` `dialog-footer` `dialog-close` `popup`
 `popup-trigger` `popup-overlay` `popup-item` `toast` `toast-item` `toast-msg`
