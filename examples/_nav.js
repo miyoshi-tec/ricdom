@@ -69,6 +69,7 @@
     'Examples': 'サンプル',
     'Home': 'ホーム',
     'Tutorial': 'チュートリアル',
+    'Guide': 'ガイド',
     'Spec': '仕様',
     'Icons': 'アイコン',
     'Source': 'ソース',

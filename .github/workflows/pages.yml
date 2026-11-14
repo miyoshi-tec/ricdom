@@ -1,0 +1,60 @@
+name: Pages
+
+# docs サイト (site/ + examples/ + docs/*.md + dist/) を組み立てて GitHub Pages に出す。
+#
+# - main への push で公開する (develop への push では動かない。develop の確認は手元の
+#   `npm run build:site` と、CI の `npm run test:examples` = _site/ を実ブラウザで開く smoke で行う)。
+# - 配布物は git に入れない方針 (dist/ と _site/ は .gitignore)。ここで毎回ビルドする。
+# - 前提: リポジトリの Settings → Pages → Build and deployment → Source が「GitHub Actions」に
+#   なっていること。なっていないと configure-pages が失敗する (この設定はオーナーの操作)。
+# - 手動でも実行できる (workflow_dispatch)。Pages を有効にした直後の初回公開に使う。
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Pages へのデプロイに必要な最小の権限
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 公開は 1 本ずつ。走っている公開は最後まで終わらせる (途中で止めると半端な状態で残るため)
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    # ci.yml と同じ理由で版を固定する (上げる条件も ci.yml のコメントと同じ)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build the library and assemble _site/
+        run: npm run build:site
+
+      - uses: actions/configure-pages@v6
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

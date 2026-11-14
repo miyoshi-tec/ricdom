@@ -1,7 +1,7 @@
 // docs サイト (GitHub Pages 等で配信する静的サイト) の `_site/` を組み立てる。
 //
 // 事前に `npm run build` で dist/ ができている前提 (npm script `build:site` が先に build する)。
-// 配信方法 (GitHub Actions でデプロイするか、出力をコミットするか) は未決なので、この
+// 配信は GitHub Actions (.github/workflows/pages.yml) が main への push で行う。この
 // スクリプトは「_site/ を作る」ことだけを担当し、デプロイには一切触れない。
 //
 // _site/ の構成 (相対パスがそのまま効くようにする。examples は `../dist/`、site は `dist/` を参照):

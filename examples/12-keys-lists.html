@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ricdom — 12 Lists and key (no build step)</title>
+<!-- ricdom-ui.css styles ricdom's UI components (load it before your own CSS). _fonts.css only sets this site's fonts.
+     ricdom-ui.css は ricdom の UI 部品の見た目です (自分の CSS より先に読み込みます)。_fonts.css はこのサイトのフォント設定だけです。 -->
+<link rel="stylesheet" href="../dist/ricdom-ui.css">
+<link rel="stylesheet" href="_fonts.css">
+<style>
+  /* The page's own layout. None of these rules is needed by ricdom.
+     このページ自身のレイアウトです。ricdom に必要な規則はありません。 */
+  main { max-width: 860px; margin: 0 auto; padding: 1.5rem; }
+  main h1 { font-size: 1.2rem; }
+  main h2 { font-size: 1rem; margin: 0 0 4px; }
+  .lists { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+  .item { display: grid; grid-template-columns: 5.5em 1fr; align-items: center; gap: 8px; margin: 6px 0; }
+  .done { text-decoration: line-through; opacity: 0.6; }
+  .wrap { flex-wrap: wrap; }
+  .log { min-height: 4.5em; margin: 0; padding: 8px 10px; border-radius: 8px; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 0.85em; border: 1px dashed color-mix(in srgb, currentColor 35%, transparent); }
+</style>
+</head>
+<body>
+<!--
+  12 Lists and key: what happens to the real DOM elements when a list changes.
+  1. Reordering: without `key`, elements stay where they are and only their content is rewritten;
+     with `key`, each element travels with its item.
+  2. Changing one item: assign a new array (or a new item object) so that ricdom notices.
+  3. The development build of ricdom prints a warning for the mistakes shown here. This page loads
+     that build and shows the warnings at the bottom.
+
+  12 リストと key: リストが変わるとき、実際の DOM 要素に何が起きるかを確かめます。
+  1. 並べ替え: `key` が無いと、要素は動かず中身だけが書き換わります。`key` があると、要素は項目と一緒に動きます。
+  2. 項目 1 つの変更: ricdom が気づけるように、新しい配列 (または新しい項目のオブジェクト) を代入します。
+  3. ricdom の開発用ビルドは、ここで見せる間違いに警告を出します。このページはそのビルドを読み込み、
+     警告をページの下に表示します。
+-->
+<main>
+  <div id="app"></div>
+  <div id="log"></div>
+</main>
+
+<!-- Optional: highlight.js colours the code in this site's Source view. ricdom does not need it.
+     任意: highlight.js はこのサイトの「ソース」表示を色分けします。ricdom 自体には不要です。 -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
+<!-- ricdom itself. This page loads the development build of the core (ricdom.iife.js, without ".min"):
+     it behaves the same and additionally prints warnings to the console. Ship the .min.js build.
+     ricdom 本体です。このページではコアの開発用ビルド (".min" の付かない ricdom.iife.js) を読み込んでいます。
+     動きは同じで、コンソールに警告を出す点だけが違います。公開するときは .min.js を使います。 -->
+<script src="../dist/ricdom.iife.js"></script>
+<script src="../dist/ricdom-ui.iife.min.js"></script>
+<!-- Docs-site helpers, not part of ricdom: the nav bar (theme, language, previous / next page) and t() for translations.
+     このサイト専用の補助で、ricdom の一部ではありません: ナビバー (テーマ・言語・前後のページ) と翻訳用の t() です。 -->
+<script src="_i18n.js"></script><script src="_samples.js"></script><script src="_nav.js"></script>
+<script>
+  // A short name for the UI components.
+  // UI 部品を短い名前で呼べるようにします。
+  const U = ricdomUI;
+
+  // Site helper: t(text, { ja: '...' }) returns the text in the chosen language.
+  // サイトの補助: t(文字列, { ja: '…' }) は選択中の言語の文字列を返します。
+  const { t, onLangChange } = ricdomI18n;
+
+  // ── The warning log ──────────────────────────────────────────────────────────────────────────
+  // A second, separate app that shows what the development build prints with console.warn.
+  // It is separate on purpose: writing a warning into the main app's state would redraw the main
+  // app, and a mistake that warns on every render would then never stop.
+  // 開発用ビルドが console.warn で出した内容を表示する、もう 1 つの独立したアプリです。
+  // 分けているのには理由があります。警告をメインのアプリの状態に書くとメインのアプリが描き直され、
+  // 描くたびに警告が出る間違いでは、それが止まらなくなるからです。
+  const logApp = ricdom.createApp('#log', { lines: [] }, (s) => ({
+    tag: 'div',
+    children: [
+      { tag: 'h2', children: [t('Warnings from the development build', { ja: '開発用ビルドの警告' })] },
+      { tag: 'pre', class: 'log', children: [s.lines.length ? s.lines.join('\n') : t('(none yet)', { ja: '(まだありません)' })] },
+      U.uiButton({ variant: 'ghost', children: [t('Clear', { ja: '消す' })], onclick: () => { s.lines = []; } }),
+    ],
+  }));
+  const originalWarn = console.warn;
+  console.warn = (...args) => {
+    originalWarn(...args);
+    const line = args.map(String).join(' ');
+    // The same warning is listed once.
+    // 同じ警告は 1 回だけ載せます。
+    if (!logApp.lines.includes(line)) logApp.lines = [...logApp.lines, line];
+  };
+
+  // ── The data ─────────────────────────────────────────────────────────────────────────────────
+  // Every item has an `id` that never changes. That is what `key` needs: a value that identifies
+  // the item itself, not its position.
+  // どの項目も、変わらない `id` を持ちます。`key` に必要なのはこれです。位置ではなく、項目そのものを
+  // 見分けられる値です。
+  let nextId = 4;
+  const state = {
+    items: [
+      { id: 1, name: 'Apple', done: false },
+      { id: 2, name: 'Banana', done: false },
+      { id: 3, name: 'Cherry', done: false },
+    ],
+    sameKey: false,
+  };
+
+  // One row: the item's name and a text field. The field is a plain <input> without `value`
+  // (the class only borrows the look of uiInput), so ricdom never writes into it: what you type
+  // lives only in that element. That makes the element visible. uiInput would not work for this:
+  // it always passes `value`, so ricdom would set the field back to that value on each render.
+  // 1 行ぶん: 項目の名前と入力欄です。入力欄は `value` を渡していない素の <input> です (class は
+  // uiInput の見た目を借りているだけです)。ricdom は中身を書き換えないので、打った文字はその要素の中に
+  // だけあります。これで「どの要素か」が目で分かります。uiInput はこの用途に向きません。`value` を
+  // 必ず渡す部品なので、描き直すたびに ricdom が入力欄をその値に戻すからです。
+  const row = (item, key) => ({
+    tag: 'div',
+    class: 'item',
+    // `key` is only added when one is given.
+    // `key` は、渡されたときだけ付けます。
+    ...(key === undefined ? {} : { key }),
+    children: [
+      { tag: 'span', class: item.done ? 'done' : '', children: [item.name] },
+      { tag: 'input', class: 'ric-input', placeholder: t('note for this item', { ja: 'この項目のメモ' }) },
+    ],
+  });
+
+  const app = ricdom.createApp('#app', state, (s) =>
+    U.uiCol({
+      children: [
+        { tag: 'h1', children: [t('Lists and key', { ja: 'リストと key' })] },
+
+        { tag: 'h2', children: [t('1. Reordering', { ja: '1. 並べ替え' })] },
+        U.uiText({
+          children: [t('Type a note into the first row of both lists, then reverse. Both lists show the same items in the same order; only the notes differ.', { ja: '両方のリストの 1 行目にメモを打ってから、逆順にしてください。どちらのリストも同じ項目が同じ順に並びますが、メモの行き先が違います。' })],
+        }),
+        U.uiRow({
+          class: 'wrap',
+          children: [
+            // A new array is assigned each time: `reverse()` and `sort()` change an array in place,
+            // so copy it first with [...s.items].
+            // 毎回、新しい配列を代入しています。`reverse()` や `sort()` は配列そのものを書き換えるので、
+            // 先に [...s.items] で写しを作ります。
+            U.uiButton({ children: [t('Reverse', { ja: '逆順にする' })], onclick: () => { s.items = [...s.items].reverse(); } }),
+            U.uiButton({
+              children: [t('Add to the top', { ja: '先頭に足す' })],
+              onclick: () => {
+                s.items = [{ id: nextId, name: `Item ${nextId}`, done: false }, ...s.items];
+                nextId += 1;
+              },
+            }),
+            U.uiButton({ children: [t('Remove the first', { ja: '先頭を消す' })], onclick: () => { s.items = s.items.slice(1); } }),
+          ],
+        }),
+        {
+          tag: 'div',
+          class: 'lists',
+          children: [
+            U.uiPanel({
+              children: [
+                // Without key: rows are matched by position. The first element stays first and gets
+                // the new first item's name, so your note ends up next to a different item.
+                // key なし: 行は位置で対応づけられます。1 番目の要素は 1 番目のまま、新しい 1 番目の項目の
+                // 名前に書き換わるので、打ったメモは別の項目の隣に残ります。
+                { tag: 'h2', children: [t('Without key', { ja: 'key なし' })] },
+                { tag: 'div', children: s.items.map((item) => row(item)) },
+              ],
+            }),
+            U.uiPanel({
+              children: [
+                // With key: rows are matched by key. The element that showed this item before is
+                // moved to the item's new position, so the note stays with its item.
+                // key あり: 行は key で対応づけられます。この項目を表示していた要素が、項目の新しい位置へ
+                // 移されるので、メモは項目と一緒に動きます。
+                { tag: 'h2', children: [t('With key: item.id', { ja: 'key あり: item.id' })] },
+                // The checkbox below the lists gives the first two rows the same key, which is a mistake:
+                // a key must be unique among the rows of one list.
+                // 下のチェックボックスを入れると、先頭の 2 行が同じ key になります。これは間違いです。
+                // key は、1 つのリストの行の中で重複してはいけません。
+                { tag: 'div', children: s.items.map((item, i) => row(item, s.sameKey && i < 2 ? 'same' : item.id)) },
+              ],
+            }),
+          ],
+        },
+        U.uiCheckbox({
+          checked: s.sameKey,
+          children: [t('Mistake: give the first two rows of the "With key" list the same key', { ja: '間違いの例: 「key あり」のリストの先頭 2 行に同じ key を付ける' })],
+          onchange: (e) => { s.sameKey = e.target.checked; },
+        }),
+        U.uiSeparator(),
+
+        { tag: 'h2', children: [t('2. Changing one item', { ja: '2. 項目 1 つを変える' })] },
+        U.uiText({
+          children: [t('ricdom notices an assignment to the state itself (s.items = …) and one level below it (s.items[0] = …). It does not notice a change two levels down (s.items[0].done = …).', { ja: 'ricdom が気づくのは、状態そのものへの代入 (s.items = …) と、その 1 つ下への代入 (s.items[0] = …) です。2 つ下の変更 (s.items[0].done = …) には気づきません。' })],
+        }),
+        U.uiRow({
+          class: 'wrap',
+          children: [
+            // The right way: build a new array in which the changed item is a new object.
+            // 正しい書き方: 変える項目だけ新しいオブジェクトにした、新しい配列を作って代入します。
+            U.uiButton({
+              variant: 'primary',
+              children: [t('Toggle the first item (new array)', { ja: '先頭の項目を切り替える (新しい配列)' })],
+              onclick: () => {
+                s.items = s.items.map((item, i) => (i === 0 ? { ...item, done: !item.done } : item));
+              },
+            }),
+            // The mistake: the data changes, but nothing is redrawn until something else causes a
+            // render. The development build reports it in the log below.
+            // 間違いの例: データは変わりますが、ほかの何かが描き直しを起こすまで画面は変わりません。
+            // 開発用ビルドは、これを下のログに報告します。
+            U.uiButton({
+              children: [t('Mistake: s.items[0].done = …', { ja: '間違いの例: s.items[0].done = …' })],
+              onclick: () => {
+                s.items[0].done = !s.items[0].done;
+              },
+            }),
+          ],
+        }),
+        // What the data says right now, to compare with the lists above.
+        // いまのデータの中身です。上のリストと見比べられます。
+        U.uiCodePre({ lang: 'json', children: [JSON.stringify(s.items)] }),
+        U.uiSeparator(),
+      ],
+    }),
+  );
+
+  // Site helper: t() returns a plain string, so draw again once when the language changes.
+  // サイトの補助: t() の戻り値はただの文字列なので、言語が変わったら 1 回描き直します。
+  onLangChange(() => {
+    app.renderNow();
+    logApp.renderNow();
+  });
+</script>
+</body>
+</html>

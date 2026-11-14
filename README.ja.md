@@ -96,9 +96,10 @@ CI パイプラインで一から作り直したもの。v1 とのソース互�
 
 ## 詳しく知る
 
-- [docs/TUTORIAL.md](docs/TUTORIAL.md) — 10 章構成、コード先行のチュートリアル (英語)
+- [docs/TUTORIAL.ja.md](docs/TUTORIAL.ja.md) — 入門: 最初のボタンからデータバインディングまで (英語版は [TUTORIAL.md](docs/TUTORIAL.md))
+- [docs/GUIDE.md](docs/GUIDE.md) — 実践ガイド: 部品・テーマと CSS・Electron・v1 からの移行 (英語)
 - [docs/SPEC.md](docs/SPEC.md) — 契約全体: 差分パッチの規則・リアクティビティ・各部品の
   props と ARIA 契約 (英語)
-- [examples/](examples/index.html) — ビルド不要のデモ 7 本
+- [examples/](examples/index.html) — 番号つきのサンプル (ビルド不要)
 - [CHANGELOG.md](CHANGELOG.md) — リリース履歴
 - [CONTRIBUTING.md](CONTRIBUTING.md) — ricdom 自体の開発 (英語)

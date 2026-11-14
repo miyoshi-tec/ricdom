@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ricdom — 13 Popup, dropdown, tooltip, collapse box (no build step)</title>
+<!-- ricdom-ui.css styles ricdom's UI components (load it before your own CSS). _fonts.css only sets this site's fonts.
+     ricdom-ui.css は ricdom の UI 部品の見た目です (自分の CSS より先に読み込みます)。_fonts.css はこのサイトのフォント設定だけです。 -->
+<link rel="stylesheet" href="../dist/ricdom-ui.css">
+<link rel="stylesheet" href="_fonts.css">
+<style>
+  .page { box-sizing: border-box; width: calc(100% - 2rem); max-width: 720px; margin: 1.5rem auto; }
+  .page > h1 { font-size: 1.1rem; margin: 0; }
+  .demo { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+  .demo > h2 { font-size: 0.95rem; margin: 0; }
+  .demo > p { margin: 0; }
+  .demo > .wide { align-self: stretch; }
+  .wrap { flex-wrap: wrap; }
+  .file-list { box-sizing: border-box; max-height: 170px; overflow-y: auto; border: 1px solid var(--ric-color-border); border-radius: var(--ric-radius); }
+  .file-row { display: flex; justify-content: space-between; align-items: center; padding: 2px 4px 2px 10px; }
+  .file-row + .file-row { border-top: 1px solid var(--ric-color-border); }
+  .stage { display: flex; justify-content: center; padding: 44px 0; }
+</style>
+</head>
+<body>
+<!--
+  13 Popup, dropdown, tooltip, collapse box: small surfaces that open next to the thing you clicked.
+  createPopup is a menu, createDropdown a panel for any content, createTooltip a hint shown on
+  hover. All three are drawn in the browser's top layer, above the rest of the page; menus and
+  panels are placed so that they stay inside the window. createCollapseBox opens and closes
+  content in place.
+  No build step: two scripts (ricdom, then ricdom/ui) and one stylesheet.
+
+  13 ポップアップ・ドロップダウン・ツールチップ・折りたたみ: クリックした場所のそばに開く、小さな面の部品です。
+  createPopup はメニュー、createDropdown は好きな内容を入れられるパネル、createTooltip はホバーで出るヒントです。
+  3 つともブラウザの最前面の層 (top layer) に、ページのほかの部分より手前に描かれます。メニューとパネルは、ウィンドウの中に収まる位置に置かれます。
+  createCollapseBox は、その場で内容を開閉します。
+  ビルド不要: <script> 2 本 (ricdom → ricdom/ui) と CSS 1 本で動きます。
+-->
+<div id="app"></div>
+
+<!-- Optional: highlight.js colours the code in this site's Source view. ricdom does not need it.
+     任意: highlight.js はこのサイトの「ソース」表示を色分けします。ricdom 自体には不要です。 -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
+<!-- ricdom itself: the core first, then the UI components. They define the globals ricdom and ricdomUI.
+     ricdom 本体: コア → UI 部品の順に読み込みます。グローバル変数 ricdom と ricdomUI ができます。 -->
+<script src="../dist/ricdom.iife.min.js"></script>
+<script src="../dist/ricdom-ui.iife.min.js"></script>
+<!-- Docs-site helpers, not part of ricdom: the nav bar (theme, language, previous / next page) and t() for translations.
+     このサイト専用の補助で、ricdom の一部ではありません: ナビバー (テーマ・言語・前後のページ) と翻訳用の t() です。 -->
+<script src="_i18n.js"></script><script src="_samples.js"></script><script src="_nav.js"></script>
+<script>
+  // A short name for the UI components.
+  // UI 部品を短い名前で呼べるようにします。
+  const U = ricdomUI;
+
+  // Site helper: t(text, { ja: '...' }) returns the text in the chosen language, with the Japanese
+  // written where the string is used. addDict holds the strings used in several places, and the
+  // t`...${value}...` form, which puts values into the text and is always looked up in the dictionary.
+  // サイトの補助: t(文字列, { ja: '…' }) は選択中の言語の文字列を返します。日本語は使う場所に書きます。
+  // addDict には、何度も使う文字列と、値を差し込む t`…${値}…` の形 (常に辞書から訳を引きます) を登録します。
+  const { t, addDict, onLangChange } = ricdomI18n;
+  addDict('ja', {
+    'Rename': '名前を変更',
+    'Duplicate': '複製',
+    'Delete': '削除',
+    'Last action: {0}': '最後の操作: {0}',
+    'Grid: {0}, zoom: {1}%': 'グリッド: {0}、拡大率: {1}%',
+    'Page {0}': '{0} ページ',
+    'Actions for {0}': '{0} の操作',
+  });
+
+  // Icon data (SVG paths) comes from `npx ricdom-icon <name>` (here: more-horizontal, check, eye,
+  // pencil, trash-2). Copy it; do not write it by hand.
+  // アイコンのデータ (SVG のパス) は `npx ricdom-icon <名前>` で取得します (ここでは more-horizontal・check・eye・
+  // pencil・trash-2)。手書きはしません。
+  const ICON_MORE = { p: 'M5 12h.01M12 12h.01M19 12h.01' };
+  const ICON_CHECK = { p: 'M20 6 9 17l-5-5' };
+  const ICON_EYE = { p: ['M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z', 'M12 15a3 3 0 1 0 0-6 3 3 0 1 0 0 6z'] };
+  const ICON_PENCIL = { p: 'M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z' };
+  const ICON_TRASH = { p: 'M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6' };
+
+  // App state, in the order of the demos below.
+  // アプリの状態です。下の実演の順に並んでいます。
+  const state = {
+    lastAction: '-',
+    showGrid: true,
+    zoom: 100,
+    page: 1,
+    menuRow: '',
+    rowAction: '-',
+    sort: 'name',
+    showSize: true,
+    showDate: false,
+    tipDir: 'auto',
+    detailsOpen: false,
+  };
+
+  // Components that keep state are registered with app.use(). They are assigned in `setup` at the
+  // bottom, which runs once before the first render, so render needs no "is it ready yet" check.
+  // 状態を持つ部品は app.use() で登録します。登録は下の `setup` で行います。
+  // setup は最初の描画の前に 1 回だけ実行されるので、render 側で「準備できたか」を確かめる必要はありません。
+  let menu, viewMenu, pageMenu, rowMenu, sortDD, columnsDD, tip, box;
+
+  // One demo on this page: a heading, a sentence that says what to try, then the live components.
+  // このページの実演 1 つ分です: 見出し、試すことを書いた 1 文、その下に実際に動く部品を並べます。
+  const demo = (title, text, ...children) => ({
+    tag: 'section',
+    class: 'demo',
+    children: [{ tag: 'h2', children: [title] }, { tag: 'p', children: [text] }, ...children],
+  });
+
+  // Demo 1. createPopup is a menu button: `trigger` is the button, `children` are the items. Every
+  // child becomes a menu item unless it carries another role, like the separator line here.
+  // Choosing an item runs its onclick, closes the menu and puts the focus back on the button.
+  // `trigger` is either the button's content (the first menu) or an object that describes the button
+  // (the second: icon, label, ghost). closeOnSelect: false keeps a menu open after a choice.
+  // 実演 1。createPopup はメニューボタンです。`trigger` がボタン、`children` がメニューの項目です。
+  // 子はどれもメニュー項目になります。ただし、ここの区切り線のように、ほかの role を付けたものは項目になりません。
+  // 項目を選ぶと、その onclick が実行され、メニューが閉じて、フォーカスがボタンに戻ります。
+  // `trigger` には、ボタンの中身 (1 つ目のメニュー) か、ボタンの見た目を表すオブジェクト (2 つ目: icon・label・ghost) を渡します。
+  // closeOnSelect: false にすると、項目を選んでもメニューは開いたままになります。
+  const menuDemo = (s) => {
+    const act = (name) => () => { s.lastAction = name; };
+    return demo(
+      t('createPopup: a menu button', { ja: 'createPopup: メニューボタン' }),
+      t(
+        'Open a menu, then press ↓ or ↑ to move through the items and Enter to choose one. Escape closes it and puts the focus back on the button; a click anywhere else closes it too. Only one menu is open at a time. The View menu stays open while you click its items.',
+        { ja: 'メニューを開き、↓ ↑ で項目を移動して、Enter で選んでください。Escape で閉じると、フォーカスがボタンに戻ります。メニューの外をクリックしても閉じます。同時に開くメニューは 1 つだけです。「表示」メニューは、項目をクリックしても開いたままです。' },
+      ),
+      U.uiRow({
+        class: 'wrap',
+        children: [
+          menu({
+            trigger: [t('Actions ▾', { ja: '操作 ▾' })],
+            children: [
+              U.uiButton({ children: [U.uiIcon(ICON_PENCIL, { size: 16 }), t('Rename')], onclick: act(t('Rename')) }),
+              U.uiButton({ children: [t('Duplicate')], onclick: act(t('Duplicate')) }),
+              { tag: 'div', role: 'separator', class: 'ric-popup__sep' },
+              U.uiButton({ children: [U.uiIcon(ICON_TRASH, { size: 16 }), t('Delete')], onclick: act(t('Delete')) }),
+            ],
+          }),
+          viewMenu({
+            trigger: { icon: U.uiIcon(ICON_EYE, { size: 16 }), label: t('View', { ja: '表示' }), ghost: true },
+            closeOnSelect: false,
+            children: [
+              U.uiButton({
+                // A checkbox-style item: say so with the role, and report its state with aria-checked.
+                // チェック式の項目です。role でそのことを示し、aria-checked で今の状態を伝えます。
+                role: 'menuitemcheckbox',
+                'aria-checked': String(s.showGrid),
+                children: [U.uiIcon(ICON_CHECK, { size: 16, style: { visibility: s.showGrid ? 'visible' : 'hidden' } }), t('Show grid', { ja: 'グリッドを表示' })],
+                onclick: () => { s.showGrid = !s.showGrid; },
+              }),
+              U.uiButton({ children: [t('Zoom in', { ja: '拡大' })], onclick: () => { s.zoom += 10; } }),
+              U.uiButton({ children: [t('Zoom out', { ja: '縮小' })], onclick: () => { s.zoom -= 10; } }),
+            ],
+          }),
+        ],
+      }),
+      U.uiText({ variant: 'muted', children: [t`Last action: ${s.lastAction}`] }),
+      U.uiText({ variant: 'muted', children: [t`Grid: ${s.showGrid ? t('on', { ja: 'オン' }) : t('off', { ja: 'オフ' })}, zoom: ${s.zoom}%`] }),
+    );
+  };
+
+  // Demo 2. A menu opens below its button if it fits there, and otherwise on the side (below or
+  // above) that has more room. When it fits on neither side, it gets a maximum height that keeps it
+  // inside the window and scrolls inside.
+  // 実演 2。メニューは、入るならボタンの下に開き、入らなければ上下のうち広いほうに開きます。
+  // 上下どちらにも入りきらないときは、ウィンドウの中に収まる高さに制限され、メニューの中がスクロールします。
+  const longMenuDemo = (s) =>
+    demo(
+      t('createPopup: more items than fit', { ja: 'createPopup: 入りきらない数の項目' }),
+      t(
+        'This menu has 40 items. It never runs off the window: it gets shorter and scrolls inside.',
+        { ja: 'このメニューには 40 個の項目があります。ウィンドウからはみ出さず、高さが縮んで、中がスクロールします。' },
+      ),
+      pageMenu({
+        trigger: [t`Page ${s.page}`, ' ▾'],
+        children: Array.from({ length: 40 }, (_, i) => U.uiButton({ key: i, children: [t`Page ${i + 1}`], onclick: () => { s.page = i + 1; } })),
+      }),
+    );
+
+  // Demo 3. A "⋯" menu on every row, with one createPopup for all rows. Called without `trigger`, it
+  // draws no button of its own; each row's button opens it with rowMenu.openAt(button), and a
+  // right-click opens the same menu at the pointer with rowMenu.openAt(event). Which row it acts
+  // on lives in state.menuRow. The items have keys: one menu serves every row, and keys keep each
+  // action on its own element when the items differ from row to row.
+  // 実演 3。行ごとの「⋯」メニューを、全行で 1 つの createPopup でまかないます。trigger を渡さないので自分のボタンは描かず、
+  // 各行のボタンから rowMenu.openAt(ボタン) で開きます。右クリックでは、rowMenu.openAt(イベント) で同じメニューを
+  // ポインターの位置に開きます。どの行に対するメニューかは state.menuRow で持ちます。
+  // 項目には key を付けます。1 つのメニューを全行で使うので、行ごとに項目が変わるときも、操作ごとに別の要素が保たれます。
+  const FILES = ['notes.txt', 'photo.png', 'budget.xlsx', 'draft.md', 'logo.svg', 'data.csv', 'slides.pptx', 'todo.txt'];
+  const rowMenuDemo = (s) => {
+    const act = (name) => () => { s.rowAction = `${name}: ${s.menuRow}`; };
+    return demo(
+      t('createPopup + openAt: a "⋯" menu on every row', { ja: 'createPopup + openAt: 行ごとの「⋯」メニュー' }),
+      t(
+        'Click "⋯" on a row, or right-click a row. Near the bottom of the window the menu opens upward. Scroll the list while the menu from a "⋯" button is open: it closes, so it can never point at the wrong row.',
+        { ja: '行の「⋯」をクリックするか、行を右クリックしてください。ウィンドウの下端に近い行では、メニューは上に開きます。「⋯」から開いたメニューは、開いたまま一覧をスクロールすると閉じます。別の行を指したまま残ることはありません。' },
+      ),
+      rowMenu({
+        children: [
+          U.uiButton({ key: 'rename', children: [t('Rename')], onclick: act(t('Rename')) }),
+          U.uiButton({ key: 'duplicate', children: [t('Duplicate')], onclick: act(t('Duplicate')) }),
+          U.uiButton({ key: 'delete', children: [t('Delete')], onclick: act(t('Delete')) }),
+        ],
+      }),
+      {
+        tag: 'div',
+        class: 'file-list wide',
+        children: FILES.map((file) => ({
+          tag: 'div',
+          class: 'file-row',
+          oncontextmenu: (e) => {
+            e.preventDefault();
+            s.menuRow = file;
+            rowMenu.openAt(e);
+          },
+          children: [
+            file,
+            U.uiButton({
+              variant: 'ghost',
+              size: 'sm',
+              // The row buttons are your own elements, so give them the menu-button attributes yourself.
+              // 行のボタンは自分の要素なので、メニューボタンであることを示す属性は自分で付けます。
+              'aria-haspopup': 'menu',
+              'aria-label': t`Actions for ${file}`,
+              children: [U.uiIcon(ICON_MORE, { size: 16 })],
+              onclick: (e) => {
+                s.menuRow = file;
+                rowMenu.openAt(e.currentTarget);
+              },
+            }),
+          ],
+        })),
+      },
+      U.uiText({ variant: 'muted', children: [t`Last action: ${s.rowAction}`] }),
+    );
+  };
+
+  // Demo 4. createDropdown is a button that opens a panel. Unlike a popup it is not a menu: the
+  // panel holds whatever you put in it, and a click inside does not close it. Escape, a click
+  // outside, or close() from your code does. The button shows a text `label` (with `chevron`), or
+  // an `icon`. An icon-only button needs a name for screen readers: uiIcon's `label` gives it one.
+  // 実演 4。createDropdown は、パネルを開くボタンです。ポップアップと違ってメニューではありません。
+  // パネルには好きな内容を入れられ、中をクリックしても閉じません。閉じるのは、Escape、外側のクリック、コードからの close() です。
+  // ボタンには、文字の `label` (`chevron` 付き) か `icon` を表示します。アイコンだけのボタンには読み上げ用の名前が必要なので、
+  // uiIcon の `label` で付けています。
+  const dropdownDemo = (s) =>
+    demo(
+      'createDropdown',
+      t(
+        'The first dropdown closes when you pick a sort order, because its buttons call close(). The second one holds checkboxes and stays open while you tick them.',
+        { ja: '1 つ目のドロップダウンは、並び順を選ぶと閉じます。中のボタンが close() を呼んでいるからです。2 つ目はチェックボックスを入れてあり、チェックを付け外ししている間は開いたままです。' },
+      ),
+      U.uiRow({
+        class: 'wrap',
+        children: [
+          sortDD({
+            label: t('Sort: ', { ja: '並び順: ' }) + s.sort,
+            chevron: true,
+            children: [
+              U.uiCol({
+                gap: 4,
+                children: ['name', 'date', 'size'].map((v) =>
+                  U.uiButton({ variant: v === s.sort ? 'primary' : 'ghost', children: [v], onclick: () => { s.sort = v; sortDD.close(); } }),
+                ),
+              }),
+            ],
+          }),
+          columnsDD({
+            icon: U.uiIcon(ICON_EYE, { size: 16, label: t('Visible columns', { ja: '表示する列' }) }),
+            ghost: true,
+            children: [
+              U.uiCol({
+                gap: 4,
+                children: [
+                  U.bindCheckbox(s, 'showSize', { children: [t('Size', { ja: 'サイズ' })] }),
+                  U.bindCheckbox(s, 'showDate', { children: [t('Date', { ja: '日付' })] }),
+                ],
+              }),
+            ],
+          }),
+        ],
+      }),
+    );
+
+  // Demo 5. createTooltip wraps the element it describes and shows `content` while the pointer is
+  // over it. `dir` is where the tooltip goes; 'auto' (the default) picks a side with enough room.
+  // A tooltip keeps its own state, so register one per element.
+  // 実演 5。createTooltip は説明したい要素を包み、ポインターが乗っている間、`content` を表示します。
+  // `dir` はツールチップを出す向きです。'auto' (既定) は、余地のある側を選びます。
+  // ツールチップは自分の状態を持つので、要素 1 つにつき 1 つ登録します。
+  const tooltipDemo = (s) =>
+    demo(
+      'createTooltip',
+      t(
+        'Choose a direction, then move the pointer over the button.',
+        { ja: '向きを選んでから、ボタンにポインターを乗せてください。' },
+      ),
+      U.uiRow({
+        children: [
+          U.uiText({ variant: 'label', for: 'tip-dir', children: ['dir'] }),
+          U.bindSelect(s, 'tipDir', { id: 'tip-dir', style: { width: '120px' }, options: ['auto', 'top', 'bottom', 'left', 'right'] }),
+        ],
+      }),
+      {
+        tag: 'div',
+        class: 'stage wide',
+        children: [
+          tip({
+            dir: s.tipDir,
+            content: t('Saves the file', { ja: 'ファイルを保存します' }),
+            children: [U.uiButton({ children: [t('Save', { ja: '保存' })] })],
+          }),
+        ],
+      },
+    );
+
+  // Demo 6. createCollapseBox animates showing and hiding its content. It has no button of its own:
+  // you tell it `visible`. box.idFor() gives the id to put in aria-controls on your own toggle button.
+  // 実演 6。createCollapseBox は中身の表示・非表示をアニメーションで切り替えます。自分のボタンは持たず、
+  // 表示するかどうかを `visible` で渡します。box.idFor() は、自分で作った開閉ボタンの aria-controls に入れる id を返します。
+  const collapseBoxDemo = (s) =>
+    demo(
+      'createCollapseBox',
+      t('The button is an ordinary button that flips a boolean in the state; the box follows it.', { ja: 'ボタンは、state の真偽値を反転させるだけの普通のボタンです。箱はその値に従います。' }),
+      U.uiButton({
+        'aria-expanded': String(s.detailsOpen),
+        'aria-controls': box.idFor(),
+        children: [s.detailsOpen ? t('Hide details', { ja: '詳細を隠す' }) : t('Show details', { ja: '詳細を表示' })],
+        onclick: () => { s.detailsOpen = !s.detailsOpen; },
+      }),
+      box({
+        visible: s.detailsOpen,
+        children: [U.uiPanel({ children: [t('The details go here. Opening and closing is animated.', { ja: 'ここに詳細な説明文が入ります。開閉はアニメーションします。' })] })],
+      }),
+    );
+
+  const app = ricdom.createApp(
+    '#app',
+    state,
+    (s) =>
+      U.uiPanel({
+        class: 'page',
+        children: [
+          { tag: 'h1', children: [t('ricdom — popup, dropdown, tooltip, collapse box', { ja: 'ricdom — ポップアップ・ドロップダウン・ツールチップ・折りたたみ' })] },
+          menuDemo(s),
+          U.uiSeparator(),
+          longMenuDemo(s),
+          U.uiSeparator(),
+          rowMenuDemo(s),
+          U.uiSeparator(),
+          dropdownDemo(s),
+          U.uiSeparator(),
+          tooltipDemo(s),
+          U.uiSeparator(),
+          collapseBoxDemo(s),
+        ],
+      }),
+    {
+      setup: (a) => {
+        menu = a.use(U.createPopup());
+        viewMenu = a.use(U.createPopup());
+        pageMenu = a.use(U.createPopup());
+        rowMenu = a.use(U.createPopup());
+        sortDD = a.use(U.createDropdown());
+        columnsDD = a.use(U.createDropdown());
+        tip = a.use(U.createTooltip());
+        box = a.use(U.createCollapseBox());
+      },
+    },
+  );
+
+  // Site helper: t() returns a plain string, so draw again once when the language changes.
+  // サイトの補助: t() の戻り値はただの文字列なので、言語が変わったら 1 回描き直します。
+  onLangChange(() => app.renderNow());
+</script>
+</body>
+</html>

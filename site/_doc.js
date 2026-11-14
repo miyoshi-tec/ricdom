@@ -112,6 +112,7 @@
     var file = path.split('/').pop();
     if (file === 'SPEC.md') return 'spec.html' + hash;
     if (file === 'TUTORIAL.md' || file === 'TUTORIAL.ja.md') return 'tutorial.html' + hash;
+    if (file === 'GUIDE.md') return 'guide.html' + hash;
     if (file === 'CHANGELOG.md') return 'CHANGELOG.md';
     if (path.indexOf('../') === 0) return GITHUB + path.replace(/^(\.\.\/)+/, '') + hash;
     if (/\.md$/.test(path)) return 'docs/' + path + hash;

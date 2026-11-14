@@ -2,30 +2,36 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>ricdom — 05 Dialog, popup, toast, tooltip (no build step)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ricdom — 05 Dialog and toast (no build step)</title>
 <!-- ricdom-ui.css styles ricdom's UI components (load it before your own CSS). _fonts.css only sets this site's fonts.
      ricdom-ui.css は ricdom の UI 部品の見た目です (自分の CSS より先に読み込みます)。_fonts.css はこのサイトのフォント設定だけです。 -->
 <link rel="stylesheet" href="../dist/ricdom-ui.css">
 <link rel="stylesheet" href="_fonts.css">
 <style>
-  main { padding: 2rem; max-width: 640px; }
-  h1 { font-size: 1.1rem; }
-  .row { display: flex; gap: 0.5rem; align-items: center; margin: 0.75rem 0; }
+  .page { box-sizing: border-box; width: calc(100% - 2rem); max-width: 720px; margin: 1.5rem auto; }
+  .page > h1 { font-size: 1.1rem; margin: 0; }
+  .demo { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+  .demo > h2 { font-size: 0.95rem; margin: 0; }
+  .demo > p { margin: 0; }
+  .wrap { flex-wrap: wrap; }
 </style>
 </head>
 <body>
 <!--
-  05 Dialog, popup, toast, tooltip: the components that float above the page.
-  They are drawn in the browser's top layer, so they stay on screen wherever the app is mounted.
+  05 Dialog and toast: a modal dialog that handles the keyboard for you, and short notifications.
+  createDialog keeps the focus inside while it is open and gives it back when it closes.
+  createToast shows messages in a corner without taking the focus. createFocusWhen moves the focus
+  to one element at the moment a condition becomes true.
   No build step: two scripts (ricdom, then ricdom/ui) and one stylesheet.
 
-  05 ダイアログ・ポップアップ・トースト・ツールチップ: ページの上に浮かぶ部品です。
-  ブラウザの最前面の層 (top layer) に描かれるので、アプリをどこに置いても画面からはみ出しません。
+  05 ダイアログとトースト: キーボード操作まで面倒を見るモーダルダイアログと、短い通知です。
+  createDialog は、開いている間フォーカスを中に閉じ込め、閉じると元の場所へ返します。
+  createToast は、フォーカスを奪わずに画面の隅へメッセージを出します。createFocusWhen は、
+  条件が真になった瞬間に、指定した要素へフォーカスを移します。
   ビルド不要: <script> 2 本 (ricdom → ricdom/ui) と CSS 1 本で動きます。
 -->
-<main>
-  <div id="app"></div>
-</main>
+<div id="app"></div>
 
 <!-- Optional: highlight.js colours the code in this site's Source view. ricdom does not need it.
      任意: highlight.js はこのサイトの「ソース」表示を色分けします。ricdom 自体には不要です。 -->
@@ -43,90 +49,293 @@
   const U = ricdomUI;
 
   // Site helper: t(text, { ja: '...' }) returns the text in the chosen language, with the Japanese
-  // written where the string is used. The one entry in addDict is for the t`...${value}...` form,
-  // which puts a value into the text and is always looked up in the dictionary.
+  // written where the string is used. addDict holds the strings used in several places, and the
+  // t`...${value}...` form, which puts a value into the text and is always looked up in the dictionary.
   // サイトの補助: t(文字列, { ja: '…' }) は選択中の言語の文字列を返します。日本語は使う場所に書きます。
-  // addDict の 1 件は、値を差し込む t`…${値}…` の形のためのもので、この形は常に辞書から訳を引きます。
+  // addDict には、何度も使う文字列と、値を差し込む t`…${値}…` の形 (常に辞書から訳を引きます) を登録します。
   const { t, addDict, onLangChange } = ricdomI18n;
   addDict('ja', {
-    '{0} clicks': '{0} 回クリック',
+    'Cancel': 'キャンセル',
+    'Keyboard focus is on: {0}': 'キーボードのフォーカスの位置: {0}',
+    'Last reason passed to onClose: {0}': '最後に onClose へ渡された理由: {0}',
+    'Message {0}': 'メッセージ {0}',
   });
+
+  // App state. name / email / focusOn belong to demo 2, discardOpen / closeReason to demo 3,
+  // and the rest to the createFocusWhen demo at the bottom.
+  // アプリの状態です。name / email / focusOn は実演 2、discardOpen / closeReason は実演 3、
+  // 残りはいちばん下の createFocusWhen の実演で使います。
+  const state = {
+    name: '',
+    email: '',
+    focusOn: '-',
+    discardOpen: false,
+    closeReason: '-',
+    fileName: 'notes.txt',
+    editing: false,
+    reportOpen: false,
+    subject: '',
+    details: '',
+  };
 
   // These components keep their own state (open or closed, the queue of toasts), so each one is
   // registered once with app.use(). They are assigned in `setup` at the bottom, which runs once
   // right before the first render, so render can call them from its very first run.
   // これらの部品は自分の状態 (開いているか、トーストの待ち行列) を持つので、app.use() で 1 回だけ登録します。
   // 登録は下の `setup` で行います。setup は最初の描画の直前に 1 回だけ実行されるので、render は初回から呼び出せます。
-  let dlg, menu, toast, tip;
+  let confirmDlg, formDlg, discardDlg, reportDlg, toast, focusWhen;
+
+  // One demo on this page: a heading, a sentence that says what to try, then the live components.
+  // このページの実演 1 つ分です: 見出し、試すことを書いた 1 文、その下に実際に動く部品を並べます。
+  const demo = (title, text, ...children) => ({
+    tag: 'section',
+    class: 'demo',
+    children: [{ tag: 'h2', children: [title] }, { tag: 'p', children: [text] }, ...children],
+  });
+
+  // Demo 1. With triggerChildren the dialog draws its own "open" button. `actions` are the buttons
+  // in the footer; dlg.close() closes the dialog from code. Opening puts the focus on the first
+  // control in the body, or (as here, where the body is only text) on the first footer button.
+  // 実演 1。triggerChildren を渡すと、ダイアログが自分の「開く」ボタンを描きます。`actions` はフッターのボタンで、
+  // dlg.close() でコードから閉じます。開くと、本文の最初の操作部品にフォーカスが移ります。
+  // ここのように本文が文字だけのときは、フッターの最初のボタンに移ります。
+  const quickDemo = () =>
+    demo(
+      'createDialog',
+      t(
+        'Open it, then close it in four ways: the ✕ button, the Escape key, a click on the backdrop (the dimmed area around it), or a button of your own that calls dlg.close().',
+        { ja: '開いてから、4 通りの方法で閉じてみてください: ✕ ボタン、Escape キー、幕 (まわりの暗くなった部分) のクリック、dlg.close() を呼ぶ自分のボタン。' },
+      ),
+      confirmDlg({
+        triggerChildren: [t('Delete 3 files…', { ja: '3 個のファイルを削除…' })],
+        title: t('Delete files', { ja: 'ファイルの削除' }),
+        children: [t('3 files will be moved to the trash.', { ja: '3 個のファイルをごみ箱へ移動します。' })],
+        actions: [
+          U.uiButton({ children: [t('Cancel')], onclick: () => confirmDlg.close() }),
+          U.uiButton({
+            variant: 'primary',
+            children: [t('Delete', { ja: '削除' })],
+            onclick: () => {
+              confirmDlg.close();
+              toast.show(t('Moved 3 files to the trash', { ja: '3 個のファイルをごみ箱へ移動しました' }), { type: 'success' });
+            },
+          }),
+        ],
+      }),
+    );
+
+  // Demo 2. Without triggerChildren the dialog draws no button: your own button calls dlg.open().
+  // While the dialog is open, Tab and Shift+Tab go round inside it (✕, the fields, the footer
+  // buttons) and the rest of the page cannot be reached. When it closes, focus goes back to the
+  // element that had it when the dialog opened; `returnFocus` names that element explicitly.
+  // 実演 2。triggerChildren を渡さなければ、ダイアログはボタンを描きません。自分のボタンから dlg.open() を呼びます。
+  // 開いている間、Tab と Shift+Tab はダイアログの中 (✕・入力欄・フッターのボタン) を巡回し、ページの残りの部分には届きません。
+  // 閉じると、開いたときにフォーカスのあった要素へ戻ります。`returnFocus` を渡すと、戻り先の要素を明示できます。
+  const focusLine = (s) => U.uiText({ variant: 'muted', children: [t`Keyboard focus is on: ${s.focusOn}`] });
+  const keyboardDemo = (s) =>
+    demo(
+      t('Keyboard: the focus stays inside', { ja: 'キーボード: フォーカスは中に閉じ込められる' }),
+      t(
+        'Open it and keep pressing Tab: the focus goes round inside the dialog and never reaches the page behind it. Close it, and the focus is back on the button that opened it.',
+        { ja: '開いて Tab キーを押し続けてください。フォーカスはダイアログの中を巡回し、後ろのページには出ません。閉じると、開いたボタンにフォーカスが戻ります。' },
+      ),
+      U.uiButton({
+        // This button is your own element, so the attribute that says "this opens a dialog" is yours to add.
+        // このボタンは自分の要素なので、「ダイアログを開く」ことを示す属性は自分で付けます。
+        'aria-haspopup': 'dialog',
+        children: [t('Edit profile…', { ja: 'プロフィールを編集…' })],
+        onclick: (e) => formDlg.open({ returnFocus: e.currentTarget }),
+      }),
+      focusLine(s),
+      formDlg({
+        title: t('Edit profile', { ja: 'プロフィールの編集' }),
+        children: [
+          U.uiCol({
+            children: [
+              U.bindInput(s, 'name', { 'aria-label': t('Name', { ja: '名前' }), placeholder: t('Name', { ja: '名前' }) }),
+              U.bindInput(s, 'email', { 'aria-label': t('Email', { ja: 'メールアドレス' }), placeholder: t('Email', { ja: 'メールアドレス' }), type: 'email' }),
+              focusLine(s),
+            ],
+          }),
+        ],
+        actions: [
+          U.uiButton({ children: [t('Cancel')], onclick: () => formDlg.close() }),
+          U.uiButton({ variant: 'primary', children: [t('Save', { ja: '保存' })], onclick: () => formDlg.close() }),
+        ],
+      }),
+    );
+
+  // Demo 3. Passing `open` puts your state in charge: the dialog is open exactly while s.discardOpen
+  // is true. The user's ways of closing call onClose(reason) with 'close-button', 'escape' or
+  // 'overlay' (the backdrop), and dlg.close() gives 'api'; you close it by writing the state.
+  // `autofocus: true` on a control makes it the one that gets the focus when the dialog opens.
+  // 実演 3。`open` を渡すと、開閉を自分の state で決められます。s.discardOpen が true の間だけ開きます。
+  // 利用者が閉じようとすると onClose(reason) が呼ばれます。理由は 'close-button'・'escape'・'overlay' (幕) で、
+  // dlg.close() なら 'api' です。実際に閉じるのは、state への代入です。
+  // 操作部品に `autofocus: true` を付けると、開いたときにその部品へフォーカスが移ります。
+  const reasonDemo = (s) =>
+    demo(
+      t('Your state decides, onClose says why', { ja: '開閉は自分の state で、閉じた理由は onClose で' }),
+      t(
+        'Close this one in different ways and watch the reason below. It opens with the focus on "Keep editing", the safe choice.',
+        { ja: 'いろいろな方法で閉じて、下の理由を見比べてください。開くと、安全な選択肢の「編集を続ける」にフォーカスが移ります。' },
+      ),
+      U.uiButton({ 'aria-haspopup': 'dialog', children: [t('Close the editor…', { ja: 'エディタを閉じる…' })], onclick: () => { s.discardOpen = true; } }),
+      U.uiText({ variant: 'muted', children: [t`Last reason passed to onClose: ${s.closeReason}`] }),
+      discardDlg({
+        open: s.discardOpen,
+        onClose: (reason) => {
+          s.closeReason = reason;
+          s.discardOpen = false;
+        },
+        title: t('Discard changes?', { ja: '変更を破棄しますか？' }),
+        children: [t('Your edits have not been saved.', { ja: '編集した内容は、まだ保存されていません。' })],
+        actions: [
+          U.uiButton({
+            children: [t('Discard', { ja: '破棄' })],
+            onclick: () => {
+              s.discardOpen = false;
+              toast.show(t('Changes discarded', { ja: '変更を破棄しました' }), { type: 'warning' });
+            },
+          }),
+          U.uiButton({ variant: 'primary', autofocus: true, children: [t('Keep editing', { ja: '編集を続ける' })], onclick: () => discardDlg.close() }),
+        ],
+      }),
+    );
+
+  // Demo 4. toast.show(message, { type, duration }) adds a notification from anywhere in your code.
+  // `duration` is in milliseconds (3000 when left out); 0 keeps the toast until its ✕ is pressed.
+  // A toast never takes the focus. Screen readers announce type 'error' at once and the other
+  // types when they are idle.
+  // 実演 4。toast.show(メッセージ, { type, duration }) は、コードのどこからでも通知を追加できます。
+  // `duration` はミリ秒 (省略すると 3000) で、0 にすると ✕ を押すまで消えません。
+  // トーストはフォーカスを奪いません。スクリーンリーダーは、type が 'error' のものをすぐに、それ以外を手が空いたときに読み上げます。
+  const toastDemo = () =>
+    demo(
+      'createToast',
+      t(
+        'Each button shows one kind of toast. Try the one that stays, and several at once: they stack in the corner, and the keyboard focus does not move.',
+        { ja: 'ボタンごとに 1 種類のトーストを出します。消えないものや、複数同時も試してください。隅に積み重なり、キーボードのフォーカスは動きません。' },
+      ),
+      U.uiRow({
+        class: 'wrap',
+        children: ['default', 'success', 'info', 'warning', 'error'].map((type) =>
+          U.uiButton({ children: [type], onclick: () => toast.show(t('Type: ', { ja: '種類: ' }) + type, { type }) }),
+        ),
+      }),
+      U.uiRow({
+        class: 'wrap',
+        children: [
+          U.uiButton({ children: [t('1 second', { ja: '1 秒' })], onclick: () => toast.show(t('Gone in a second', { ja: '1 秒で消えます' }), { duration: 1000 }) }),
+          U.uiButton({
+            children: [t('Stays until closed', { ja: '閉じるまで残る' })],
+            onclick: () => toast.show(t('Press ✕ to close me', { ja: '✕ を押すと閉じます' }), { type: 'info', duration: 0 }),
+          }),
+          U.uiButton({
+            children: [t('Three at once', { ja: '3 個同時' })],
+            onclick: () => [1, 2, 3].forEach((n) => toast.show(t`Message ${n}`)),
+          }),
+        ],
+      }),
+    );
+
+  // Demo 5. focusWhen(refName, condition), called in render, focuses the element that carries
+  // `ref: refName` once, at the moment the condition turns from false to true. Above: the input
+  // that appears when you rename. Below: a dialog would start on its first field, and focusWhen
+  // sends the focus to the second one instead.
+  // 実演 5。focusWhen(ref の名前, 条件) を render の中で呼ぶと、条件が false から true に変わった瞬間に 1 回だけ、
+  // `ref: 名前` を付けた要素へフォーカスを移します。上は、名前の変更で現れる入力欄です。
+  // 下のダイアログは、そのままなら最初の入力欄から始まりますが、focusWhen で 2 番目の入力欄へ移しています。
+  const focusWhenDemo = (s) =>
+    demo(
+      'createFocusWhen',
+      t(
+        'Press "Rename": the input appears with the focus already in it. "Report a problem…" opens a dialog with the focus in its second field.',
+        { ja: '「名前を変更」を押すと、入力欄がフォーカスの入った状態で現れます。「問題を報告…」は、2 番目の入力欄にフォーカスが入った状態でダイアログを開きます。' },
+      ),
+      s.editing
+        ? U.uiRow({
+            children: [
+              // Every keystroke writes s.fileName and redraws the page; the input keeps its focus and caret anyway.
+              // 1 文字ごとに s.fileName へ書き込んで再描画しますが、入力欄のフォーカスとカーソル位置は保たれます。
+              U.bindInput(s, 'fileName', { ref: 'fileName', 'aria-label': t('File name', { ja: 'ファイル名' }) }),
+              U.uiButton({ variant: 'primary', children: [t('Done', { ja: '完了' })], onclick: () => { s.editing = false; } }),
+            ],
+          })
+        : U.uiRow({
+            children: [U.uiText({ children: [s.fileName] }), U.uiButton({ children: [t('Rename', { ja: '名前を変更' })], onclick: () => { s.editing = true; } })],
+          }),
+      focusWhen('fileName', s.editing),
+      U.uiRow({
+        children: [U.uiButton({ 'aria-haspopup': 'dialog', children: [t('Report a problem…', { ja: '問題を報告…' })], onclick: () => { s.reportOpen = true; } })],
+      }),
+      reportDlg({
+        open: s.reportOpen,
+        onClose: () => { s.reportOpen = false; },
+        title: t('Report a problem', { ja: '問題の報告' }),
+        children: [
+          U.uiCol({
+            children: [
+              U.bindInput(s, 'subject', { 'aria-label': t('Subject', { ja: '件名' }), placeholder: t('Subject', { ja: '件名' }) }),
+              U.bindTextarea(s, 'details', { ref: 'details', 'aria-label': t('What happened?', { ja: '何が起きましたか？' }), placeholder: t('What happened?', { ja: '何が起きましたか？' }) }),
+            ],
+          }),
+        ],
+        actions: [
+          U.uiButton({ children: [t('Cancel')], onclick: () => { s.reportOpen = false; } }),
+          U.uiButton({
+            variant: 'primary',
+            children: [t('Send', { ja: '送信' })],
+            onclick: () => {
+              s.reportOpen = false;
+              toast.show(t('Report sent', { ja: '報告を送信しました' }), { type: 'success' });
+            },
+          }),
+        ],
+      }),
+      focusWhen('details', s.reportOpen),
+    );
 
   const app = ricdom.createApp(
     '#app',
-    { count: 0 },
-    (s) => ({
-      tag: 'div',
-      children: [
-        { tag: 'h1', children: [t('Dialog, popup, toast, tooltip', { ja: 'ダイアログ・ポップアップ・トースト・ツールチップ' })] },
-        // Site helper: the tagged-template form of t() puts a value into the translated text.
-        // サイトの補助: t をタグ付きテンプレートで使うと、訳文の中に値を差し込めます。
-        { tag: 'p', children: [t`${s.count} clicks`] },
-        {
-          tag: 'div',
-          class: 'row',
-          children: [
-            // With triggerChildren the dialog draws its own "open" button; dlg.close() closes it from code.
-            // triggerChildren を渡すと、ダイアログが自分の「開く」ボタンを描きます。dlg.close() でコードから閉じます。
-            dlg({
-              triggerChildren: [t('Open dialog', { ja: 'ダイアログを開く' })],
-              title: t('Confirm', { ja: '確認' }),
-              children: [t('Do you really want to run it?', { ja: '本当に実行しますか？' })],
-              actions: [
-                U.uiButton({
-                  variant: 'primary',
-                  children: [t('OK', { ja: 'OK' })],
-                  onclick: () => {
-                    s.count += 1;
-                    dlg.close();
-                    toast.show(t('Done', { ja: '実行しました' }), { type: 'success' });
-                  },
-                }),
-              ],
-            }),
-            // A popup menu: `trigger` is the button's content, `children` are the menu items.
-            // ポップアップメニュー: `trigger` はボタンの中身、`children` はメニューの項目です。
-            menu({
-              trigger: [t('Menu ▾', { ja: 'メニュー ▾' })],
-              children: [
-                U.uiButton({ children: [t('Duplicate', { ja: '複製' })], onclick: () => toast.show(t('Duplicated', { ja: '複製しました' })) }),
-                U.uiButton({ children: [t('Delete', { ja: '削除' })], onclick: () => toast.show(t('Deleted', { ja: '削除しました' }), { type: 'error' }) }),
-              ],
-            }),
-            // A tooltip wraps the element it describes and shows `content` on hover or focus.
-            // ツールチップは説明したい要素を包み、ホバーやフォーカスで `content` を表示します。
-            tip({
-              content: t('Tip: this button adds one to the count', { ja: 'ヒント: このボタンはカウントを 1 増やします' }),
-              children: [U.uiButton({ children: ['+1'], onclick: () => { s.count += 1; } })],
-            }),
-          ],
-        },
-        U.uiInput({
-          placeholder: t('Type here (focus must survive re-renders)', { ja: 'ここに入力 (再描画しても入力中の状態が保たれます)' }),
-          oninput: () => {
-            // Every keystroke writes state and redraws the page; the text field keeps its focus and caret anyway.
-            // 1 文字ごとに状態へ書き込んで再描画しますが、入力欄のフォーカスとカーソル位置は保たれます。
-            s.count = s.count;
-          },
-        }),
-      ],
-    }),
+    state,
+    (s) =>
+      U.uiPanel({
+        class: 'page',
+        children: [
+          { tag: 'h1', children: [t('ricdom — dialog and toast', { ja: 'ricdom — ダイアログとトースト' })] },
+          quickDemo(),
+          U.uiSeparator(),
+          keyboardDemo(s),
+          U.uiSeparator(),
+          reasonDemo(s),
+          U.uiSeparator(),
+          toastDemo(),
+          U.uiSeparator(),
+          focusWhenDemo(s),
+        ],
+      }),
     {
       setup: (a) => {
-        dlg = a.use(U.createDialog());
-        menu = a.use(U.createPopup());
+        confirmDlg = a.use(U.createDialog());
+        formDlg = a.use(U.createDialog());
+        discardDlg = a.use(U.createDialog());
+        reportDlg = a.use(U.createDialog());
         toast = a.use(U.createToast());
-        tip = a.use(U.createTooltip());
+        focusWhen = a.use(U.createFocusWhen());
       },
     },
   );
+
+  // For demo 2: show where the keyboard focus is. The browser fires `focusin` every time the focus
+  // moves; the handler writes a short description of that element (its tag, then its accessible
+  // name or its text) into the state, and the page redraws.
+  // 実演 2 のために、キーボードのフォーカスがどこにあるかを表示します。フォーカスが動くたびにブラウザが `focusin` を
+  // 発生させるので、その要素の短い説明 (タグ名と、読み上げ用の名前か文字) を state に書き込みます。すると画面が描き直されます。
+  document.addEventListener('focusin', (e) => {
+    const name = e.target.getAttribute('aria-label') || e.target.textContent.trim().slice(0, 30);
+    app.focusOn = `<${e.target.tagName.toLowerCase()}> ${name}`;
+  });
 
   // Site helper: t() returns a plain string, so draw again once when the language changes.
   // サイトの補助: t() の戻り値はただの文字列なので、言語が変わったら 1 回描き直します。

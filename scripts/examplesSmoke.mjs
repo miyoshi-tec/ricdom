@@ -14,8 +14,9 @@
 //   - サンプル (NN-*.html): #ricdom-nav にテーマ <select> (7 択) と言語 <select> (2 択)、
 //     Source ボタンでソースのダイアログが開く、言語/テーマの切替が反映される
 //   - _samples.js の一覧と NN-*.html が 1 対 1 で一致する
-//   - tutorial.html: en / ja の両方で h2 が 5 個以上、ja はライブデモの iframe が 3 個以上で中身が動いている
-//   - spec.html: h2 が 5 個以上、icons.html: アイコンのセルが 30 個以上
+//   - tutorial.html: en / ja の両方で h2 が 5 個以上、ライブデモの iframe が 3 個以上で中身が動いている
+//     (en は ja の訳で、同じ `html live` フェンスを持つ)
+//   - spec.html / guide.html: h2 が 5 個以上、icons.html: アイコンのセルが 30 個以上
 
 import { createServer } from 'node:http';
 import { readFile, readdir, stat } from 'node:fs/promises';
@@ -226,7 +227,7 @@ const checkTutorial = async (browser, baseUrl, lang) => {
   if (!idsOk) issues.push('h2 に id が付いていない (目次のリンク先がない)');
 
   let frames = 0;
-  if (lang === 'ja') {
+  {
     frames = await page.locator('iframe.doc-demo__frame').count();
     if (frames < 3) issues.push(`ライブデモの iframe が ${frames} 個 (期待: 3 以上)`);
     await page.waitForTimeout(500); // iframe 内の ricdom が描画されるのを待つ
@@ -244,8 +245,9 @@ const checkTutorial = async (browser, baseUrl, lang) => {
   return { label: `tutorial.html (${lang})`, issues, note: `h2 ${h2}, toc ${toc}, live iframe ${frames}` };
 };
 
-const checkSpec = async (browser, baseUrl) => {
-  const { page, context, problems } = await openPage(browser, baseUrl, 'spec.html');
+// SPEC.md / GUIDE.md を描くページ (どちらも英語のみ、作りは同じ)
+const checkDocPage = async (browser, baseUrl, file) => {
+  const { page, context, problems } = await openPage(browser, baseUrl, file);
   const issues = [];
   await page.waitForSelector('.doc-body h2', { timeout: 5000 }).catch(() => issues.push('h2 が描画されなかった'));
   const h2 = await countH2(page);
@@ -253,7 +255,7 @@ const checkSpec = async (browser, baseUrl) => {
   await checkNav(page, issues);
   issues.push(...problems);
   await context.close();
-  return { label: 'spec.html', issues, note: `h2 ${h2}` };
+  return { label: file, issues, note: `h2 ${h2}` };
 };
 
 const checkIcons = async (browser, baseUrl) => {
@@ -334,7 +336,8 @@ const main = async () => {
     report(await checkLanding(browser, baseUrl));
     report(await checkTutorial(browser, baseUrl, 'en'));
     report(await checkTutorial(browser, baseUrl, 'ja'));
-    report(await checkSpec(browser, baseUrl));
+    report(await checkDocPage(browser, baseUrl, 'spec.html'));
+    report(await checkDocPage(browser, baseUrl, 'guide.html'));
     report(await checkIcons(browser, baseUrl));
   } finally {
     await browser.close();

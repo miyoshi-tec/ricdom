@@ -95,9 +95,10 @@ License: [MIT](LICENSE). A few bundled icons derive from Lucide (ISC); see
 
 ## Learn more
 
-- [TUTORIAL.md](docs/TUTORIAL.md) — a 10-chapter, code-first walkthrough
+- [TUTORIAL.md](docs/TUTORIAL.md) — the introduction: from the first button to data binding, with live code
+- [GUIDE.md](docs/GUIDE.md) — task-oriented chapters: components, themes and CSS, Electron, moving from v1
 - [SPEC.md](docs/SPEC.md) — the full contract: diffing rules, reactivity, every
   component's props and ARIA behavior
-- [examples/](examples/index.html) — 7 build-free demo pages
+- [examples/](examples/index.html) — numbered, build-free sample pages
 - [CHANGELOG.md](CHANGELOG.md) — release history
 - [CONTRIBUTING.md](CONTRIBUTING.md) — developing ricdom itself

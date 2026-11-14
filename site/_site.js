@@ -5,6 +5,7 @@ window.RICDOM_NAV_OPTIONS = {
     { href: 'index.html', label: 'Home' },
     { href: 'examples/index.html', label: 'Examples' },
     { href: 'tutorial.html', label: 'Tutorial' },
+    { href: 'guide.html', label: 'Guide' },
     { href: 'spec.html', label: 'Spec' },
     { href: 'icons.html', label: 'Icons' },
   ],

@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ricdom — 02 Buttons, text, icons and themes (no build step)</title>
+<!-- ricdom-ui.css styles ricdom's UI components (load it before your own CSS). _fonts.css only sets this site's fonts.
+     ricdom-ui.css は ricdom の UI 部品の見た目です (自分の CSS より先に読み込みます)。_fonts.css はこのサイトのフォント設定だけです。 -->
+<link rel="stylesheet" href="../dist/ricdom-ui.css">
+<link rel="stylesheet" href="_fonts.css">
+<style>
+  /* Every rule below targets a class that only this page's own elements carry, so none of them
+     reaches inside a ricdom component.
+     下の規則はどれも、このページ自身の要素にだけ付けたクラスを対象にしています。ricdom の部品の中には届きません。 */
+  main { padding: 2rem; max-width: 720px; }
+  .page-title { font-size: 1.3rem; }
+  .section { font-size: 1rem; margin: 2rem 0 0.25rem; }
+  .note { margin: 0.75rem 0 0.5rem; color: var(--ric-color-fg-muted); }
+  .demo { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.75rem; }
+  .demo--stack { flex-direction: column; align-items: flex-start; }
+  /* The box that gets its own theme. Its gap follows the density chosen for the box.
+     自分のテーマを持つ箱です。すき間 (gap) は、箱に選んだ密度に従います。 */
+  .themed-box {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--ric-gap-md);
+    margin-top: 0.75rem;
+    padding: 1rem;
+    border: 1px solid var(--ric-color-border);
+    border-radius: 8px;
+  }
+</style>
+</head>
+<body>
+<!--
+  02 Buttons, text, icons and themes: the first components of ricdom/ui.
+  Each one is a plain function that returns an object, so it goes right where 01 wrote
+  { tag: 'button', ... } by hand: inside render.
+  No build step: two scripts (ricdom, then ricdom/ui) and one stylesheet.
+
+  02 ボタン・テキスト・アイコン・テーマ: ricdom/ui の最初の部品です。
+  どれも「オブジェクトを返すただの関数」なので、01 で { tag: 'button', ... } を手で書いた場所、
+  つまり render の中にそのまま書けます。
+  ビルド不要: <script> 2 本 (ricdom → ricdom/ui) と CSS 1 本で動きます。
+-->
+<main>
+  <div id="app"></div>
+</main>
+
+<!-- Optional: highlight.js colours the code in this site's Source view. ricdom does not need it.
+     任意: highlight.js はこのサイトの「ソース」表示を色分けします。ricdom 自体には不要です。 -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
+<!-- ricdom itself: the core first, then the UI components. They define the globals ricdom and ricdomUI.
+     ricdom 本体: コア → UI 部品の順に読み込みます。グローバル変数 ricdom と ricdomUI ができます。 -->
+<script src="../dist/ricdom.iife.min.js"></script>
+<script src="../dist/ricdom-ui.iife.min.js"></script>
+<!-- Docs-site helpers, not part of ricdom: the nav bar (theme, language, previous / next page) and t() for translations.
+     このサイト専用の補助で、ricdom の一部ではありません: ナビバー (テーマ・言語・前後のページ) と翻訳用の t() です。 -->
+<script src="_i18n.js"></script><script src="_samples.js"></script><script src="_nav.js"></script>
+<script>
+  // A short name for the UI components.
+  // UI 部品を短い名前で呼べるようにします。
+  const U = ricdomUI;
+
+  // Site helper: t(text, { ja: '...' }) returns the text in the chosen language. Every string on this
+  // page is used once, so its Japanese is written right where it is used.
+  // サイトの補助: t(文字列, { ja: '…' }) は選択中の言語の文字列を返します。このページの文字列は
+  // どれも 1 回しか使わないので、使う場所に日本語を書いています。
+  const { t, onLangChange } = ricdomI18n;
+
+  // An icon is data: an object holding SVG paths. This block is the output of
+  // `npx ricdom-icon plus trash-2 download info check triangle-alert loader`, pasted as it is.
+  // Always copy icon data from that command; do not write the paths by hand.
+  // アイコンはデータ (SVG のパスを持つオブジェクト) です。下のかたまりは
+  // `npx ricdom-icon plus trash-2 download info check triangle-alert loader` の出力を、そのまま貼ったものです。
+  // アイコンのデータは必ずこのコマンドから写し、パスを手で書かないでください。
+  const ICONS = {
+    plus: {"p":"M12 5v14M5 12h14"},
+    "trash-2": {"p":"M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6"},
+    download: {"p":"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"},
+    info: {"p":["M12 22a10 10 0 1 0 0-20 10 10 0 1 0 0 20z","M12 16v-4","M12 8h.01"]},
+    check: {"p":"M20 6 9 17l-5-5"},
+    "triangle-alert": {"p":["M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z","M12 9v4","M12 17h.01"]},
+    loader: {"p":"M12 3v3M12 18v3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M3 12h3M18 12h3M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"},
+  };
+
+  // The values offered in the last section. `theme` has seven built-in names; five are listed here.
+  // 最後の節で選べる値です。`theme` の組み込みの名前は 7 つあり、ここではそのうち 5 つを並べています。
+  const THEMES = ['light', 'dark', 'teal', 'cyber', 'aqua'];
+  const DENSITIES = ['comfortable', 'compact', 'tight'];
+  const FONT_SIZES = ['sm', 'md', 'lg'];
+
+  // A helper for the last section: one small button per value. The current value is drawn as
+  // `primary`; a click stores the new value in state and themes the box again.
+  // 最後の節のための補助です。値ごとに小さなボタンを 1 つ作ります。いま選ばれている値は `primary` の
+  // 見た目にし、クリックされたら新しい値を状態に入れて、箱にテーマを当て直します。
+  const choices = (s, key, values) =>
+    values.map((value) =>
+      U.uiButton({
+        size: 'sm',
+        variant: s[key] === value ? 'primary' : 'default',
+        children: [value],
+        onclick: () => {
+          s[key] = value;
+          themeBox();
+        },
+      }),
+    );
+
+  const app = ricdom.createApp(
+    '#app',
+    { clicks: 0, theme: 'aqua', density: 'compact', fontSize: 'md' },
+    (s) => ({
+      tag: 'div',
+      children: [
+        { tag: 'h1', class: 'page-title', children: [t('Buttons, text, icons and themes', { ja: 'ボタン・テキスト・アイコン・テーマ' })] },
+        { tag: 'p', class: 'note', children: [t(
+          'ricdom/ui is a set of ready-made components. Each one is a function that returns the same kind of object you wrote by hand in 01, so you call it inside render.',
+          { ja: 'ricdom/ui は、あらかじめ用意された部品集です。どの部品も、01 で手で書いたのと同じ種類のオブジェクトを返す関数なので、render の中で呼ぶだけで使えます。' },
+        )] },
+
+        // ── uiButton ──
+        // `variant` chooses the look: default, primary, ghost (no frame until you point at it) or
+        // link (looks like text). `onclick` is the same handler you would put on a <button>.
+        // `variant` で見た目を選びます: default・primary・ghost (マウスを載せるまで枠なし)・link (文字のような見た目)。
+        // `onclick` は、<button> に書くのと同じクリック時の処理です。
+        { tag: 'h2', class: 'section', children: ['uiButton'] },
+        { tag: 'p', class: 'note', children: [t('variant chooses the look and onclick handles the click. Press any of them.', { ja: 'variant で見た目を選び、onclick にクリックされたときの処理を書きます。どれかを押してみてください。' })] },
+        {
+          tag: 'div',
+          class: 'demo',
+          children: [
+            U.uiButton({ children: ['default'], onclick: () => { s.clicks += 1; } }),
+            U.uiButton({ variant: 'primary', children: ['primary'], onclick: () => { s.clicks += 1; } }),
+            U.uiButton({ variant: 'ghost', children: ['ghost'], onclick: () => { s.clicks += 1; } }),
+            U.uiButton({ variant: 'link', children: ['link'], onclick: () => { s.clicks += 1; } }),
+            { tag: 'output', children: [t('Clicks: ', { ja: 'クリック数: ' }) + s.clicks] },
+          ],
+        },
+        // `size` is sm, md (the default) or lg. `disabled: true` turns a button off.
+        // `size` は sm・md (既定)・lg のどれかです。`disabled: true` でボタンを押せなくします。
+        { tag: 'p', class: 'note', children: [t('size is sm, md (the default) or lg. disabled: true turns a button off.', { ja: 'size は sm・md (既定)・lg のどれかです。disabled: true でボタンを押せなくします。' })] },
+        {
+          tag: 'div',
+          class: 'demo',
+          children: [
+            U.uiButton({ size: 'sm', children: ['sm'] }),
+            U.uiButton({ children: ['md'] }),
+            U.uiButton({ size: 'lg', children: ['lg'] }),
+            U.uiButton({ disabled: true, children: ['disabled'] }),
+            U.uiButton({ variant: 'primary', disabled: true, children: ['disabled'] }),
+          ],
+        },
+        // `children` can mix an icon and text. A button that holds only an icon has no text for a
+        // screen reader to read, so give the icon a `label`: it becomes the button's name.
+        // `children` にはアイコンと文字を混ぜて書けます。アイコンだけのボタンには読み上げる文字が無いので、
+        // アイコンに `label` を付けます。それがボタンの名前になります。
+        { tag: 'p', class: 'note', children: [t('A button can hold an icon, with or without text. The first one adds a click, the second one resets the count.', { ja: 'ボタンにはアイコンを入れられます (文字つきでも、アイコンだけでも)。1 つ目はクリック数を 1 増やし、2 つ目は 0 に戻します。' })] },
+        {
+          tag: 'div',
+          class: 'demo',
+          children: [
+            U.uiButton({ variant: 'primary', children: [U.uiIcon(ICONS.plus), t('Add', { ja: '追加' })], onclick: () => { s.clicks += 1; } }),
+            U.uiButton({ variant: 'ghost', children: [U.uiIcon(ICONS['trash-2'], { label: t('Reset the count', { ja: 'クリック数を 0 に戻す' }) })], onclick: () => { s.clicks = 0; } }),
+          ],
+        },
+
+        // ── uiText ──
+        // `variant` chooses both the look and the HTML element: default and muted are a <span>,
+        // title is an <h2>, label is a <label>.
+        // `variant` は見た目と HTML の要素の両方を決めます: default と muted は <span>、
+        // title は <h2>、label は <label> になります。
+        { tag: 'h2', class: 'section', children: ['uiText'] },
+        { tag: 'p', class: 'note', children: [t('Text in the colours and sizes of the theme. variant is default, muted, title or label.', { ja: 'テーマの色と大きさに合わせた文字です。variant は default・muted・title・label のどれかです。' })] },
+        {
+          tag: 'div',
+          class: 'demo demo--stack',
+          children: [
+            U.uiText({ variant: 'title', children: [t('title: a heading', { ja: 'title: 見出し' })] }),
+            U.uiText({ children: [t('default: body text', { ja: 'default: 本文' })] }),
+            U.uiText({ variant: 'muted', children: [t('muted: a quieter note', { ja: 'muted: 控えめな補足' })] }),
+            U.uiText({ variant: 'label', children: [t('label: the name of a field', { ja: 'label: 入力欄などの名前' })] }),
+          ],
+        },
+
+        // ── uiIcon ──
+        // uiIcon(data, options). `size` is a number (pixels) or a CSS length; without it the icon
+        // is 1em, so it is as tall as the text it sits in.
+        // uiIcon(データ, オプション)。`size` は数値 (ピクセル) か CSS の長さです。省略すると 1em、
+        // つまり周りの文字と同じ高さになります。
+        { tag: 'h2', class: 'section', children: ['uiIcon'] },
+        { tag: 'p', class: 'note', children: [t('size sets the size. Without it, an icon is as tall as the text around it.', { ja: 'size で大きさを決めます。省略すると、周りの文字と同じ高さになります。' })] },
+        {
+          tag: 'div',
+          class: 'demo',
+          children: [
+            U.uiIcon(ICONS.info, { size: 16 }),
+            U.uiIcon(ICONS.info, { size: 24 }),
+            U.uiIcon(ICONS.info, { size: 32 }),
+            { tag: 'span', children: [U.uiIcon(ICONS.download), ' ', t('no size: follows the text', { ja: 'size なし: 文字に合わせる' })] },
+            { tag: 'span', style: { fontSize: '1.5rem' }, children: [U.uiIcon(ICONS.download), ' ', t('larger text', { ja: '大きな文字' })] },
+          ],
+        },
+        // An icon has no colour of its own: it is drawn in the text colour of the place it is put
+        // (CSS currentColor). Set `color` on the icon or on anything around it.
+        // アイコン自身は色を持ちません。置かれた場所の文字色 (CSS の currentColor) で描かれます。
+        // 色を変えるには、アイコンか、その外側の要素に `color` を指定します。
+        { tag: 'p', class: 'note', children: [t('An icon is drawn in the text colour of where it is placed.', { ja: 'アイコンは、置かれた場所の文字色で描かれます。' })] },
+        {
+          tag: 'div',
+          class: 'demo',
+          children: [
+            { tag: 'span', style: { color: 'var(--ric-color-accent)' }, children: [U.uiIcon(ICONS.check), ' ', t('accent colour', { ja: 'アクセント色' })] },
+            { tag: 'span', style: { color: 'crimson' }, children: [U.uiIcon(ICONS.check), ' crimson'] },
+            U.uiIcon(ICONS.check, { size: 24, style: { color: 'seagreen' } }),
+          ],
+        },
+        // With `label`, screen readers announce the icon by that name. Without it the icon is
+        // hidden from them, which is right for decoration next to text. `spin: true` rotates it.
+        // `label` を付けると、読み上げソフトがその名前でアイコンを読みます。付けなければ読み上げの対象から
+        // 外れます (文字の隣の飾りにはこれが適切です)。`spin: true` でアイコンが回転します。
+        { tag: 'p', class: 'note', children: [t('label gives an icon a name for screen readers. spin: true makes it rotate.', { ja: 'label で、読み上げ用の名前を付けます。spin: true で回転します。' })] },
+        {
+          tag: 'div',
+          class: 'demo',
+          children: [
+            U.uiIcon(ICONS['triangle-alert'], { size: 24, label: t('Warning', { ja: '警告' }) }),
+            { tag: 'span', children: [U.uiIcon(ICONS.loader, { spin: true }), ' ', t('Loading…', { ja: '読み込んでいます…' })] },
+          ],
+        },
+
+        // ── applyTheme ──
+        // `ref: 'box'` makes this element available as app.refs.get('box'), so themeBox() (below
+        // createApp) can hand it to applyTheme. The components inside are the same as above.
+        // `ref: 'box'` を付けると、この要素を app.refs.get('box') で取り出せます。createApp の下にある
+        // themeBox() が、それを applyTheme に渡します。中の部品は、上で使ったものと同じです。
+        { tag: 'h2', class: 'section', children: ['applyTheme'] },
+        { tag: 'p', class: 'note', children: [t(
+          'applyTheme(element, { theme, density, fontSize }) themes one element and everything inside it. The box below has a theme of its own; the rest of the page keeps the one chosen in the nav bar.',
+          { ja: 'applyTheme(要素, { theme, density, fontSize }) は、1 つの要素とその中身全体にテーマを当てます。下の箱は自分のテーマを持ち、ページのほかの部分はナビバーで選んだテーマのままです。' },
+        )] },
+        { tag: 'div', class: 'demo', children: ['theme', ...choices(s, 'theme', THEMES)] },
+        { tag: 'div', class: 'demo', style: { marginTop: '0.5rem' }, children: ['density', ...choices(s, 'density', DENSITIES)] },
+        { tag: 'div', class: 'demo', style: { marginTop: '0.5rem' }, children: ['fontSize', ...choices(s, 'fontSize', FONT_SIZES)] },
+        {
+          tag: 'div',
+          ref: 'box',
+          class: 'themed-box',
+          children: [
+            U.uiText({ variant: 'title', children: [t('A box with its own theme', { ja: '自分のテーマを持つ箱' })] }),
+            U.uiText({ children: [t('density changes the height, padding and gaps of controls; fontSize changes the size of the text.', { ja: 'density はコントロールの高さ・余白・すき間を、fontSize は文字の大きさを変えます。' })] }),
+            U.uiText({ variant: 'muted', children: [t('The other built-in themes are on the "Themes and frosted glass" page.', { ja: 'ほかの組み込みテーマは「テーマとフロストガラス」のページにあります。' })] }),
+            {
+              tag: 'div',
+              class: 'demo',
+              children: [
+                U.uiButton({ children: ['default'] }),
+                U.uiButton({ variant: 'primary', children: [U.uiIcon(ICONS.check), 'primary'] }),
+                U.uiButton({ variant: 'ghost', children: ['ghost'] }),
+              ],
+            },
+          ],
+        },
+      ],
+    }),
+  );
+
+  // applyTheme writes the theme as CSS variables onto the one element it is given, and every
+  // component inside that element uses them. `density` is comfortable (the default), compact or
+  // tight; `fontSize` is sm, md (the default) or lg.
+  // The state can be read from `app` the same way as from `s` inside render.
+  // applyTheme は、渡された 1 つの要素にテーマを CSS 変数として書き込み、その要素の中の部品がそれを使います。
+  // `density` は comfortable (既定)・compact・tight、`fontSize` は sm・md (既定)・lg のどれかです。
+  // 状態は、render の中の `s` と同じように `app` からも読めます。
+  const themeBox = () => {
+    U.applyTheme(app.refs.get('box'), { theme: app.theme, density: app.density, fontSize: app.fontSize });
+  };
+
+  // Theme the box once at the start. createApp has already drawn the page by the time it returns,
+  // so the box exists here. (Site helper: the nav bar does the same for the whole page, by calling
+  // applyTheme on <body>. In your own app, call it once on your app's element.)
+  // 最初に 1 回、箱にテーマを当てます。createApp は戻ってきた時点でもうページを描き終えているので、
+  // ここで箱は存在しています。(サイトの補助: ナビバーは <body> に applyTheme を呼んで、ページ全体に
+  // 同じことをしています。自分のアプリでは、アプリの要素に 1 回呼んでください。)
+  themeBox();
+
+  // Site helper: t() returns a plain string, so draw again once when the language changes.
+  // サイトの補助: t() の戻り値はただの文字列なので、言語が変わったら 1 回描き直します。
+  onLangChange(() => app.renderNow());
+</script>
+</body>
+</html>

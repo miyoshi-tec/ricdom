@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ricdom — 04 Layout (no build step)</title>
+<!-- ricdom-ui.css styles ricdom's UI components (load it before your own CSS). _fonts.css only sets this site's fonts.
+     ricdom-ui.css は ricdom の UI 部品の見た目です (自分の CSS より先に読み込みます)。_fonts.css はこのサイトのフォント設定だけです。 -->
+<link rel="stylesheet" href="../dist/ricdom-ui.css">
+<link rel="stylesheet" href="_fonts.css">
+<style>
+  /* Every rule below targets a class that only this page's own elements carry, so none of them
+     reaches inside a ricdom component.
+     下の規則はどれも、このページ自身の要素にだけ付けたクラスを対象にしています。ricdom の部品の中には届きません。 */
+  main { padding: 2rem; max-width: 720px; }
+  .page-title { font-size: 1.3rem; }
+  .section { font-size: 1rem; margin: 2rem 0 0.25rem; }
+  .note { margin: 0.75rem 0 0.5rem; color: var(--ric-color-fg-muted); }
+  .demo { display: flex; flex-direction: column; gap: 0.75rem; }
+  .chooser { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; }
+  /* Layout boxes draw nothing themselves, so this page makes them visible: `frame` is a dashed
+     line around a layout box, `box` is a tinted block that stands in for real content.
+     レイアウト用の箱は自分では何も描かないので、このページで見えるようにしています。`frame` は
+     レイアウトの箱を囲む破線、`box` は中身の代わりに置く色つきのブロックです。 */
+  .frame { padding: 6px; border: 1px dashed var(--ric-color-fg-muted); border-radius: 8px; }
+  .box {
+    padding: 0.35rem 0.75rem;
+    border: 1px solid color-mix(in srgb, var(--ric-color-accent) 45%, transparent);
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--ric-color-accent) 16%, transparent);
+  }
+</style>
+</head>
+<body>
+<!--
+  04 Layout: the boxes of ricdom/ui that line things up (uiRow, uiCol, uiGrid), the surface that
+  groups them (uiPanel) and the line between them (uiSeparator).
+  Like the components before, each one is a plain function that returns an object.
+  No build step: two scripts (ricdom, then ricdom/ui) and one stylesheet.
+
+  04 レイアウト: ricdom/ui の「並べるための箱」(uiRow・uiCol・uiGrid) と、それをまとめる面 (uiPanel)、
+  間に引く線 (uiSeparator) です。
+  これまでの部品と同じく、どれも「オブジェクトを返すただの関数」です。
+  ビルド不要: <script> 2 本 (ricdom → ricdom/ui) と CSS 1 本で動きます。
+-->
+<main>
+  <div id="app"></div>
+</main>
+
+<!-- Optional: highlight.js colours the code in this site's Source view. ricdom does not need it.
+     任意: highlight.js はこのサイトの「ソース」表示を色分けします。ricdom 自体には不要です。 -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
+<!-- ricdom itself: the core first, then the UI components. They define the globals ricdom and ricdomUI.
+     ricdom 本体: コア → UI 部品の順に読み込みます。グローバル変数 ricdom と ricdomUI ができます。 -->
+<script src="../dist/ricdom.iife.min.js"></script>
+<script src="../dist/ricdom-ui.iife.min.js"></script>
+<!-- Docs-site helpers, not part of ricdom: the nav bar (theme, language, previous / next page) and t() for translations.
+     このサイト専用の補助で、ricdom の一部ではありません: ナビバー (テーマ・言語・前後のページ) と翻訳用の t() です。 -->
+<script src="_i18n.js"></script><script src="_samples.js"></script><script src="_nav.js"></script>
+<script>
+  // A short name for the UI components.
+  // UI 部品を短い名前で呼べるようにします。
+  const U = ricdomUI;
+
+  // Site helper: t(text, { ja: '...' }) returns the text in the chosen language. Every string on this
+  // page is used once, so its Japanese is written right where it is used.
+  // サイトの補助: t(文字列, { ja: '…' }) は選択中の言語の文字列を返します。このページの文字列は
+  // どれも 1 回しか使わないので、使う場所に日本語を書いています。
+  const { t, onLangChange } = ricdomI18n;
+
+  // Two helpers for this page. box(text) is a tinted block that stands in for real content.
+  // pick(s, key, values) is a row of small buttons that stores the pressed value in s[key];
+  // the current value is drawn as `primary`.
+  // このページのための補助 2 つです。box(文字) は、中身の代わりに置く色つきのブロックです。
+  // pick(s, キー, 値の一覧) は小さなボタンの列で、押された値を s[キー] に入れます。
+  // いま選ばれている値は `primary` の見た目になります。
+  const box = (text) => ({ tag: 'div', class: 'box', children: [text] });
+  const pick = (s, key, values) =>
+    values.map((value) =>
+      U.uiButton({
+        size: 'sm',
+        variant: s[key] === value ? 'primary' : 'default',
+        children: [String(value)],
+        onclick: () => { s[key] = value; },
+      }),
+    );
+
+  const app = ricdom.createApp(
+    '#app',
+    { gap: 8, justify: 'flex-start', count: 5, locked: false, presses: 0 },
+    (s) => ({
+      tag: 'div',
+      children: [
+        { tag: 'h1', class: 'page-title', children: [t('Layout', { ja: 'レイアウト' })] },
+        { tag: 'p', class: 'note', children: [t(
+          'Boxes that line up whatever you put in them. On this page a dashed line marks each layout box and a tinted block stands in for its content.',
+          { ja: '中に入れたものを並べるための箱です。このページでは、レイアウトの箱を破線で囲み、中身の代わりに色つきのブロックを置いています。' },
+        )] },
+
+        // ── uiRow / uiCol ──
+        // `class` is added to the component's own class, so `frame` (this page's dashed line) can
+        // be put on any of them. Without it these boxes have no colour, border or padding.
+        // `class` は部品自身のクラスに追加されるので、`frame` (このページの破線) はどの部品にも付けられます。
+        // 付けなければ、これらの箱には色も枠も余白もありません。
+        { tag: 'h2', class: 'section', children: ['uiRow / uiCol'] },
+        { tag: 'p', class: 'note', children: [t('uiRow puts its children side by side; uiCol stacks them.', { ja: 'uiRow は子を横に並べ、uiCol は縦に積みます。' })] },
+        {
+          tag: 'div',
+          class: 'demo',
+          children: [
+            U.uiRow({ class: 'frame', children: [box('A'), box('B'), box('C')] }),
+            U.uiCol({ class: 'frame', children: [box('A'), box('B'), box('C')] }),
+          ],
+        },
+
+        // ── gap ──
+        // `gap` is the space between children: a number is pixels, a string is any CSS length.
+        // Leave it out and the gap comes from the theme (its density).
+        // `gap` は子と子の間のすき間です。数値はピクセル、文字列は CSS の長さとして扱われます。
+        // 省略すると、すき間はテーマ (の密度) で決まります。
+        { tag: 'h2', class: 'section', children: ['gap'] },
+        { tag: 'p', class: 'note', children: [t('gap sets the space between children, on uiRow, uiCol and uiGrid alike. Choose one:', { ja: 'gap で子と子の間のすき間を決めます。uiRow・uiCol・uiGrid のどれでも同じです。選んでみてください:' })] },
+        {
+          tag: 'div',
+          class: 'demo',
+          children: [
+            { tag: 'div', class: 'chooser', children: ['gap', ...pick(s, 'gap', [0, 8, 24, '3em'])] },
+            U.uiRow({ class: 'frame', gap: s.gap, children: [box('A'), box('B'), box('C')] }),
+            U.uiCol({ class: 'frame', gap: s.gap, children: [box('A'), box('B'), box('C')] }),
+          ],
+        },
+
+        // ── Alignment and wrapping ──
+        // uiRow and uiCol are CSS flex containers, and `style` is passed on to the element. So
+        // alignment and wrapping are ordinary CSS: justifyContent, alignItems, flexWrap.
+        // uiRow と uiCol は CSS の flex コンテナで、`style` はそのまま要素に渡されます。
+        // そのため、寄せ方や折り返しは普通の CSS (justifyContent・alignItems・flexWrap) で書きます。
+        { tag: 'h2', class: 'section', children: [t('Alignment and wrapping', { ja: '寄せと折り返し' })] },
+        { tag: 'p', class: 'note', children: [t('Anything beyond gap is plain CSS in style. justifyContent moves the children along the row:', { ja: 'gap 以外は、style に普通の CSS を書きます。justifyContent は、子を行の中で寄せます:' })] },
+        {
+          tag: 'div',
+          class: 'demo',
+          children: [
+            { tag: 'div', class: 'chooser', children: ['justifyContent', ...pick(s, 'justify', ['flex-start', 'center', 'flex-end', 'space-between'])] },
+            U.uiRow({ class: 'frame', style: { justifyContent: s.justify }, children: [box('A'), box('B'), box('C')] }),
+          ],
+        },
+        { tag: 'p', class: 'note', children: [t('With flexWrap: wrap, children that do not fit move to the next line:', { ja: 'flexWrap: wrap を付けると、収まらない子は次の行に回ります:' })] },
+        U.uiRow({
+          class: 'frame',
+          style: { flexWrap: 'wrap' },
+          children: ['HTML', 'CSS', 'JavaScript', 'TypeScript', 'SVG', 'Canvas', 'WebGL', 'WebAssembly', 'Service Worker', 'IndexedDB'].map(box),
+        }),
+
+        // ── Nesting ──
+        // Layout boxes go inside each other. Two details: an empty element with `flex: 1` takes
+        // the free space and pushes what follows to the far end, and uiRow centres its children
+        // vertically unless you set alignItems (here 'stretch', so both columns are equally tall).
+        // レイアウトの箱は入れ子にできます。ポイントは 2 つです。`flex: 1` を付けた空の要素は、余った幅を
+        // 全部取って、後ろのものを端に押しやります。uiRow は子を上下中央にそろえるので、変えたいときは
+        // alignItems を指定します (ここでは 'stretch' にして、2 つの列の高さをそろえています)。
+        { tag: 'h2', class: 'section', children: [t('Nesting', { ja: '入れ子' })] },
+        { tag: 'p', class: 'note', children: [t('Rows inside columns inside rows: the usual shape of an app screen.', { ja: '行の中に列、その中にまた行。アプリの画面でよくある形です。' })] },
+        U.uiCol({
+          class: 'frame',
+          children: [
+            U.uiRow({
+              class: 'frame',
+              children: [box(t('Title', { ja: 'タイトル' })), { tag: 'div', style: { flex: 1 } }, box(t('Menu', { ja: 'メニュー' }))],
+            }),
+            U.uiRow({
+              class: 'frame',
+              style: { alignItems: 'stretch' },
+              children: [
+                U.uiCol({ class: 'frame', children: [box('1'), box('2'), box('3')] }),
+                U.uiCol({ class: 'frame', style: { flex: 1 }, children: [box(t('Content', { ja: '本文' }))] }),
+              ],
+            }),
+          ],
+        }),
+
+        // ── uiGrid ──
+        // `columns` has three forms. A number makes that many equal columns. A string is passed to
+        // CSS as it is ('120px 1fr': one fixed column, one taking the rest). 'auto-fit 120px' fits
+        // as many columns of at least 120px as the width allows. `rows` takes the same forms.
+        // `columns` の書き方は 3 通りです。数値は、その数の等幅の列になります。文字列は CSS にそのまま
+        // 渡されます ('120px 1fr' は、固定幅の列 1 つと残り全部を取る列 1 つ)。'auto-fit 120px' は、
+        // 120px 以上の列を幅に入るだけ並べます。`rows` も同じ書き方です。
+        { tag: 'h2', class: 'section', children: ['uiGrid'] },
+        { tag: 'p', class: 'note', children: [t('Columns of cells. Here: columns: 3, then columns: "120px 1fr".', { ja: 'マス目に並べます。上から columns: 3、columns: "120px 1fr" です。' })] },
+        {
+          tag: 'div',
+          class: 'demo',
+          children: [
+            U.uiGrid({ class: 'frame', columns: 3, children: ['1', '2', '3', '4', '5', '6'].map(box) }),
+            U.uiGrid({ class: 'frame', columns: '120px 1fr', children: [box('120px'), box('1fr'), box('120px'), box('1fr')] }),
+          ],
+        },
+        { tag: 'p', class: 'note', children: [t('columns: "auto-fit 120px" changes the number of columns with the width. Add boxes, or make the window narrower:', { ja: 'columns: "auto-fit 120px" は、幅に合わせて列の数が変わります。ブロックを増やすか、ウィンドウを狭めてみてください:' })] },
+        {
+          tag: 'div',
+          class: 'demo',
+          children: [
+            {
+              tag: 'div',
+              class: 'chooser',
+              children: [
+                U.uiButton({ size: 'sm', children: ['−'], disabled: s.count <= 1, onclick: () => { s.count -= 1; } }),
+                U.uiButton({ size: 'sm', children: ['+'], disabled: s.count >= 12, onclick: () => { s.count += 1; } }),
+                { tag: 'output', children: [t('Boxes: ', { ja: 'ブロックの数: ' }) + s.count] },
+              ],
+            },
+            U.uiGrid({
+              class: 'frame',
+              columns: 'auto-fit 120px',
+              gap: 4,
+              children: Array.from({ length: s.count }, (unused, i) => box(String(i + 1))),
+            }),
+          ],
+        },
+
+        // ── uiPanel ──
+        // uiPanel is the one layout box that draws something: a background, a border and padding,
+        // all from the theme. `layout` is 'col' (the default) or 'row'. `disabled: true` dims the
+        // panel and makes everything inside it unreachable (no click, no focus, no text selection).
+        // uiPanel は、レイアウトの箱の中でただ 1 つ、自分で何かを描きます (背景・枠・余白。どれもテーマの値)。
+        // `layout` は 'col' (既定) か 'row' です。`disabled: true` にすると、パネルが薄くなり、
+        // 中のものすべてに触れなくなります (クリックも、フォーカスも、文字の選択もできません)。
+        { tag: 'h2', class: 'section', children: ['uiPanel'] },
+        { tag: 'p', class: 'note', children: [t('A surface that groups things. Its children are stacked (layout: col) or side by side (layout: row).', { ja: 'ひとまとまりを示す面です。子は縦に積む (layout: col) か、横に並べます (layout: row)。' })] },
+        {
+          tag: 'div',
+          class: 'demo',
+          children: [
+            U.uiPanel({ children: [box('A'), box('B')] }),
+            U.uiPanel({ layout: 'row', children: [box('A'), box('B')] }),
+          ],
+        },
+        { tag: 'p', class: 'note', children: [t('disabled: true locks a panel and everything in it. Lock it, then try the button inside:', { ja: 'disabled: true で、パネルとその中身をまとめて操作できなくします。ロックしてから、中のボタンを押してみてください:' })] },
+        {
+          tag: 'div',
+          class: 'demo',
+          children: [
+            {
+              tag: 'div',
+              class: 'chooser',
+              children: [
+                U.uiButton({
+                  children: [s.locked ? t('Unlock the panel', { ja: 'パネルのロックを外す' }) : t('Lock the panel', { ja: 'パネルをロックする' })],
+                  onclick: () => { s.locked = !s.locked; },
+                }),
+              ],
+            },
+            U.uiPanel({
+              layout: 'row',
+              disabled: s.locked,
+              children: [
+                U.uiButton({ variant: 'primary', children: [t('Press me', { ja: '押してください' })], onclick: () => { s.presses += 1; } }),
+                { tag: 'output', children: [t('Pressed: ', { ja: '押した回数: ' }) + s.presses] },
+              ],
+            }),
+          ],
+        },
+
+        // ── uiSeparator ──
+        // A horizontal line (an <hr>) in the theme's border colour. In a uiCol or a uiPanel it
+        // spans the full width.
+        // テーマの枠線の色で引く水平線 (<hr>) です。uiCol や uiPanel の中では、幅いっぱいに引かれます。
+        { tag: 'h2', class: 'section', children: ['uiSeparator'] },
+        { tag: 'p', class: 'note', children: [t('A line between two groups.', { ja: 'まとまりの間に引く線です。' })] },
+        U.uiPanel({
+          children: [
+            t('Above the line', { ja: '線の上' }),
+            U.uiSeparator(),
+            t('Below the line', { ja: '線の下' }),
+          ],
+        }),
+      ],
+    }),
+  );
+
+  // Site helper: t() returns a plain string, so draw again once when the language changes.
+  // サイトの補助: t() の戻り値はただの文字列なので、言語が変わったら 1 回描き直します。
+  onLangChange(() => app.renderNow());
+</script>
+</body>
+</html>

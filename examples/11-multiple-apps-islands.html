@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ricdom — 11 Several apps and islands (no build step)</title>
+<!-- ricdom-ui.css styles ricdom's UI components (load it before your own CSS). _fonts.css only sets this site's fonts.
+     ricdom-ui.css は ricdom の UI 部品の見た目です (自分の CSS より先に読み込みます)。_fonts.css はこのサイトのフォント設定だけです。 -->
+<link rel="stylesheet" href="../dist/ricdom-ui.css">
+<link rel="stylesheet" href="_fonts.css">
+<style>
+  /* The page's own layout. None of these rules is needed by ricdom.
+     このページ自身のレイアウトです。ricdom に必要な規則はありません。 */
+  article { max-width: 720px; margin: 0 auto; padding: 1.5rem; line-height: 1.7; }
+  article h1 { font-size: 1.2rem; }
+  article h2 { font-size: 1rem; margin: 2rem 0 0.4rem; }
+  .card { display: inline-block; vertical-align: top; padding: 12px 14px; border-radius: 10px; margin: 0.5rem 0.75rem 0.5rem 0; border: 1px solid color-mix(in srgb, currentColor 25%, transparent); }
+  .controls { flex-wrap: wrap; margin-bottom: 8px; }
+  .nowrap { white-space: nowrap; }
+  .stage { display: block; width: 100%; max-width: 480px; aspect-ratio: 16 / 9; border-radius: 8px; background: #0f172a; }
+</style>
+</head>
+<body>
+<!--
+  11 Several apps and islands: ricdom does not have to own the whole page.
+  The article below is ordinary hand-written HTML. Five small ricdom apps are mounted into it, each
+  with its own state. The third one hands a <canvas> over to an animation loop ("island"), and the
+  last one sends its dialog to an element outside itself (portalTo).
+
+  11 複数のアプリと島: ricdom はページ全体を受け持つ必要はありません。
+  下の記事は、手書きの普通の HTML です。そこへ小さな ricdom アプリを 5 つ、それぞれ別の状態を持たせて
+  差し込んでいます。3 つ目は <canvas> をアニメーションのループに明け渡し (「島」)、最後の 1 つは自分の
+  ダイアログを自分の外側の要素へ出しています (portalTo)。
+-->
+<article>
+  <h1 id="title"></h1>
+  <p id="lead"></p>
+
+  <h2 id="h-apps"></h2>
+  <p id="p-apps"></p>
+  <!-- Two mount points. Everything around them stays hand-written HTML.
+       差し込み先が 2 つあります。周りは手書きの HTML のままです。 -->
+  <div id="app-a" class="card"></div>
+  <div id="app-b" class="card"></div>
+
+  <h2 id="h-island"></h2>
+  <p id="p-island"></p>
+  <div id="app-c"></div>
+
+  <h2 id="h-portal"></h2>
+  <p id="p-portal"></p>
+  <div id="app-d" class="card"></div>
+  <div id="app-e" class="card"></div>
+</article>
+<!-- The element that receives the dialog of the last app (see portalTo below). It sits outside every app.
+     最後のアプリのダイアログを受け取る要素です (下の portalTo を参照)。どのアプリの外側にもあります。 -->
+<div id="page-portal"></div>
+
+<!-- Optional: highlight.js colours the code in this site's Source view. ricdom does not need it.
+     任意: highlight.js はこのサイトの「ソース」表示を色分けします。ricdom 自体には不要です。 -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
+<!-- ricdom itself: the core first, then the UI components. They define the globals ricdom and ricdomUI.
+     ricdom 本体: コア → UI 部品の順に読み込みます。グローバル変数 ricdom と ricdomUI ができます。 -->
+<script src="../dist/ricdom.iife.min.js"></script>
+<script src="../dist/ricdom-ui.iife.min.js"></script>
+<!-- Docs-site helpers, not part of ricdom: the nav bar (theme, language, previous / next page) and t() for translations.
+     このサイト専用の補助で、ricdom の一部ではありません: ナビバー (テーマ・言語・前後のページ) と翻訳用の t() です。 -->
+<script src="_i18n.js"></script><script src="_samples.js"></script><script src="_nav.js"></script>
+<script>
+  // A short name for the UI components.
+  // UI 部品を短い名前で呼べるようにします。
+  const U = ricdomUI;
+
+  // Site helper: t(text, { ja: '...' }) returns the text in the chosen language.
+  // サイトの補助: t(文字列, { ja: '…' }) は選択中の言語の文字列を返します。
+  const { t, onLangChange } = ricdomI18n;
+
+  // Site helper: texts that carry a value (the tagged-template form of t) are registered in a dictionary.
+  // サイトの補助: 値を差し込む文字列 (t をタグ付きテンプレートで使う形) は、辞書に登録します。
+  ricdomI18n.addDict('ja', {
+    'used {0} times': '{0} 回使用',
+    '{0} frames per second': '毎秒 {0} フレーム',
+  });
+
+  // Site helper: the hand-written article has no text of its own, so that it can follow the language
+  // switch. Your own page would simply contain its text.
+  // サイトの補助: 言語の切り替えに合わせるため、手書きの記事の文章はここで入れています。
+  // 自分のページなら、文章は HTML にそのまま書けば済みます。
+  const fillArticle = () => {
+    const put = (id, text) => { document.getElementById(id).textContent = text; };
+    put('title', t('Several apps and islands', { ja: '複数のアプリと島' }));
+    put('lead', t('This article is plain HTML. The boxes in it are separate ricdom apps.', { ja: 'この記事は普通の HTML です。中の箱が、それぞれ別の ricdom アプリです。' }));
+    put('h-apps', t('1. Two apps, two states, two themes', { ja: '1. アプリが 2 つ、状態も 2 つ、テーマも 2 つ' }));
+    put('p-apps', t('Each createApp call draws into its own element and keeps its own state. The right one is always dark: a theme belongs to an element, not to the page.', { ja: 'createApp は呼ぶたびに、自分の要素の中だけを描き、自分の状態を持ちます。右の箱はいつも dark です。テーマはページではなく、要素に付きます。' }));
+    put('h-island', t('2. An island: a canvas that ricdom leaves alone', { ja: '2. 島: ricdom が触らない canvas' }));
+    put('p-island', t('The controls are drawn by ricdom. The canvas is drawn by an animation loop of its own.', { ja: '操作する部分は ricdom が描きます。canvas は、独自のアニメーションのループが描きます。' }));
+    put('h-portal', t('3. Where a dialog is drawn: portalTo', { ja: '3. ダイアログをどこに描くか: portalTo' }));
+    put('p-portal', t('Both boxes are dark and open the same dialog. The left dialog is dark like its app; the right one follows the page.', { ja: 'どちらの箱も dark で、同じダイアログを開きます。左のダイアログはアプリと同じ dark に、右のダイアログはページのテーマになります。' }));
+  };
+  fillArticle();
+
+  // ── 1. Two apps ──────────────────────────────────────────────────────────────────────────────
+  // App A: the core alone is enough for a counter. createApp returns the app; reading and assigning
+  // its state from outside (appA.count) works the same as `s.count` inside render.
+  // アプリ A: カウンターならコアだけで足ります。createApp はアプリを返します。外から状態を読み書きする
+  // (appA.count) のは、render の中の `s.count` と同じです。
+  const appA = ricdom.createApp('#app-a', { count: 0 }, (s) => ({
+    tag: 'div',
+    children: [
+      U.uiText({ children: [t('App A', { ja: 'アプリ A' })] }),
+      U.uiRow({
+        children: [
+          U.uiButton({ children: ['+1'], onclick: () => { s.count += 1; } }),
+          { tag: 'output', children: [String(s.count)] },
+        ],
+      }),
+    ],
+  }));
+
+  // App B has a theme of its own. applyTheme sets the theme's CSS variables on the element you give
+  // it, so the components inside that element use them. The rest of the page keeps the theme chosen
+  // in the nav bar.
+  // アプリ B は自分のテーマを持ちます。applyTheme は、渡した要素にテーマの CSS 変数を設定するので、
+  // その要素の中の部品がそれを使います。ページのほかの部分は、ナビバーで選んだテーマのままです。
+  U.applyTheme(document.getElementById('app-b'), { theme: 'dark' });
+
+  // Apps talk to each other through ordinary JavaScript: this button assigns to app A's state,
+  // and app A redraws by itself.
+  // アプリ同士のやりとりは、普通の JavaScript です。このボタンはアプリ A の状態に代入し、
+  // アプリ A は自分で描き直します。
+  const appB = ricdom.createApp('#app-b', { clicks: 0 }, (s) => ({
+    tag: 'div',
+    children: [
+      U.uiText({ children: [t('App B (always dark)', { ja: 'アプリ B (いつも dark)' })] }),
+      U.uiRow({
+        children: [
+          U.uiButton({
+            children: [t('Reset app A', { ja: 'アプリ A を 0 に戻す' })],
+            onclick: () => {
+              appA.count = 0;
+              s.clicks += 1;
+            },
+          }),
+          { tag: 'output', children: [t`used ${s.clicks} times`] },
+        ],
+      }),
+    ],
+  }));
+
+  // ── 2. An island ─────────────────────────────────────────────────────────────────────────────
+  // `island: true` tells ricdom to build the element once and never look inside it again.
+  // `ref: 'stage'` registers the element, so the loop below can get it with app.refs.get('stage').
+  // Without `island`, an element with no children means "empty", and a later render would clear
+  // whatever another script put inside it. (A canvas keeps its pixels either way, but a chart or
+  // editor library that adds child elements would lose them.)
+  // `island: true` は「この要素は 1 回だけ作り、その後は中を見ない」という指定です。
+  // `ref: 'stage'` で要素を登録しておくと、下のループが app.refs.get('stage') で取り出せます。
+  // `island` を付けないと、子の無い要素は「空」という意味になり、ほかのスクリプトが中に入れたものを
+  // 後の描画が消してしまいます。(canvas の絵はどちらでも消えませんが、子要素を足すグラフや
+  // エディタのライブラリでは消えます。)
+  const appC = ricdom.createApp('#app-c', { speed: 60, running: true, fps: 0 }, (s) => ({
+    tag: 'div',
+    children: [
+      U.uiRow({
+        class: 'controls',
+        children: [
+          U.uiButton({
+            children: [s.running ? t('Pause', { ja: '止める' }) : t('Resume', { ja: '再開する' })],
+            onclick: () => { s.running = !s.running; },
+          }),
+          U.uiText({ class: 'nowrap', children: [t('Speed', { ja: '速さ' })] }),
+          U.uiRange({ value: s.speed, min: 0, max: 200, style: { width: '200px', flex: 'none' }, oninput: (e) => { s.speed = Number(e.target.value); } }),
+          { tag: 'output', class: 'nowrap', children: [t`${s.fps} frames per second`] },
+        ],
+      }),
+      { tag: 'canvas', class: 'stage', island: true, ref: 'stage', width: 480, height: 270 },
+    ],
+  }));
+
+  // The loop is plain canvas code. It reads appC.speed and appC.running every frame (reading state
+  // never redraws), and writes appC.fps once per second (assigning redraws the row above).
+  // ループは普通の canvas のコードです。毎フレーム appC.speed と appC.running を読み (読むだけでは
+  // 描き直しません)、1 秒に 1 回だけ appC.fps に書きます (代入すると上の行が描き直されます)。
+  const stage = appC.refs.get('stage');
+  const ctx = stage.getContext('2d');
+  const balls = Array.from({ length: 12 }, (_, i) => ({ x: 40 + i * 35, y: 40 + (i * 53) % 190, dx: i % 2 ? 1 : -1, dy: i % 3 ? 1 : -1, hue: i * 30 }));
+  let last = performance.now();
+  let frames = 0;
+  let since = last;
+  const frame = (now) => {
+    const dt = (now - last) / 1000;
+    last = now;
+    if (appC.running) {
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.25)';
+      ctx.fillRect(0, 0, stage.width, stage.height);
+      for (const b of balls) {
+        b.x += b.dx * appC.speed * dt;
+        b.y += b.dy * appC.speed * dt;
+        if (b.x < 8 || b.x > stage.width - 8) b.dx = -b.dx;
+        if (b.y < 8 || b.y > stage.height - 8) b.dy = -b.dy;
+        b.x = Math.min(Math.max(b.x, 8), stage.width - 8);
+        b.y = Math.min(Math.max(b.y, 8), stage.height - 8);
+        ctx.fillStyle = `hsl(${b.hue} 80% 60%)`;
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, 8, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    frames += 1;
+    if (now - since >= 1000) {
+      appC.fps = Math.round((frames * 1000) / (now - since));
+      frames = 0;
+      since = now;
+    }
+    requestAnimationFrame(frame);
+  };
+  requestAnimationFrame(frame);
+
+  // ── 3. portalTo ──────────────────────────────────────────────────────────────────────────────
+  // Dialogs, popups and toasts are not drawn where you call them: each app draws them into one
+  // extra element, its "portal". By default the portal is created inside the app's own element, so
+  // a dialog inherits the app's theme. `portalTo` names another element to use instead; here it
+  // sits directly under <body>, so the dialog takes the page's theme.
+  // ダイアログ・ポップアップ・トーストは、呼び出した場所には描かれません。アプリごとに 1 つある
+  // 「ポータル」という要素にまとめて描かれます。既定ではポータルはアプリ自身の要素の中に作られるので、
+  // ダイアログはアプリのテーマを受け継ぎます。`portalTo` で別の要素を指定できます。ここでは
+  // <body> の直下の要素を指定しているので、ダイアログはページのテーマになります。
+  const makeDialogApp = (selector, title, options) => {
+    U.applyTheme(document.querySelector(selector), { theme: 'dark' });
+    let dlg;
+    return ricdom.createApp(
+      selector,
+      {},
+      () =>
+        U.uiRow({
+          children: [
+            U.uiText({ class: 'nowrap', children: [title()] }),
+            // With triggerChildren the dialog draws its own "open" button.
+            // triggerChildren を渡すと、ダイアログが自分の「開く」ボタンを描きます。
+            dlg({
+              triggerChildren: [t('Open dialog', { ja: 'ダイアログを開く' })],
+              title: title(),
+              children: [t('Compare my colours with the box that opened me.', { ja: '開いた箱と、このダイアログの色を見比べてください。' })],
+              actions: [U.uiButton({ variant: 'primary', children: [t('Close', { ja: '閉じる' })], onclick: () => dlg.close() })],
+            }),
+          ],
+        }),
+      // The dialog keeps state (open or closed), so it is registered with app.use() in `setup`.
+      // ダイアログは状態 (開いているか) を持つので、`setup` の中で app.use() を使って登録します。
+      { ...options, setup: (a) => { dlg = a.use(U.createDialog()); } },
+    );
+  };
+  const appD = makeDialogApp('#app-d', () => t('Default portal', { ja: '既定のポータル' }), {});
+  const appE = makeDialogApp('#app-e', () => t('portalTo: outside the app', { ja: 'portalTo: アプリの外' }), { portalTo: document.getElementById('page-portal') });
+
+  // Site helper: t() returns a plain string, so draw everything again once when the language changes.
+  // サイトの補助: t() の戻り値はただの文字列なので、言語が変わったら全部を 1 回描き直します。
+  onLangChange(() => {
+    fillArticle();
+    for (const a of [appA, appB, appC, appD, appE]) a.renderNow();
+  });
+</script>
+</body>
+</html>

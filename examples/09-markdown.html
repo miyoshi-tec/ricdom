@@ -2,31 +2,41 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>ricdom — 09 Markdown editor (no build step)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ricdom — 09 Markdown (no build step)</title>
 <!-- ricdom-ui.css styles ricdom's UI components, the Markdown editor included (load it before your own CSS). _fonts.css only sets this site's fonts.
      ricdom-ui.css は ricdom の UI 部品 (Markdown エディタを含む) の見た目です (自分の CSS より先に読み込みます)。_fonts.css はこのサイトのフォント設定だけです。 -->
 <link rel="stylesheet" href="../dist/ricdom-ui.css">
 <link rel="stylesheet" href="_fonts.css">
 <style>
-  main { padding: 2rem; max-width: 720px; }
-  h1 { font-size: 1.1rem; }
+  /* Every rule below targets a class that only this page's own elements carry.
+     下の規則はどれも、このページ自身の要素にだけ付けたクラスを対象にしています。 */
+  main { padding: 2rem; max-width: 900px; }
+  .page-title { font-size: 1.3rem; }
+  .section { font-size: 1rem; margin: 2rem 0 0.25rem; }
+  .note { margin: 0.75rem 0 0.5rem; color: var(--ric-color-fg-muted); }
+  .demo { display: flex; flex-direction: column; gap: 0.75rem; }
   /* wrapperClass puts this class on the editor's outer box (not on the textarea), so you can size
      the editor from your own CSS without relying on the library's internal class names.
      wrapperClass を渡すと、このクラスがエディタの外側の箱 (textarea ではなく) に付きます。
      ライブラリ内部のクラス名に頼らずに、自分の CSS でエディタの大きさを決められます。 */
   .example-md-editor { width: 100%; }
-  .example-md-editor textarea { min-height: 320px; }
+  .example-md-editor textarea { min-height: 440px; }
 </style>
 </head>
 <body>
 <!--
-  09 Markdown editor: ricdom/md-editor, an optional add-on with its own script (global ricdomMdEditor).
+  09 Markdown: first showing it, then editing it.
+  uiMdPre draws a Markdown string and uiCodePre shows code or JSON; both are plain functions of
+  ricdom/ui. ricdom/md-editor is an optional add-on with its own script (global ricdomMdEditor).
   What you type into is still a plain <textarea>, so value, oninput and ref work exactly as with
   uiTextarea. The colours come from a hidden copy of the text drawn behind it, so native editing
   (IME input, undo, spellcheck, screen readers) is untouched.
   No build step: three scripts (ricdom, ricdom/ui, then ricdom/md-editor) and one stylesheet.
 
-  09 Markdown エディタ: ricdom/md-editor は、専用の <script> で読み込む追加部品です (グローバル変数 ricdomMdEditor)。
+  09 Markdown: 前半は表示、後半は編集です。
+  uiMdPre は Markdown の文字列を描画し、uiCodePre はコードや JSON を表示します。どちらも ricdom/ui の
+  ただの関数です。ricdom/md-editor は、専用の <script> で読み込む追加部品です (グローバル変数 ricdomMdEditor)。
   文字を打ち込む先はただの <textarea> なので、value・oninput・ref は uiTextarea とまったく同じに使えます。
   色は、背後に重ねた「見えない写し」が付けています。そのため、日本語入力・元に戻す・スペルチェック・
   読み上げといったブラウザ本来の編集機能はそのまま働きます。
@@ -36,8 +46,10 @@
   <div id="app"></div>
 </main>
 
-<!-- Optional: highlight.js colours the code in this site's Source view. ricdom does not need it.
-     任意: highlight.js はこのサイトの「ソース」表示を色分けします。ricdom 自体には不要です。 -->
+<!-- Optional: highlight.js colours code (the code blocks on this page and this site's Source view).
+     uiMdPre, uiCodePre and the editor use it when it is loaded, and show plain text when it is not.
+     任意: highlight.js はコードを色分けします (このページのコードブロックと、このサイトの「ソース」表示)。
+     uiMdPre・uiCodePre・エディタは、読み込まれていればそれを使い、無ければ色分けなしで表示します。 -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
 <!-- ricdom itself: the core, the UI components, then the Markdown editor. They define the globals ricdom, ricdomUI and ricdomMdEditor.
      ricdom 本体: コア → UI 部品 → Markdown エディタの順に読み込みます。グローバル変数 ricdom・ricdomUI・ricdomMdEditor ができます。 -->
@@ -62,10 +74,6 @@
   // The text the editor starts with. It shows most of the syntax that gets coloured.
   // エディタの最初の中身です。色分けされる構文をひととおり含めています。
   const SAMPLE = [
-    '---',
-    'title: ricdom/md-editor sample',
-    '---',
-    '',
     '# ricdom/md-editor',
     '',
     'A **Markdown**-colored `textarea` with *no* extra dependency. Supports:',
@@ -93,40 +101,123 @@
     '',
     '---',
     '',
-    'Try typing below — the colors update as you type.',
+    'Try typing here: the colors and the preview update as you type.',
   ].join('\n');
 
   // The editor keeps state (the hidden copy that follows your typing), so it is registered with
-  // app.use() in `setup` (bottom), before the first render.
-  // エディタは状態 (入力に追従する見えない写し) を持つので、最初の描画の前に `setup` (下) で app.use() を使って登録します。
+  // app.use() in `setup` (bottom), before the first render. uiMdPre and uiCodePre keep none, so
+  // they are called directly.
+  // エディタは状態 (入力に追従する見えない写し) を持つので、最初の描画の前に `setup` (下) で app.use() を
+  // 使って登録します。uiMdPre と uiCodePre は状態を持たないので、そのまま呼びます。
   let md;
 
   const app = ricdom.createApp(
     '#app',
     { body: SAMPLE },
-    (s) =>
-      U.uiPanel({
-        children: [
-          { tag: 'h1', children: [t('ricdom/md-editor', { ja: 'ricdom/md-editor' })] },
-          U.uiText({
-            children: [t(
-              'The area below is a real <textarea>. Markdown syntax (headings, bold, emphasis, links, fenced code, tables, ...) is colored by an invisible mirror layered behind it.',
-              { ja: '下の欄は本物の <textarea> です。Markdown の構文 (見出し・太字・強調・リンク・コードブロック・表など) は、背後に重ねた見えないミラーが色分けします。' },
-            )],
-          }),
-          U.uiSeparator(),
-          // Used exactly like a textarea: value in, oninput out.
-          // textarea と同じ使い方です: value で渡し、oninput で受け取ります。
-          md({
-            value: s.body,
-            placeholder: t('Write Markdown…', { ja: 'Markdown を書いてください…' }),
-            wrapperClass: 'example-md-editor',
-            oninput: (ev) => {
-              s.body = ev.target.value;
-            },
-          }),
-        ],
-      }),
+    (s) => ({
+      tag: 'div',
+      children: [
+        { tag: 'h1', class: 'page-title', children: ['Markdown'] },
+        { tag: 'p', class: 'note', children: [t(
+          'Two components show Markdown and code, and one edits Markdown. At the bottom of the page they work together as an editor with a live preview.',
+          { ja: 'Markdown とコードを表示する部品が 2 つ、Markdown を編集する部品が 1 つあります。ページの最後では、それらを組み合わせて、プレビューつきのエディタにしています。' },
+        )] },
+
+        // ── uiMdPre ──
+        // `children` is the Markdown source as a string. uiMdPre turns it into ordinary elements
+        // (headings, lists, tables, ...) itself, with no other library. It covers a practical
+        // subset of Markdown, not all of it.
+        // `children` に Markdown の原稿を文字列で渡します。uiMdPre は、ほかのライブラリを使わずに、それを
+        // 普通の要素 (見出し・リスト・表など) に変換します。対応しているのは Markdown のうち実用的な範囲で、
+        // すべてではありません。
+        { tag: 'h2', class: 'section', children: ['uiMdPre'] },
+        { tag: 'p', class: 'note', children: [t('Draws a Markdown string: headings, bold, italic, code, links, lists, quotes, tables, code blocks.', { ja: 'Markdown の文字列を描画します。見出し・太字・斜体・コード・リンク・リスト・引用・表・コードブロックに対応しています。' })] },
+        U.uiPanel({
+          children: [
+            U.uiMdPre({
+              children: [
+                [
+                  '## ' + t('Heading', { ja: '見出し' }),
+                  '',
+                  t('**bold**, *italic*, `code` and a [link](https://github.com/miyoshi-tec/ricdom)', { ja: '**太字**・*斜体*・`code`・[リンク](https://github.com/miyoshi-tec/ricdom)' }),
+                  '',
+                  '- ' + t('Item A', { ja: '項目 A' }),
+                  '- ' + t('Item B', { ja: '項目 B' }),
+                  '',
+                  '1. ' + t('Step 1', { ja: '手順 1' }),
+                  '2. ' + t('Step 2', { ja: '手順 2' }),
+                  '',
+                  '> ' + t('A quotation', { ja: '引用' }),
+                  '',
+                  '```js',
+                  "console.log('hello');",
+                  '```',
+                ].join('\n'),
+              ],
+            }),
+          ],
+        }),
+
+        // ── uiCodePre ──
+        // Pass code as a string in `children` (`lang` names the language for highlight.js), or pass
+        // any value as `obj` and it is shown as JSON. Because render runs again on every change,
+        // the second block follows what you type into the editor below.
+        // コードは `children` に文字列で渡します (`lang` は highlight.js に伝える言語名です)。`obj` に値を渡すと、
+        // JSON として表示されます。render は変更のたびに実行されるので、2 つ目のブロックは、下のエディタに
+        // 打った内容に追従します。
+        { tag: 'h2', class: 'section', children: ['uiCodePre'] },
+        { tag: 'p', class: 'note', children: [t('Shows code, or any value as JSON. The second block counts the text in the editor below, so it changes as you type there.', { ja: 'コードを表示します。値を渡すと JSON で表示します。2 つ目のブロックは下のエディタの文字を数えているので、エディタに入力すると変わります。' })] },
+        {
+          tag: 'div',
+          class: 'demo',
+          children: [
+            U.uiCodePre({
+              lang: 'javascript',
+              children: [
+                [
+                  "const app = ricdom.createApp('#app', { count: 0 }, (s) => ({",
+                  "  tag: 'button',",
+                  '  onclick: () => { s.count += 1; },',
+                  '  children: [String(s.count)],',
+                  '}));',
+                ].join('\n'),
+              ],
+            }),
+            U.uiCodePre({ obj: { characters: s.body.length, lines: s.body.split('\n').length } }),
+          ],
+        },
+
+        // ── ricdom/md-editor ──
+        // The editor is used exactly like a textarea: value in, oninput out. The preview next to it
+        // is uiMdPre given the same string, so the two always agree. uiGrid puts them side by side
+        // when there is room for two columns of 280px, and stacks them when there is not.
+        // エディタは textarea と同じ使い方です: value で渡し、oninput で受け取ります。隣のプレビューは、
+        // 同じ文字列を渡した uiMdPre なので、両者はいつも一致します。uiGrid は、280px の列が 2 つ入る幅が
+        // あれば横に並べ、無ければ縦に積みます。
+        { tag: 'h2', class: 'section', children: ['ricdom/md-editor'] },
+        { tag: 'p', class: 'note', children: [t(
+          'The left side is a real <textarea>: Markdown syntax is coloured by an invisible copy of the text layered behind it. The right side draws the same text with uiMdPre. The editor colours a little more syntax than uiMdPre draws (task lists and <autolinks>, for example).',
+          { ja: '左は本物の <textarea> です。Markdown の構文は、背後に重ねた見えない写しが色分けしています。右は、同じ文字列を uiMdPre で描画したものです。エディタが色分けする構文は、uiMdPre が描画できる構文より少し広めです (タスクリストや <自動リンク> など)。' },
+        )] },
+        U.uiGrid({
+          columns: 'auto-fit 280px',
+          children: [
+            md({
+              value: s.body,
+              placeholder: t('Write Markdown…', { ja: 'Markdown を書いてください…' }),
+              wrapperClass: 'example-md-editor',
+              oninput: (ev) => {
+                s.body = ev.target.value;
+              },
+            }),
+            // minWidth: 0 lets a wide table or code block scroll inside the panel instead of
+            // widening the column.
+            // minWidth: 0 を付けると、幅の広い表やコードブロックが列を押し広げず、パネルの中でスクロールします。
+            U.uiPanel({ style: { minWidth: 0, overflowX: 'auto' }, children: [U.uiMdPre({ children: [s.body] })] }),
+          ],
+        }),
+      ],
+    }),
     { setup: (a) => { md = a.use(MD.createMdEditor()); } },
   );
 

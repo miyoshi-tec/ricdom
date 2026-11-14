@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ricdom — 07 Tabs and accordion (no build step)</title>
+<!-- ricdom-ui.css styles ricdom's UI components (load it before your own CSS). _fonts.css only sets this site's fonts.
+     ricdom-ui.css は ricdom の UI 部品の見た目です (自分の CSS より先に読み込みます)。_fonts.css はこのサイトのフォント設定だけです。 -->
+<link rel="stylesheet" href="../dist/ricdom-ui.css">
+<link rel="stylesheet" href="_fonts.css">
+<style>
+  .page { box-sizing: border-box; width: calc(100% - 2rem); max-width: 720px; margin: 1.5rem auto; }
+  .page > h1 { font-size: 1.1rem; margin: 0; }
+  .demo { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+  .demo > h2 { font-size: 0.95rem; margin: 0; }
+  .demo > p { margin: 0; }
+  .demo > .ric-tabs, .demo > .ric-accordion, .demo > .wide { align-self: stretch; }
+  .wrap { flex-wrap: wrap; }
+  .tile { box-sizing: border-box; padding: 8px; border: 1px solid var(--ric-color-border); border-radius: var(--ric-radius); }
+</style>
+</head>
+<body>
+<!--
+  07 Tabs and accordion: two ways to show one part of the content at a time.
+  Each can be written in two styles. Uncontrolled: the component remembers what is selected or
+  open, and you write no state. Controlled: your app state holds it, so buttons elsewhere, a saved
+  setting or a URL can change it too.
+  No build step: two scripts (ricdom, then ricdom/ui) and one stylesheet.
+
+  07 タブとアコーディオン: 内容の一部だけを切り替えて表示する 2 つの部品です。
+  どちらも 2 通りの書き方ができます。部品に任せる書き方 (uncontrolled) では、選択中のタブや開閉を部品が覚えるので、
+  state を書きません。アプリの state で持つ書き方 (controlled) では、ほかの場所のボタン、保存した設定、URL などからも
+  切り替えられます。
+  ビルド不要: <script> 2 本 (ricdom → ricdom/ui) と CSS 1 本で動きます。
+-->
+<div id="app"></div>
+
+<!-- Optional: highlight.js colours the code in this site's Source view. ricdom does not need it.
+     任意: highlight.js はこのサイトの「ソース」表示を色分けします。ricdom 自体には不要です。 -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
+<!-- ricdom itself: the core first, then the UI components. They define the globals ricdom and ricdomUI.
+     ricdom 本体: コア → UI 部品の順に読み込みます。グローバル変数 ricdom と ricdomUI ができます。 -->
+<script src="../dist/ricdom.iife.min.js"></script>
+<script src="../dist/ricdom-ui.iife.min.js"></script>
+<!-- Docs-site helpers, not part of ricdom: the nav bar (theme, language, previous / next page) and t() for translations.
+     このサイト専用の補助で、ricdom の一部ではありません: ナビバー (テーマ・言語・前後のページ) と翻訳用の t() です。 -->
+<script src="_i18n.js"></script><script src="_samples.js"></script><script src="_nav.js"></script>
+<script>
+  // A short name for the UI components.
+  // UI 部品を短い名前で呼べるようにします。
+  const U = ricdomUI;
+
+  // Site helper: t(text, { ja: '...' }) returns the text in the chosen language, with the Japanese
+  // written where the string is used. The entries in addDict are for the t`...${value}...` form,
+  // which puts a value into the text and is always looked up in the dictionary.
+  // サイトの補助: t(文字列, { ja: '…' }) は選択中の言語の文字列を返します。日本語は使う場所に書きます。
+  // addDict の分は、値を差し込む t`…${値}…` の形のためのもので、この形は常に辞書から訳を引きます。
+  const { t, addDict, onLangChange } = ricdomI18n;
+  addDict('ja', {
+    'Item {0}': '項目 {0}',
+    'The state now holds: {0}': 'いまの state の値: {0}',
+  });
+
+  // Icon data (SVG paths) comes from `npx ricdom-icon info`. Copy it; do not write it by hand.
+  // アイコンのデータ (SVG のパス) は `npx ricdom-icon info` で取得します。手書きはしません。
+  const ICON_INFO = { p: ['M12 22a10 10 0 1 0 0-20 10 10 0 1 0 0 20z', 'M12 16v-4', 'M12 8h.01'] };
+
+  // App state, used only by the controlled demos: the wizard step (demo 2), the view (demo 3),
+  // "several panels at once" (demo 4), and which settings panels are open (demo 5).
+  // アプリの状態です。state で持つ書き方 (controlled) の実演だけが使います。ウィザードの段階 (実演 2)、
+  // 表示の種類 (実演 3)、「複数のパネルを同時に開く」(実演 4)、開いている設定パネル (実演 5) です。
+  const state = {
+    step: 'account',
+    view: 'list',
+    multi: false,
+    open: { general: true, network: false, advanced: false },
+    nickname: '',
+    proxy: '',
+  };
+
+  // Tabs and accordions keep state (at least in the uncontrolled style), so each one on the page is
+  // registered with app.use(). They are assigned in `setup` at the bottom, which runs once before
+  // the first render.
+  // タブとアコーディオンは状態を持つ (少なくとも部品に任せる書き方では) ので、ページ上の 1 つ 1 つを app.use() で登録します。
+  // 登録は下の `setup` で行います。setup は最初の描画の前に 1 回だけ実行されます。
+  let plainTabs, stepTabs, viewTabs, faq, settings;
+
+  // One demo on this page: a heading, a sentence that says what to try, then the live components.
+  // このページの実演 1 つ分です: 見出し、試すことを書いた 1 文、その下に実際に動く部品を並べます。
+  const demo = (title, text, ...children) => ({
+    tag: 'section',
+    class: 'demo',
+    children: [{ tag: 'h2', children: [title] }, { tag: 'p', children: [text] }, ...children],
+  });
+
+  // Demo 1. Uncontrolled tabs: pass `items` (key, label, children) and nothing else. The component
+  // remembers the selected tab; the first one is selected at the start unless you pass
+  // `defaultActive`. Only the selected tab is in the Tab key order; the arrow keys move between tabs.
+  // 実演 1。部品に任せる書き方のタブです。`items` (key・label・children) だけを渡します。選択中のタブは部品が覚えます。
+  // `defaultActive` を渡さなければ、最初は先頭のタブが選ばれます。Tab キーで移動できるのは選択中のタブだけで、
+  // タブの間は矢印キーで移動します。
+  const plainTabsDemo = () =>
+    demo(
+      t('createTabs: the component remembers', { ja: 'createTabs: 部品に任せる' }),
+      t(
+        'Click a tab. With the keyboard: Tab moves to the selected tab, ← and → switch tabs, Home and End jump to the first and the last.',
+        { ja: 'タブをクリックしてください。キーボードでは、Tab キーで選択中のタブへ移動し、← → でタブを切り替え、Home / End で先頭 / 末尾のタブへ移動します。' },
+      ),
+      plainTabs({
+        defaultActive: 'notifications',
+        items: [
+          { key: 'profile', label: t('Profile', { ja: 'プロフィール' }), children: [t('Your name and photo.', { ja: '名前と写真の設定です。' })] },
+          { key: 'notifications', label: t('Notifications', { ja: '通知' }), children: [t('Choose which emails you receive.', { ja: '受け取るメールの種類を選びます。' })] },
+          { key: 'billing', label: t('Billing', { ja: '請求' }), children: [t('Your plan and invoices.', { ja: 'プランと請求書の確認です。' })] },
+        ],
+      }),
+    );
+
+  // Demo 2. Controlled tabs: `active` says which tab is selected, and it comes from your state.
+  // Selecting a tab calls onChange(key); the tab only changes because the handler writes the state.
+  // Anything else that writes s.step, like the Back and Next buttons here, switches the tab as well.
+  // 実演 2。state で持つ書き方のタブです。`active` に選択中のタブを渡し、その値は自分の state から取ります。
+  // タブを選ぶと onChange(key) が呼ばれます。タブが切り替わるのは、その中で state に書き込むからです。
+  // s.step に書き込むものなら何でも (ここでは「戻る」「次へ」ボタン)、同じようにタブを切り替えられます。
+  const STEPS = ['account', 'plan', 'confirm'];
+  const stepTabsDemo = (s) => {
+    const index = STEPS.indexOf(s.step);
+    return demo(
+      t('createTabs: your state decides', { ja: 'createTabs: 自分の state で持つ' }),
+      t(
+        'The Back and Next buttons are outside the tabs: they just assign s.step. Clicking a tab does the same through onChange.',
+        { ja: '「戻る」「次へ」ボタンはタブの外にあり、s.step に代入しているだけです。タブのクリックも、onChange を通して同じことをしています。' },
+      ),
+      stepTabs({
+        active: s.step,
+        onChange: (key) => { s.step = key; },
+        items: [
+          { key: 'account', label: t('1. Account', { ja: '1. アカウント' }), children: [t('Step 1: who are you?', { ja: '手順 1: アカウントの情報を入力します。' })] },
+          { key: 'plan', label: t('2. Plan', { ja: '2. プラン' }), children: [t('Step 2: pick a plan.', { ja: '手順 2: プランを選びます。' })] },
+          { key: 'confirm', label: t('3. Confirm', { ja: '3. 確認' }), children: [t('Step 3: check and finish.', { ja: '手順 3: 内容を確かめて完了します。' })] },
+        ],
+      }),
+      U.uiRow({
+        class: 'wrap',
+        children: [
+          U.uiButton({ disabled: index === 0, children: [t('← Back', { ja: '← 戻る' })], onclick: () => { s.step = STEPS[index - 1]; } }),
+          U.uiButton({ variant: 'primary', disabled: index === STEPS.length - 1, children: [t('Next →', { ja: '次へ →' })], onclick: () => { s.step = STEPS[index + 1]; } }),
+          U.uiText({ variant: 'muted', children: [t`The state now holds: ${`s.step = '${s.step}'`}`] }),
+        ],
+      }),
+    );
+  };
+
+  // Demo 3. variant: 'pill' draws the tabs as a row of rounded buttons (the default is 'line', as
+  // above). When no item has `children`, createTabs draws only the row of tabs and no panel: a
+  // switch whose result you draw yourself, here a list or a grid of the same items.
+  // 実演 3。variant: 'pill' を渡すと、タブを角の丸いボタンの列として描きます (既定は上の 2 つと同じ 'line')。
+  // どの item にも `children` が無いときは、タブの列だけを描き、パネルは描きません。切り替えた結果は自分で描きます。
+  // ここでは、同じ項目を一覧か格子のどちらかで表示しています。
+  const viewTabsDemo = (s) => {
+    const items = [1, 2, 3, 4].map((n) => ({ tag: 'div', class: 'tile', children: [t`Item ${n}`] }));
+    return demo(
+      t("createTabs: variant 'pill', and tabs without panels", { ja: "createTabs: variant 'pill' と、パネルの無いタブ" }),
+      t(
+        'These tabs have no panels of their own. They only choose how the items below are laid out.',
+        { ja: 'このタブは自分のパネルを持ちません。下の項目の並べ方を選ぶだけです。' },
+      ),
+      viewTabs({
+        variant: 'pill',
+        active: s.view,
+        onChange: (key) => { s.view = key; },
+        items: [
+          { key: 'list', label: t('List', { ja: '一覧' }) },
+          { key: 'grid', label: t('Grid', { ja: '格子' }) },
+        ],
+      }),
+      s.view === 'list' ? U.uiCol({ class: 'wide', gap: 4, children: items }) : U.uiGrid({ class: 'wide', columns: 2, gap: 4, children: items }),
+    );
+  };
+
+  // Demo 4. Uncontrolled accordion: pass `items` (id, title, children). The component remembers
+  // which panels are open; `defaultOpen` (an option of createAccordion, see `setup`) opens q1 at
+  // the start. With multi: false, opening one panel closes the others; the default lets several
+  // stay open. Each header is a real button, so Enter and Space work on it.
+  // 実演 4。部品に任せる書き方のアコーディオンです。`items` (id・title・children) を渡します。どのパネルが開いているかは
+  // 部品が覚えます。`defaultOpen` (createAccordion のオプション。`setup` を見てください) で、最初に q1 を開いています。
+  // multi: false にすると、1 つを開けばほかは閉じます。既定では複数を同時に開けます。
+  // 見出しは本物のボタンなので、Enter キーと Space キーで開閉できます。
+  const faqDemo = (s) =>
+    demo(
+      t('createAccordion: the component remembers', { ja: 'createAccordion: 部品に任せる' }),
+      t(
+        'Click a question to open it. Tick the box and several answers can stay open at the same time.',
+        { ja: '質問をクリックすると開きます。チェックを入れると、複数の答えを同時に開いておけます。' },
+      ),
+      U.bindCheckbox(s, 'multi', { children: [t('Let several panels stay open (multi: true)', { ja: '複数のパネルを同時に開けるようにする (multi: true)' })] }),
+      faq({
+        multi: s.multi,
+        items: [
+          {
+            id: 'q1',
+            title: t('Do I need a build step?', { ja: 'ビルドは必要ですか？' }),
+            children: [t('No. Two <script> tags and one CSS <link> are enough.', { ja: 'いいえ。<script> 2 本と CSS の <link> 1 本だけで動きます。' })],
+          },
+          {
+            id: 'q2',
+            title: t('How do I register a stateful component?', { ja: '状態を持つ部品はどう登録しますか？' }),
+            children: [t('Once, with app.use(createAccordion()).', { ja: 'app.use(createAccordion()) で 1 回だけ登録します。' })],
+          },
+          {
+            id: 'q3',
+            title: [U.uiIcon(ICON_INFO, { size: 16 }), ' ', t('Can a title contain more than text?', { ja: '見出しに文字以外を入れられますか？' })],
+            children: [t('Yes. A title can be any nodes, for example an icon followed by text.', { ja: 'はい。見出しには、アイコンと文字の組み合わせなど、任意のノードを渡せます。' })],
+          },
+        ],
+      }),
+    );
+
+  // Demo 5. Controlled accordion: `open` is an object { id: true or false } from your state.
+  // Clicking a header calls onToggle(id, nextOpen, nextMap); nextMap is the whole next object, so
+  // storing it is all the handler has to do. The buttons below write the same state directly.
+  // A closed panel is inert: its controls are skipped by the Tab key and hidden from screen readers.
+  // 実演 5。state で持つ書き方のアコーディオンです。`open` に、自分の state にある { id: true か false } のオブジェクトを渡します。
+  // 見出しをクリックすると onToggle(id, nextOpen, nextMap) が呼ばれます。nextMap は次の状態のオブジェクト全体なので、
+  // それを state に入れるだけで済みます。下のボタンは、同じ state に直接書き込んでいます。
+  // 閉じたパネルは inert になり、中の操作部品は Tab キーで飛ばされ、スクリーンリーダーからも隠されます。
+  const settingsDemo = (s) =>
+    demo(
+      t('createAccordion: your state decides', { ja: 'createAccordion: 自分の state で持つ' }),
+      t(
+        'Open and close panels with the buttons or by clicking the headers: both change the same state. Then press Tab through the accordion: the inputs in closed panels are skipped.',
+        { ja: 'ボタンでも、見出しのクリックでも開閉できます。どちらも同じ state を書き換えています。次に、Tab キーでアコーディオンの中を移動してみてください。閉じたパネルの入力欄は飛ばされます。' },
+      ),
+      U.uiRow({
+        class: 'wrap',
+        children: [
+          U.uiButton({ children: [t('Open all', { ja: 'すべて開く' })], onclick: () => { s.open = { general: true, network: true, advanced: true }; } }),
+          U.uiButton({ children: [t('Close all', { ja: 'すべて閉じる' })], onclick: () => { s.open = { general: false, network: false, advanced: false }; } }),
+        ],
+      }),
+      settings({
+        open: s.open,
+        onToggle: (id, nextOpen, nextMap) => { s.open = nextMap; },
+        items: [
+          {
+            id: 'general',
+            title: t('General', { ja: '一般' }),
+            children: [U.bindInput(s, 'nickname', { 'aria-label': t('Nickname', { ja: 'ニックネーム' }), placeholder: t('Nickname', { ja: 'ニックネーム' }) })],
+          },
+          {
+            id: 'network',
+            title: t('Network', { ja: 'ネットワーク' }),
+            children: [U.bindInput(s, 'proxy', { 'aria-label': t('Proxy server', { ja: 'プロキシサーバー' }), placeholder: t('Proxy server', { ja: 'プロキシサーバー' }) })],
+          },
+          {
+            id: 'advanced',
+            title: t('Advanced', { ja: '詳細' }),
+            children: [U.uiButton({ children: [t('Reset all settings', { ja: 'すべての設定を初期化' })] })],
+          },
+        ],
+      }),
+      U.uiText({ variant: 'muted', children: [t`The state now holds: ${`s.open = ${JSON.stringify(s.open)}`}`] }),
+    );
+
+  const app = ricdom.createApp(
+    '#app',
+    state,
+    (s) =>
+      U.uiPanel({
+        class: 'page',
+        children: [
+          { tag: 'h1', children: [t('ricdom — tabs and accordion', { ja: 'ricdom — タブとアコーディオン' })] },
+          plainTabsDemo(),
+          U.uiSeparator(),
+          stepTabsDemo(s),
+          U.uiSeparator(),
+          viewTabsDemo(s),
+          U.uiSeparator(),
+          faqDemo(s),
+          U.uiSeparator(),
+          settingsDemo(s),
+        ],
+      }),
+    {
+      setup: (a) => {
+        plainTabs = a.use(U.createTabs());
+        stepTabs = a.use(U.createTabs());
+        viewTabs = a.use(U.createTabs());
+        faq = a.use(U.createAccordion({ defaultOpen: { q1: true } }));
+        settings = a.use(U.createAccordion());
+      },
+    },
+  );
+
+  // Site helper: t() returns a plain string, so draw again once when the language changes.
+  // サイトの補助: t() の戻り値はただの文字列なので、言語が変わったら 1 回描き直します。
+  onLangChange(() => app.renderNow());
+</script>
+</body>
+</html>

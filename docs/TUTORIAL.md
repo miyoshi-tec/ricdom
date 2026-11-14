@@ -1,734 +1,809 @@
-# ricdom TUTORIAL
+# What is ricdom? — A JavaScript UI library where "you write the UI as objects, and the screen follows when you assign to state"
 
-Ten short chapters, each with runnable code. This tutorial only uses a `<script>` tag —
-no build step, no `npm install` — so you can copy any snippet into an `.html` file and
-open it in a browser. For the full contract behind everything shown here, see
-[SPEC.md](SPEC.md).
+ricdom is a JavaScript UI library built around **data binding**. It was made for "building
+comfortable, valuable UIs" for web pages and web apps that run in a web browser (such as Chrome) or
+on Electron.
 
-1. [Setup](#1-setup)
-2. [Writing a tree](#2-writing-a-tree)
-3. [Changing state re-renders — and the one trap](#3-changing-state-re-renders--and-the-one-trap)
-4. [Wiring up inputs](#4-wiring-up-inputs)
-5. [Components and `use()`](#5-components-and-use)
-6. [Theme and CSS](#6-theme-and-css)
-7. [Dialog and popup](#7-dialog-and-popup)
-8. [The tweak panel](#8-the-tweak-panel)
-9. [Islands: coexisting with a `<canvas>`](#9-islands-coexisting-with-a-canvas)
-10. [Next steps](#10-next-steps)
+By a "comfortable, valuable UI" I mean a UI that is comfortable for the people who use the finished
+thing (the users), of course, and at the same time comfortable for the people who design, implement,
+and maintain it (designers and programmers).
 
----
+> This document is a rewrite of the 2020 article that introduced **JAVIS.js**, the predecessor of
+> ricdom, with ricdom put in its place. The same idea has been polished over three generations,
+> JAVIS → RicDOM v1 → ricdom (v2), so the skeleton of the article is kept as it was, and the code
+> and the "things you can now do" are swapped for their current form. The Japanese version is
+> [TUTORIAL.ja.md](TUTORIAL.ja.md).
 
-## 1. Setup
+## 0. Background
 
-One `<script>` tag is enough:
+To implement a comfortable UI that runs in a web browser, you have to make full use of HTML tags,
+tidy up the design with CSS, write events in JavaScript, and keep writing code with all kinds of
+situations in mind, such as screen size (responsive layout). "You can't build a comfortable,
+valuable UI unless you work hard and write a lot of code" — I feel that this is still how things
+stand today.
+
+Many people want to break out of this situation, and quite a few UI libraries (frameworks) have been
+released, such as React, Vue.js, Svelte, and Solid. Thanks to them, implementing a UI has become
+much easier. Even so, there was someone who felt it was "still far from comfortable" (that someone
+is me), and what came out of that feeling is JAVIS.js, and its third generation is ricdom.
+
+ricdom does not sell itself on being feature-rich. Quite the opposite: its selling point is being
+**simple and lightweight**. The core is about 5KB gzipped, and it asks for no build step on your
+side. It runs with a single `<script>` tag.
+
+- **ricdom**: pronounced "rick-dom". It stands for **Ri**ch **C**ontrol **DOM**, meaning "a DOM that
+  is easy to work with". JAVIS was named out of the wish to "bind JavaScript data to the UI
+  (Visualization)", whereas ricdom is named from the other end: "the well-controlled DOM you get as
+  a result"
+- **Web browser**: here this mainly means Chrome (Chromium) on a PC. Many of the in-house apps that
+  use ricdom are Electron apps (Chromium inside), so that is where most of the testing is done. It
+  also works in Firefox and Safari
+- **UI library**: I use this as a general term for libraries that "tie the UI to data", such as
+  React / Vue.js / Svelte / Solid / Lit. Think of it as the things gathered under
+  [UI data binding](https://en.wikipedia.org/wiki/UI_data_binding)
+
+## 1. Features of ricdom
+
+Through **data binding** (tying the UI to data), ricdom aims for an implementation you can write
+intuitively, without agonizing over MVC, MVVM, and the like.
+
+### Feature 1: One API
+
+JAVIS.js had two APIs, `render()` and `bind()`. ricdom folds them into **just one, `createApp()`**.
+You pass three things — "where", "which data", and "how to draw it" — and from then on the screen
+follows whenever you assign to the data.
+
+I am convinced that simplicity is one clear value in the face of a nature that heads toward chaos
+when left alone.
+
+### Feature 2: Write the UI as plain objects
+
+The second feature is that you write HTML as **plain JavaScript objects**.
+
+When you handle HTML from a program (JavaScript), "how to write the HTML" is a real struggle.
+Concatenating strings on and on is one answer, but then you end up replacing the HTML wholesale, and
+updating just one part of it is hard. Extending the language, as React does (JSX), is another
+solution, but it needs a compiler.
+
+JAVIS.js invented **JSAN** (JavaScript Array Notation, a way of writing HTML as arrays). In ricdom
+you write **objects**, `{ tag, children }`, instead of arrays. It is slightly longer than an array,
+but it is clear where the attributes and the children go, and TypeScript types apply to it as is.
+
+```html
+<button>Hello ricdom</button>
+```
+
+```js
+{ tag: 'button', children: ['Hello ricdom'] }
+```
+
+- `tag` is the tag name
+- `children` is the content. A string is shown as is; an object becomes a child element. List them in an array
+
+### Hierarchy
+
+HTML can express a hierarchy. Objects can do the same. You just line up more objects inside
+`children`.
+
+```html
+<div>
+  <button>OK</button>
+  <button>NG</button>
+</div>
+```
+
+```js
+{ tag: 'div', children: [
+  { tag: 'button', children: ['OK'] },
+  { tag: 'button', children: ['NG'] },
+] }
+```
+
+### Attributes
+
+HTML tag attributes are written as **keys** of the same object. Event attributes in particular
+(`onclick` and so on) are written as functions (arrow functions).
+
+```html
+<button onclick="alert('HELLO!!!')">Hello ricdom</button>
+```
+
+```js
+{ tag: 'button', onclick: () => alert('HELLO!!!'), children: ['Hello ricdom'] }
+```
+
+All in all, almost anything you can write in HTML can be written as an object just as it is.
+
+### The benefit of writing objects
+
+So what is so good about being able to write HTML almost as is in objects? You might think, "Isn't
+that just a different way of writing the same thing?"
+
+Not at all. This is **JavaScript**. Variables, functions, the ternary operator, `map()`, if
+statements, for loops — everything JavaScript offers can be used as is. HTML, which until now could
+only show something fixed, gains variables, functions, and control flow.
+**Real-time, dynamic expression becomes possible**, and that is where the big value lies.
+
+Now, let's look at some actual code.
+
+## 2. A simple example
+
+### (1) Loading
+
+First, load ricdom. It takes one `<script>` tag. No build is needed.
 
 ```html
 <script src="https://cdn.jsdelivr.net/npm/ricdom@2/dist/ricdom.iife.min.js"></script>
-<script>
-  ricdom.createApp('#app', { count: 0 }, (s) => ({
-    tag: 'div',
-    children: [`count: ${s.count}`],
-  }));
-</script>
+```
+
+(Until it is published on npm, run `npm ci && npm run build` from a tag of the repository and put
+`dist/ricdom.iife.min.js` on your own site.)
+
+### (2) Where to display
+
+Next, decide where to display it. Prepare a tag as a marker that says "display it here". A `div` is
+recommended.
+
+```html
 <div id="app"></div>
 ```
 
-While developing, load `dist/ricdom.iife.js` instead — the unminified build with dev-mode
-warnings (deep-assignment misses, duplicate keys, invalid theme names) enabled. Ship
-`.iife.min.js`, which has that code removed. The same pair exists for `ricdom-ui`.
+### (3) Displaying — `createApp()`
 
-Or, with a bundler / native ESM:
-
-```js
-import { createApp } from 'https://esm.sh/ricdom@2';
-```
-
-Both forms give you exactly the same API — `ricdom` (the global) and the module's default
-export are the same object. Everything below is written as ESM `import`s; swap in the
-`ricdom.` / `ricdomUI.` global prefix if you're using the `<script>` tags instead.
-
----
-
-## 2. Writing a tree
-
-A ricdom tree is plain JavaScript objects and arrays — no JSX, no template syntax.
+Display it with `ricdom.createApp()`. There are three arguments: **where** (a selector string or an
+element), **which data** (the state), and **how to draw it** (the render function).
 
 ```js
-import { createApp } from 'ricdom';
-
-createApp('#app', {}, () => ({
-  tag: 'ul',
-  children: [
-    { tag: 'li', children: ['one'] },
-    { tag: 'li', children: ['two'] },
-    { tag: 'li', children: ['three'] },
-  ],
-}));
+ricdom.createApp('#app', {}, () => ({ tag: 'button', children: ['Hello ricdom'] }));
 ```
 
-- `tag` picks the element (any HTML or SVG tag name).
-- `children` is a node or array of nodes: strings/numbers become text, `null`/`false`/
-  `undefined` render as nothing, arrays are flattened.
-- Anything else you put on the object becomes an attribute, a property, or (for `on*`
-  keys) an event handler:
+In this example we pass `'#app'` as the selector, an empty object as the state, and "a function that
+returns a button" as the render function. It means "display a button inside `#app`".
 
-```js
-{ tag: 'button', class: 'primary', disabled: false, onclick: () => alert('hi'), children: ['Click'] }
+- The selector string is anything you can pass to `document.querySelector()`. Passing the element itself is fine too
+- The state is explained later. An empty one will do for now
+- The render function is "a function that returns an object". `createApp()` calls it and turns the returned object into DOM
+
+### (4) Running it
+
+Put together, it becomes the following code. Run it and a button appears (pressing it does nothing,
+though).
+
+```html live
+<div id="app"></div>
+<script>
+ricdom.createApp('#app', {}, () => ({ tag: 'button', children: ['Hello ricdom'] }));
+</script>
 ```
 
----
+I think it is rather impressive that an HTML button can be displayed this simply, but nobody praises
+me for it, so I will praise myself.
 
-## 3. Changing state re-renders — and the one trap
+## 3. Specifying attributes
 
-`createApp(target, state, render)` returns an **app handle**. Assigning to a property of
-that handle schedules a re-render:
-
-```js
-import { createApp } from 'ricdom';
-
-const app = createApp('#app', { count: 0 }, (s) => ({
-  tag: 'div',
-  children: [
-    { tag: 'button', onclick: () => { app.count -= 1; }, children: ['-'] },
-    { tag: 'output', children: [String(s.count)] },
-    { tag: 'button', onclick: () => { app.count += 1; }, children: ['+'] },
-  ],
-}));
-```
-
-Notice the render callback's own parameter, `s`, and the outer `app` handle refer to the
-**same reactive object** — you can write to either one (`s.count = 1` inside an event
-handler works exactly like `app.count = 1`). What does *not* work is writing to the plain
-object you originally passed in:
-
-```js
-const state = { count: 0 };
-const app = createApp('#app', state, (s) => ({ tag: 'div', children: [s.count] }));
-
-state.count = 1;   // ❌ nothing happens — `state` was never made reactive, only wrapped
-app.count = 1;      // ✅ this is the reactive handle — re-renders
-```
-
-This is the single most common thing people trip on, so it's worth internalizing early:
-**`createApp` wraps your object, it does not mutate it.** Only the returned handle (and
-the `s` your render function receives) is reactive. Once you're in the habit of reading
-and writing through `app`/`s`, this never comes up again.
-
-### One more rule: shallow
-
-The reactive wrapper only tracks the state object's own top-level properties, plus one
-level into any object-valued property:
-
-```js
-app.user = { name: 'x' };      // ✅ tracked (top level)
-app.user.name = 'y';            // ✅ tracked (one level in)
-app.user.address.city = 'z';    // ❌ not tracked (two levels in)
-```
-
-To update something nested two or more levels deep, shallow-copy the level that changed:
-
-```js
-app.user = { ...app.user, address: { ...app.user.address, city: 'z' } };
-```
-
-In a development build, writing to an untracked nested path like that still writes the
-value — it just won't re-render on its own. If you write the nested value and then, in the
-same synchronous task, trigger a render some other way (e.g. `app.user = { ...app.user }`,
-matching the shallow-copy pattern above), nothing is logged — the render picks up your
-nested write along with everything else. Only if nothing ends up triggering a render does
-`console.warn` fire, once per path, at the end of that task — that's the actual bug this
-warning is for.
-
----
-
-## 4. Wiring up inputs
-
-`ricdom/ui` ships plain-function form controls plus `bind*` helpers for the common
-two-way case. Add the UI package:
+HTML tag attributes are specified as keys of the object. For example, to give a button a `style` and
+an `onclick`, it looks like this.
 
 ```html
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ricdom@2/dist/ricdom-ui.css">
-<script src="https://cdn.jsdelivr.net/npm/ricdom@2/dist/ricdom.iife.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/ricdom@2/dist/ricdom-ui.iife.min.js"></script>
+<button style="height: 70px; background: #e77;" onclick="alert('HELLO!!')">Hello ricdom</button>
 ```
 
-Put the `ricdom-ui.css` `<link>` **before your own stylesheet**. The sheet is a base layer:
-it styles inputs, textareas, buttons and selects too (every control has
-`font-family: inherit; font-size: 1em`, so they follow your page's font — see SPEC §10.1;
-`.ric-select { width: 100% }`, …) at single-class specificity, so an app rule of the same
-specificity wins only if it comes later. `injectStyles()` appends a `<style>` at the end of
-`<head>`, so if you use it instead of a `<link>`, call it before your own stylesheets load.
-
 ```js
-import { createApp } from 'ricdom';
-import { bindInput, uiText } from 'ricdom/ui';
+{ tag: 'button',
+  style: { height: '70px', background: '#e77' },
+  onclick: () => alert('HELLO!!'),
+  children: ['Hello ricdom'] }
+```
 
-createApp('#app', { name: '' }, (s) => ({
-  tag: 'div',
-  children: [
-    bindInput(s, 'name', { placeholder: 'Your name' }),
-    uiText({ children: [`Hello, ${s.name || 'stranger'}!`] }),
+I think you can see that the content of the HTML is expressed almost as is.
+
+- `style` is written **as an object**. JAVIS also accepted a string, but ricdom takes objects only
+  (the reason is in chapter 7). Write the keys as they are, like `background`, or in camelCase, like
+  `backgroundColor`
+- For `onclick`, specify the function to be called when the element is clicked
+
+```html live
+<div id="app"></div>
+<script>
+ricdom.createApp('#app', {}, () => ({
+  tag: 'button',
+  style: { height: '70px', background: '#e77' },
+  onclick: () => alert('HELLO!!'),
+  children: ['Hello ricdom'],
+}));
+</script>
+```
+
+Did a slightly larger red button appear? When you click it, an alert should say "HELLO!!".
+
+## 4. Data binding (tying the UI to data)
+
+At last, the heart of ricdom: data binding.
+
+As a warm-up, let's give the state three values, `hu`, `ji`, and `ko`, and have the render function
+return three divs. That state is passed to the render function as its argument `s`.
+
+```html live
+<div id="app"></div>
+<script>
+ricdom.createApp('#app', { hu: 111, ji: 222, ko: 333 }, (s) => ({
+  tag: 'div', children: [
+    { tag: 'div', children: [s.hu] },
+    { tag: 'div', children: [s.ji] },
+    { tag: 'div', children: [s.ko] },
   ],
 }));
+</script>
 ```
 
-`bindInput(s, 'name', options)` is shorthand for wiring `value`/`oninput` yourself:
-
-```js
-uiInput({
-  value: s.name,
-  oninput: (ev) => { s.name = ev.target.value; },
-});
-```
-
-`bindTextarea`, `bindCheckbox`, `bindSelect`, and `bindRange` follow the same pattern for
-their respective controls. Reach for the plain `uiInput`/`uiCheckbox`/… functions directly
-whenever you need custom logic in the handler instead of a straight assignment.
-
----
-
-## 5. Components and `use()`
-
-Stateless components (everything in the previous chapter) are just functions you call.
-Stateful components — ones that hold their own open/closed state and need somewhere to
-render into, like a dialog — are different: you register them once with `app.use()`, and
-call the returned handle inside `render` every time. `createApp` renders synchronously
-before it returns, so register the part in the `setup` option — it runs right before that
-first render, so the part is already usable on the very first call:
-
-```js
-import { createApp } from 'ricdom';
-import { createToast, uiButton } from 'ricdom/ui';
-
-let toast;
-const app = createApp(
-  '#app',
-  {},
-  () => {
-    toast(); // registers this render cycle's portal content — call it every render
-    return uiButton({
-      children: ['Save'],
-      onclick: () => toast.show('Saved!', { type: 'success' }),
-    });
-  },
-  { setup: (a) => { toast = a.use(createToast()); } },
-);
-```
-
-(Without `setup`, you'd have to make `render` return a placeholder until `use()` has run,
-then trigger another render — `setup` exists so you don't have to.)
-
-There's a second sanctioned way to untangle the same circular dependency (the part needs
-the app handle; the render function needs the part): pass a render function that renders
-nothing yet, and assign the real one to `app.render` once you have what you need. This is
-useful when building the render function itself is involved enough that you'd rather do it
-outside `createApp`'s call site:
-
-```js
-const app = createApp('#app', {}, () => null); // nothing to render yet
-const toast = app.use(createToast());
-app.render = () => { toast(); return uiButton({ children: ['Save'], onclick: () => toast.show('Saved!') }); };
-```
-
-Assigning to `app.render` re-renders synchronously right away, same as assigning to any
-other property on the handle — there's no lenient mode where a missing/placeholder render
-function skips the first paint.
-
-**Pitfall (a pilot migration, 2.0.0-alpha.9): `createApp` runs its first render
-synchronously, during the call itself** — so if the render function you pass closes over
-a `const` declared *after* that `createApp(...)` call in the same module, you hit a
-temporal-dead-zone `ReferenceError`, not a `console.error`-and-NOOP like the `use()`
-mistake above:
-
-```js
-// ❌ ReferenceError: Cannot access 'CONFIG' before initialization.
-// createApp's synchronous first render calls the render function immediately,
-// and CONFIG's `const` declaration hasn't executed yet at that point.
-const app = createApp('#app', {}, () => uiText({ children: [CONFIG.title] }));
-const CONFIG = { title: 'Settings' };
-```
-
-The fix is the same shape as the two patterns above: either declare `CONFIG` before the
-`createApp(...)` call, or use the `() => null` + `app.render = ...` pattern shown above so
-the *real* render function (the one referencing `CONFIG`) isn't wired up — and therefore
-never executed — until after `CONFIG` exists. This is the same underlying reason v1 code
-that assigned `handle.render = render` after building up its dependencies never hit this:
-the real render function simply wasn't called until you attached it, same as the `app.render`
-pattern above.
-
-If you forget the `app.use(...)` step and call `createToast()()` directly, nothing
-crashes — `ricdom/ui` logs one `console.error` explaining the fix and renders nothing.
-There's no implicit wiring to get subtly wrong: either a part is registered with `use()`,
-or it visibly isn't.
-
----
-
-## 6. Theme and CSS
-
-`applyTheme` sets a family of `--ric-*` CSS variables (plus the native `color-scheme`
-property) as inline style on whatever element you give it — themes are per-element, not
-global, so different parts of a page can carry different themes at once:
-
-```js
-import { applyTheme } from 'ricdom/ui';
-
-applyTheme(document.getElementById('app'), { theme: 'dark', density: 'compact' });
-```
-
-Built-in themes: `light`, `dark`, `teal`, `cyber`, `aqua`, `glass`, `glass-dark`. Densities:
-`comfortable` (default), `compact`, `tight`. You can also pass your own
-`{ '--ric-color-accent': '#e91e8c', ... }` object as `theme` for a fully custom palette, or
-`createTheme('teal', { ... })` to start from a bundled theme and override just a few
-variables.
-
-`applyTheme` also paints `background`/`color`/`font-size` on the element itself
-(background/color since 2.0.0-alpha.3, font-size added in alpha.6) — with v1's
-`create_ui_page` gone, this is what makes the element you called it on actually look
-themed, not just its descendants (which pick up the `--ric-*` variables through normal CSS
-inheritance either way).
-
-If you skipped the `<link rel="stylesheet">` in chapter 4 (e.g. a pure `<script>`-only
-page), call `ricdomUI.injectStyles()` once instead — it inserts the same stylesheet at
-runtime and is safe to call more than once.
-
-### Frosted glass over the desktop (Electron)
-
-`glass`/`glass-dark` (`2.0.0-alpha.18`) model Windows 11 Acrylic / iOS translucency:
-floating surfaces (dialog, popup, dropdown, toast, tooltip, panel, the tweak panel) get a
-`backdrop-filter` blur via the `--ric-surface-blur` token, and controls (`uiInput` etc.)
-stay translucent (`rgba()` backgrounds) without the blur itself — see SPEC.md §8 for which
-surfaces get it and why controls don't.
-
-In a plain browser, `glass` looks right out of the box because its `--ric-color-bg` is a
-built-in gradient. In an Electron app with a transparent window, you want the *real*
-desktop behind your UI instead of that gradient — override `--ric-color-bg` to
-`'transparent'`:
-
-```js
-// main process
-const win = new BrowserWindow({
-  backgroundMaterial: 'acrylic', // or 'mica' | 'tabbed' — Windows 11 22H2+, Electron 22+
-  backgroundColor: '#00000000', // fully transparent — an opaque backgroundColor (even the
-  // Electron default) blocks acrylic/mica entirely on Windows, rendering `glass` as solid
-  // white instead of translucent. If you already set backgroundColor for another reason,
-  // change it to '#00000000' (or drop the option) rather than adding a second one.
-  // macOS: vibrancy: 'under-window' (or 'sidebar') instead of backgroundMaterial
-  // Linux / other: best effort — transparent: true, frame: false
-});
-```
-
-```js
-// renderer, after the window is created with the options above
-document.documentElement.style.background = 'transparent';
-document.body.style.background = 'transparent';
-applyTheme(document.getElementById('app'), {
-  theme: createTheme('glass', { '--ric-color-bg': 'transparent' }),
-});
-```
-
-This `createTheme('glass', ...)` form keeps the same `prefers-reduced-transparency`
-fallback and `data-ricdom-theme="glass"` attribute as passing the plain string `'glass'`
-would (`2.0.0-alpha.19`, via the `--ric-theme` marker every bundled palette carries — see
-SPEC.md §8) — you don't lose either by overriding `--ric-color-bg`.
-
-This override only clears the *page* background — `--ric-color-bg` is read solely by
-`[data-ricdom-theme]`, the paint rule on the element you called `applyTheme` on. Every
-floating/container surface (dialog, popup, toast, tooltip, dropdown, `uiPanel`, the tweak
-panel) reads its own surface token instead (`--ric-color-control`, `--ric-popup-bg`,
-`--ric-panel-bg`, `--ric-tooltip-bg` — see SPEC.md §8), so those keep their own translucent
-`glass`/`glass-dark` background and stay visible over whatever desktop shows through. As of
-`2.0.0-alpha.20` this is true for `uiPanel`/the tweak panel too — before that, both read
-`--ric-color-bg` directly and went fully transparent under this exact recipe (reported by
-Trend Guard, #16).
-
-The OS-level window material (`backgroundMaterial`/`vibrancy`/`transparent`) supplies the
-blur of the *desktop* behind your whole window; `--ric-surface-blur` adds a second,
-per-surface blur on top of that for dialogs/popups/etc., the same way it would over any
-other background. Performance note: `backdrop-filter` is not applied to controls
-specifically because its cost scales with the number of elements using it — a handful of
-floating surfaces is fine, hundreds of inputs would not be.
-
-`prefers-reduced-transparency` is checked once, when `applyTheme` runs — not a live
-subscription (SPEC.md §8). To track the setting live, re-apply the theme on change:
-
-```js
-matchMedia('(prefers-reduced-transparency: reduce)').addEventListener('change', () => {
-  applyTheme(document.getElementById('app'), { theme: 'glass' });
-});
-```
-
-Be honest about scope: this is a look, not a guarantee — your app still owns its own
-background wherever the window itself is transparent (e.g. behind content `glass`'s
-surfaces don't cover).
-
-### Frameless + `backgroundMaterial` and a real maximize (reported by Rancha, pilot #6)
-
-On Electron 32 / Windows 11, a frameless (`frame: false`) window with `backgroundMaterial`
-set turns solid black the moment it's actually maximized — `win.maximize()`, Win+↑, a
-title-bar double-click, or dragging to the screen top all trigger it, and it never recovers
-even after un-maximizing. This is a Chromium custom-frame issue, not anything `applyTheme`
-or `--ric-*` tokens do — `frame: true` windows are unaffected, and none of re-applying
-`setBackgroundMaterial`, `setBackgroundColor`, nudging the bounds, hide/show, minimize/
-restore, or toggling fullscreen (12 attempts) brings the acrylic back. Working recipe:
-disable the real maximize and fake it instead.
-
-```js
-// main process
-const win = new BrowserWindow({ frame: false, backgroundMaterial: 'acrylic', maximizable: false, /* ... */ });
-win.setMaximizable(false); // belt and suspenders — some platforms still expose Win+↑
-
-let restoreBounds = null;
-function toggleMaximize() {
-  if (restoreBounds) {
-    win.setBounds(restoreBounds);
-    restoreBounds = null;
-  } else {
-    restoreBounds = win.getBounds();
-    win.setBounds(screen.getDisplayMatching(restoreBounds).workArea); // pseudo-maximize
-  }
-}
-```
-
-Wire your title bar's maximize button to `toggleMaximize()` instead of `win.maximize()`.
-Half-snap (Win+←/→), minimize, drag regions, rounded corners, and the window shadow all
-keep working normally — just skip persisting bounds while pseudo-maximized. Note
-`transparent: true` is not needed alongside `backgroundMaterial` and would break frameless
-drag/Aero Snap if added.
-
-### Derived tokens must live on the themed element, not `:root`
-
-`applyTheme` writes `--ric-*` as **inline style on the element you called it on**, and CSS
-custom properties only inherit downward — a `:root` rule referencing them (e.g.
-`color-mix(in srgb, var(--ric-color-fg) ...)`) sits *above* that element in the DOM and
-never sees the values, so it silently resolves to nothing. Scope your own derived tokens to
-the same element (or an attribute selector that matches it) instead:
-
-```css
-/* wrong: :root is never a descendant of the applyTheme'd element */
-:root { --app-hover: color-mix(in srgb, var(--ric-color-fg) 8%, transparent); }
-/* right */
-[data-ricdom-theme] { --app-hover: color-mix(in srgb, var(--ric-color-fg) 8%, transparent); }
-```
-
-### `glass-dark` over a bright wallpaper
-
-If the real desktop behind a transparent window is light-colored, `glass-dark`'s
-near-white text can lose contrast against it. Rather than reintroducing an opaque
-`--ric-color-bg`, keep the glass look and add back just enough contrast with a translucent
-scrim:
-
-```js
-applyTheme(el, { theme: createTheme('glass-dark', { '--ric-color-bg': 'rgba(15,23,42,0.35)' }) });
-```
-
-(As of `2.0.0-alpha.22` the bundled `glass`/`glass-dark` surface tokens already target AA
-contrast against a pure-white/pure-black wallpaper — see the contrast FACT in SPEC.md §8 —
-so this scrim is now for extra headroom or a specific known wallpaper, not a baseline fix.)
-
-### Give containers with no background of their own a surface
-
-`ricdom/ui` controls (`uiPanel`, dialogs, popups, …) all read a surface token
-(`--ric-panel-bg`, `--ric-popup-bg`, …, see SPEC.md §8) precisely so the Electron
-transparent-window recipe above doesn't hollow them out. But plain layout containers you
-build yourself — a header bar, a footer, a status bar — have no background of their own
-unless you give them one, so under this recipe they sit directly on the wallpaper, not on
-`--ric-color-bg`. This is the opposite direction from the advice everywhere else on this
-page ("remove opaque backgrounds so the desktop shows through"): here, a container holding
-`--ric-color-fg`-colored text needs a surface added back, e.g.
-`background: var(--ric-panel-bg)` (or `--ric-color-control`/your own translucent value),
-or its text loses contrast against whatever happens to be behind the window — the same
-underlying problem the contrast FACT above addresses for the bundled surfaces, just for
-containers RicDOM doesn't style for you.
-
-### Acrylic/Mica can fall back to a solid color
-
-Windows 11 itself — not `ricdom`, not your app — swaps `backgroundMaterial: 'acrylic'`/
-`'mica'` for a solid color whenever the window isn't the active/focused one (`IsInputActive`
-in Windows' own design), and also when transparency effects are turned off in Settings, on
-battery saver, over Remote Desktop, or on a weak/unsupported GPU. If your window looks like
-`glass` only while focused and turns opaque the moment focus moves elsewhere, that's this —
-not a bug to work around in `--ric-*` tokens. `win.blur()` does **not** reliably reproduce
-it for local testing; only a real focus change to another window (e.g. actually clicking a
-different app) does.
-
-### Theming inline SVG: `var()` works in CSS, not in presentation attributes
-
-If your app draws its own SVG (a chart, a gear outline, crosshairs), note that SVG
-*presentation attributes* such as `stroke="…"`/`fill="…"` do not accept `var(--ric-color-fg)`
-— the attribute value is parsed as a color, and the `var()` reference is invalid there.
-Give the element a class and set the color in CSS instead, where custom properties resolve
-normally (reported by the 歯車DXFジェネレーター pilot, which themes its crosshair lines this
-way across all seven themes):
-
-```css
-.gear-crosshair { stroke: var(--ric-color-fg-muted); }
-```
-
-```js
-{ tag: 'line', class: 'gear-crosshair', x1: 0, y1: -10, x2: 0, y2: 10 }
-```
-
-Plain browser apps with no native window still get a complete `glass`/`glass-dark` — the
-themes' built-in `--ric-color-bg` gradient is what the frost sits on, so the "transparent
-window" steps above simply don't apply (same pilot: a `file://`-opened static page, 7/7
-themes, no app-side workarounds).
-
----
-
-## 7. Dialog and popup
-
-Accessibility (focus trap, `Escape` handling, ARIA roles) is the library's job, not yours
-— you just supply content. For the common "click a button to open" case, `createDialog`
-can render its own trigger button for you:
-
-```js
-import { createApp } from 'ricdom';
-import { createDialog, uiButton } from 'ricdom/ui';
-
-let dlg;
-const app = createApp(
-  '#app',
-  {},
-  () =>
-    dlg({
-      triggerChildren: ['Delete item'],
-      title: 'Are you sure?',
-      children: ['This cannot be undone.'],
-      actions: [uiButton({ children: ['Delete'], variant: 'primary', onclick: () => { /* ... */ dlg.close(); } })],
-    }),
-  { setup: (a) => { dlg = a.use(createDialog()); } },
-);
-```
-
-This is *uncontrolled* mode: the dialog manages its own open/closed state. For a dialog
-driven entirely by your own state (`controlled` mode), pass `open`/`onClose` instead of
-`triggerChildren`:
-
-```js
-dlg({
-  open: s.showDialog,
-  onClose: (reason) => { s.showDialog = false; }, // reason: 'overlay' | 'close-button' | 'escape' | 'api'
-  title: 'Are you sure?',
-  children: ['This cannot be undone.'],
-});
-```
-
-**A trap when the dialog body starts with an input (LCP, pilot 8)**: a dialog's default
-initial focus (SPEC.md §10.3.1c) can land on the first focusable element in the body, so if
-that's a `textarea`/`input`/`select`, the editing guard (§2.4's FACT) is active from the
-moment the dialog opens — a button elsewhere in the dialog that writes that field's value
-back from state will silently do nothing while the field is still focused. This bites E2E
-tests specifically: a plain `el.click()` never moves focus, so a test that opens the dialog
-and immediately `.click()`s a "reset from state" button *appears* to pass the guard (the
-field was never focused by the test), while a real user's mouse click on that same button
-does move focus away from the input first, un-blocking the write. Write the test the way a
-real click behaves: `resetBtn.focus(); resetBtn.click();`.
-
-`createPopup` follows the same `use()`-then-call pattern for a `role="menu"` dropdown menu
-with arrow-key navigation built in:
-
-```js
-let menu;
-const app = createApp(
-  '#app',
-  {},
-  () =>
-    menu({
-      trigger: ['⋯'],
-      children: [
-        uiButton({ children: ['Rename'], onclick: () => { /* ... */ } }),
-        uiButton({ children: ['Delete'], onclick: () => { /* ... */ } }),
-      ],
-    }),
-  { setup: (a) => { menu = a.use(createPopup()); } },
-);
-```
-
-`Escape`, focus trapping/restoration, and outside-click dismissal all work without any
-further code on your part. Selecting a menuitem also closes the menu by default (pass
-`closeOnSelect: false` for a checkbox-style menu that should stay open).
-
-One naming difference worth remembering: `createPopup`'s trigger look (icon/ghost/size) is
-configured *inside* the `trigger` object (`trigger: { icon, ghost, size }`), while
-`createDropdown`'s equivalent look is a set of **top-level props** (`label`/`icon`/`ghost`)
-passed alongside `children` — the two components don't share a `trigger` shape.
-
-`createAccordion` follows the same controlled/uncontrolled split as `createTabs`: leave
-`open` out and it manages itself, or pass `open` to drive it from your own state — for
-example, a "Close all" button that no header click could express on its own:
-
-```js
-import { createApp } from 'ricdom';
-import { createAccordion, uiButton, uiCol } from 'ricdom/ui';
-
-let acc;
-const app = createApp(
-  '#app',
-  { acc: { a: true, b: false } },
-  (s) =>
-    uiCol({
-      children: [
-        uiButton({ children: ['Close all'], onclick: () => { s.acc = { a: false, b: false }; } }),
-        acc({
-          items: [
-            { id: 'a', title: 'Section A', children: ['...'] },
-            { id: 'b', title: 'Section B', children: ['...'] },
-          ],
-          open: s.acc,
-          // Derive from the live state. `nextMap` (3rd arg) is computed from the `open`
-          // of the last render, so a click that lands before a heavy re-render finishes
-          // would be lost if you assigned it directly (see SPEC §10.3.3a).
-          onToggle: (id, next) => { s.acc = { ...s.acc, [id]: next }; },
-        }),
-      ],
-    }),
-  { setup: (a) => { acc = a.use(createAccordion()); } },
-);
-```
-
----
-
-## 8. The tweak panel
-
-For quickly exposing a set of parameters to adjust live — useful for prototyping visual
-effects, calibrating a simulation, or building an internal debug panel —
-`createTweakPanel` turns a plain data object into a full parameter panel automatically:
-
-```js
-import { createApp } from 'ricdom';
-import { createTweakPanel } from 'ricdom/ui';
-
-let tweak;
-const app = createApp(
-  '#app',
-  { params: { size: 10, color: '#ff0000', spin: true } },
-  (s) => tweak({ title: 'Params', data: s.params }),
-  { setup: (a) => { tweak = a.use(createTweakPanel()); } },
-);
-```
-
-This alone produces a number field for `size`, a color picker for `color`, and a checkbox
-for `spin` — the row type is inferred from the value's type (booleans → checkbox, numbers
-→ number input, hex/`rgba()` strings → color picker, everything else → text). Nest a plain
-object to get a collapsible folder. Override individual rows (min/max/step/options/type)
-with the `keys` prop, or append your own hand-built rows with `rows` — see
-[SPEC.md §10](SPEC.md#10-components) or `examples/10-tweak-panel.html` for the full three-tier API.
-
-A row doesn't have to come from `data`: give a `keys` entry a `get` (and optionally `set`)
-function and it renders as its own row without ever reading or writing `data[key]` —
-useful for a derived/read-only value (e.g. an area computed from `size`). A folder's
-`keys` entry can also carry its own `rows` array, appended at the end of that folder
-specifically (the top-level `rows` prop only ever appends to the end of the whole panel).
-
-A folder can show a one-line `summary` in its header while it is closed (it disappears when the
-folder opens, and is clipped with an ellipsis if it doesn't fit), and its open/closed state can be
-owned by your own state instead of the panel's — pass `open` and `onToggle` (the same contract as
-`createAccordion`, keyed by the dot path such as `'border'` or `'outer.inner'`):
-
-```js
-tweak({
-  data: s.params,
-  keys: { border: { summary: `${s.params.border.width}px` } },  // shown only while closed
-  open: s.folders,                                              // { border: true }
-  onToggle: (path, next, map) => { s.folders = map; },
-});
-```
-
----
-
-## 9. Islands: coexisting with a `<canvas>`
-
-Sometimes part of your page is driven by something other than ricdom's own diffing — an
-animation loop drawing to a `<canvas>`, a third-party widget. Mark that subtree
-`island: true` and ricdom will build it once and never touch its descendants again on any
-later render:
-
-```js
-createApp('#app', { fps: 0 }, (s) => ({
-  tag: 'div',
-  children: [
-    { tag: 'output', children: [`${s.fps} fps`] },
-    { tag: 'canvas', island: true, width: 400, height: 300, ref: 'canvas' },
+When you write `{ tag: 'div', children: [s.hu] }`, `s.hu` is expanded, and it is the same as writing
+`{ tag: 'div', children: [111] }`. Check that the divs show 111, 222, and 333.
+
+It displayed as expected. It displayed, yes, but is this the goal? No, no. This is only the entrance.
+
+### Let's update the data
+
+We take `app`, the return value of `createApp()`, and increase each value at a different interval
+with `setInterval()`.
+
+```html live
+<div id="app"></div>
+<script>
+const app = ricdom.createApp('#app', { hu: 111, ji: 222, ko: 333 }, (s) => ({
+  tag: 'div', children: [
+    { tag: 'div', children: [s.hu] },
+    { tag: 'div', children: [s.ji] },
+    { tag: 'div', children: [s.ko] },
   ],
 }));
+
+setInterval(() => app.hu++,  500);  // every 0.5 s
+setInterval(() => app.ji++, 1500);  // every 1.5 s
+setInterval(() => app.ko++, 3000);  // every 3.0 s
+</script>
 ```
 
-Grab the canvas element yourself via `app.refs.get('canvas')` and drive it however you
-like — ricdom's diffing will never fight you for control of anything inside an island.
+Now, what will happen? Take a moment to think about it.
 
-### Migrating from v1: the second trap — omitting `children` no longer means "leave this alone"
+... The numbers are moving, aren't they? **This is the heart of ricdom.**
 
-If you're porting a v1 tree, this is the mirror image of chapter 3's trap and just as easy
-to miss. In v1, an element that omitted `ctx` (v1's `children`) was implicitly an island —
-ricdom never touched its descendants. In v2, omitting `children` just means **an empty
-element** (`island` must be requested explicitly, above). A v1 element that relied on the
-old implicit behavior renders correctly on the first paint (it happens to already be
-correct DOM) and then goes quietly wrong on the *next* render, when v2 diffs it against an
-empty `children` and clears out whatever was there.
+With JAVIS.js, at this point I first had to show an example where "the numbers don't move" and then
+call `bind()`. In ricdom, `createApp()` tracks (binds) the state from the start, so with `app.hu++`
+**a re-render is scheduled the moment you assign**. That is what I mean by `render()` and `bind()`
+having become one.
 
-Before migrating, grep the v1 codebase for the two shapes most likely to be relying on this
-implicit behavior (pilot 5-7 = Rancha's report; this doesn't show up as an error, so it has
-to be found by inspection, not by running the app):
+The point is that the data is updated with no connection to the HTML display (with no awareness of
+it at all), and yet the HTML display **follows in real time**. Being able to write the data and the
+display completely apart from each other is what characterizes data binding.
 
-1. **Elements that carry only a `ref`, no `ctx`/`children`** — almost always a hand-off
-   point, e.g. `{ tag: 'canvas', ref: 'chart' }` for a chart library that draws into it
-   later. Add `island: true`.
-2. **Any host element that some other piece of code writes into directly** — `el.innerHTML
-   = ...` from a rich-text editor, a third-party widget's own `.mount(el)`, a canvas
-   animation loop — reached via `app.refs.get(name)` or a raw `document.querySelector`.
-   Add `island: true` to that element in the tree, not just to the code that touches it
-   afterwards.
+### Just one trap
 
----
-
-## 10. Markdown-colored textarea
-
-`ricdom/md-editor` is a separate, opt-in subpath — importing `ricdom/ui` alone never pulls
-it in. It gives you `createMdEditor()`, which behaves exactly like `uiTextarea` (§4) but
-colors the Markdown syntax as you type, VS Code-style:
+If you modify **the original object** you passed to `createApp()` directly, the screen does not
+move.
 
 ```js
-import { createApp } from 'ricdom';
-import { createTweakPanel } from 'ricdom/ui'; // unrelated, just showing ricdom/ui still works
-import { createMdEditor } from 'ricdom/md-editor';
+const state = { hu: 111 };
+const app = ricdom.createApp('#app', state, (s) => ({ tag: 'div', children: [s.hu] }));
 
-let md;
-const app = createApp(
-  '#app',
-  { body: '# Notes\n\nWrite **Markdown** here.' },
-  (s) => md({ value: s.body, oninput: (ev) => { s.body = ev.target.value; } }),
-  { setup: (a) => { md = a.use(createMdEditor()); } },
-);
+state.hu = 999;  // ✗ nothing happens (the one being tracked is app)
+app.hu = 999;    // ✓ re-rendered
 ```
 
-The element you actually get in the DOM is a real `<textarea>` — `ref`, `onkeydown`,
-`autoResize`, everything from §4 still works unchanged, because a transparent copy of the
-textarea sits on top of a colored, invisible `<pre>` mirror behind it (see
-[SPEC.md §13](SPEC.md#13-ricdommd-editor-opt-in-subpath) for the mechanism and every FACT).
-Pass `highlight: 'none'` to fall back to a plain, undecorated `uiTextarea` — useful for a
-"plain text mode" toggle.
+`createApp()` **wraps** the object and returns it; it does not rewrite the original object. The only
+things that are tracked are the return value `app` (and the render function's argument `s`; these
+two are the same thing). Once you are in the habit of reading and writing through `app` or `s`, you
+will never step on this again.
 
-With the IIFE build (no bundler), load it as a third `<script>` tag alongside the core and
-`ricdom/ui`:
+This is the most common cause of "it doesn't work" in ricdom, so I am writing it down first.
 
-```html
-<script src="https://cdn.jsdelivr.net/npm/ricdom@2/dist/ricdom.iife.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/ricdom@2/dist/ricdom-ui.iife.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/ricdom@2/dist/ricdom-md-editor.iife.min.js"></script>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ricdom@2/dist/ricdom-ui.css">
+## 5. The standard way to write it
+
+While we have this momentum, let's refactor the code a little.
+
+The render function's argument `s` is the same thing as `app`, so inside an event handler the screen
+moves if you assign to `s`, **without referring to the outer variable `app`**. You can write it in a
+closed way, as in object-oriented programming.
+
+```html live
+<div id="app"></div>
+<script>
+ricdom.createApp('#app', { hu: 111, ji: 222, ko: 333 }, (s) => ({
+  tag: 'div', children: [
+    { tag: 'div', children: [s.hu] },
+    { tag: 'div', children: [s.ji] },
+    { tag: 'div', children: [s.ko] },
+    { tag: 'button', onclick: () => { s.hu++; }, children: ['hu++'] },
+  ],
+}));
+</script>
 ```
 
-`ricdomMdEditor.createMdEditor` is then available as its own global — see
-`examples/09-markdown.html` for a full working page.
+You only need to keep the return value when you touch the state from outside the render function, as
+with `setInterval()`.
+
+### The only rule for the render function is to "return an object"
+
+The rule for the render function of `createApp()` is to "return an object (or an array of them)"; as
+long as you keep to that, what goes on inside is up to you. For example, you can even `map()` over
+the keys of the state to build objects and return them.
+
+```html live
+<div id="app"></div>
+<script>
+const app = ricdom.createApp('#app', { hu: 111, ji: 222, ko: 333 }, (s) => ({
+  tag: 'div',
+  children: Object.keys(s).map((k) => ({ tag: 'div', children: [`${k}: ${s[k]}`] })),
+}));
+
+setInterval(() => app.hu++,  500);
+setInterval(() => app.ji++, 1500);
+setInterval(() => app.ko++, 3000);
+</script>
+```
+
+## 6. Making several tags work together
+
+This time, we make three tags work together: div, input, and button. Each of these separate tags
+refers to and updates the one `s.hu`.
+
+1. The div shows the content of `s.hu`
+2. The input, in its `oninput` event, puts the changed value `ev.target.value` into `s.hu` (as a number, via `Math.trunc()`)
+3. The button, in its `onclick` event, increases `s.hu` by 1
+
+The argument `ev` passed to an event function is the browser's event object itself.
+
+```html live
+<div id="app"></div>
+<script>
+ricdom.createApp('#app', { hu: 111 }, (s) => ({
+  tag: 'div', children: [
+    { tag: 'div', children: [`hu: ${s.hu}`] },
+    { tag: 'input', type: 'number', value: s.hu, oninput: (ev) => { s.hu = Math.trunc(ev.target.value); } },
+    { tag: 'button', onclick: () => { s.hu++; }, children: ['hu++'] },
+  ],
+}));
+</script>
+```
+
+I think you can confirm that even when several tags update and refer to one piece of data
+asynchronously, the display follows without any problem.
+
+### Changing only the look
+
+Let's change the input to a `range`. We set the maximum to 50 and the minimum to 0. We are only
+changing attributes, and using the features of HTML as they are.
+
+```html live
+<div id="app"></div>
+<script>
+ricdom.createApp('#app', { hu: 11 }, (s) => ({
+  tag: 'div', children: [
+    { tag: 'div', children: [`hu: ${s.hu}`] },
+    { tag: 'input', type: 'range', min: 0, max: 50,   // ← here
+      value: s.hu, oninput: (ev) => { s.hu = Math.trunc(ev.target.value); } },
+    { tag: 'button', onclick: () => { s.hu++; }, children: ['hu++'] },
+  ],
+}));
+</script>
+```
+
+Here you get a glimpse of the benefit of data binding.
+**You can change the look (the UI) without caring at all about how `s.hu` is updated**. The UI and
+the data are separated, and you can update each of them however you like.
+
+(I noticed later that the button does not check the upper limit, so the value goes on past 50. It is
+the same hole as in the JAVIS article.)
+
+## 7. Putting it to work: Picking a color with RGB
+
+With what we know so far, let's make something a little bigger. It displays an RGB color and updates
+it.
+
+The key point is that the background color of the div is assembled from the state.
+
+```js
+style: { background: `rgb(${s.r}, ${s.g}, ${s.b})` }
+```
+
+```html live
+<div id="app"></div>
+<script>
+ricdom.createApp('#app', { r: 200, g: 200, b: 200 }, (s) => ({
+  tag: 'div',
+  style: { padding: '10px', background: `rgb(${s.r}, ${s.g}, ${s.b})` },
+  children: [
+    `rgb(${s.r}, ${s.g}, ${s.b})`,
+    { tag: 'div', children: ['R: ', { tag: 'input', type: 'range', min: 0, max: 255, value: s.r, oninput: (ev) => { s.r = Math.trunc(ev.target.value); } }, s.r] },
+    { tag: 'div', children: ['G: ', { tag: 'input', type: 'range', min: 0, max: 255, value: s.g, oninput: (ev) => { s.g = Math.trunc(ev.target.value); } }, s.g] },
+    { tag: 'div', children: ['B: ', { tag: 'input', type: 'range', min: 0, max: 255, value: s.b, oninput: (ev) => { s.b = Math.trunc(ev.target.value); } }, s.b] },
+  ],
+}));
+</script>
+```
+
+### Why `style` became objects only
+
+In JAVIS you could write `style` as either a string or an object. ricdom takes objects only. The
+reason is "updating only a part".
+
+ricdom compares the object it drew last time with the object this time, and updates the DOM
+**only where something changed**. If `style` is an object, it can tell that "only `background`
+changed", so it does not touch `padding`. With a string, all it can do is compare the whole thing
+again; it cannot tell which property changed, so it ends up rewriting the lot.
+
+```js
+// last time
+style: { padding: '10px', background: 'rgb(200, 200, 200)' }
+// this time → only background is written to the DOM. padding is not touched
+style: { padding: '10px', background: 'rgb(201, 200, 200)' }
+```
+
+When you override just part of the style of a component (explained later), objects are more
+convenient for the same reason.
+
+## 8. Putting it to work: Picking a color with HSLA
+
+This time it is HSLA. This is the final boss of this document.
+
+It is an application of everything so far, so there is not much to explain in depth, but two small
+tricks appear here for the first time.
+
+The first is that we make `control()`, a **function that returns an object**, to share the tag
+descriptions that tend to get redundant and monotonous. You could call it a light form of "making a
+component". When it comes to components proper, we tend to think in grand terms — classes,
+encapsulation, inheritance — but here we only gather things into "a function that builds an object
+and returns it". The UI components of ricdom (`ricdom/ui`) are built the same way at the root.
+
+(While I was at it, I also added `onwheel` so that it can be operated with the mouse wheel.
+`ev.preventDefault()` stops the scroll from reaching the parent. It is a technique you can use with
+HTML in general, not only with ricdom.)
+
+The other is that, with
+
+```js
+color: s.l < 45 ? '#eee' : '#111',
+```
+
+the text is made white when the background is dark and black when it is light, so that it does not
+become unreadable.
+
+```html live
+<div id="app"></div>
+<script>
+ricdom.createApp('#app', { h: 200, s: 75, l: 75, a: 100 }, (s) => {
+  const control = (label, k, max, min = 0) => ({
+    tag: 'div',
+    onwheel: (ev) => {
+      s[k] = Math.min(max, Math.max(min, s[k] + (ev.deltaY <= 0 ? 5 : -5)));
+      ev.preventDefault();
+    },
+    children: [
+      label,
+      { tag: 'input', type: 'number', min, max, value: s[k], style: { textAlign: 'right' },
+        oninput: (ev) => { s[k] = Math.trunc(ev.target.value); } },
+      { tag: 'input', type: 'range', min, max, value: s[k],
+        oninput: (ev) => { s[k] = Math.trunc(ev.target.value); } },
+    ],
+  });
+  const hsla = `hsla(${s.h}, ${s.s}%, ${s.l}%, ${s.a}%)`;
+
+  return {
+    tag: 'div',
+    style: { padding: '10px', background: hsla, color: s.l < 45 ? '#eee' : '#111' },
+    children: [
+      hsla,
+      control('H: ', 'h', 360),
+      control('S: ', 's', 100),
+      control('L: ', 'l', 100),
+      control('A: ', 'a', 100),
+    ],
+  };
+});
+</script>
+```
+
+Since we have come this far, try spinning the mouse wheel around to change the color.
+
+I take pride in thinking that there are not many UI libraries (it is a rare breed) that can write
+this much UI in so few lines.
+
+## 9. Putting it to work: An accordion with CSS transitions
+
+Here we use CSS transitions to make an accordion. You often see people working hard at an accordion
+in JavaScript, but implementing one in CSS is quite difficult. You will see once you try it.
+
+The biggest point is `transition: 'height 0.3s'` in `style`, and
+**putting in a concrete height when opening, too**. With `auto` the transition does not fire, so we
+compute the height on the basis of 28px per item and put that in. Opening and closing is a single
+ternary operator.
+
+```js
+style: { overflow: 'hidden', transition: 'height 0.3s', height: `${s.open ? s.items.length * 28 : 0}px` }
+```
+
+```html live
+<div id="app"></div>
+<script>
+ricdom.createApp('#app', { items: ['item-01', 'item-02', 'item-03', 'item-04'], open: false }, (s) => ({
+  tag: 'div', children: [
+    { tag: 'div', style: { cursor: 'pointer', userSelect: 'none' },
+      onclick: () => { s.open = !s.open; },
+      children: [`${s.open ? '▼' : '▶'} Accordion list`] },
+    { tag: 'div',
+      style: { paddingLeft: '15px', overflow: 'hidden', transition: 'height 0.3s', height: `${s.open ? s.items.length * 28 : 0}px` },
+      children: s.items.map((it, i) => ({ tag: 'div', style: { height: '28px' }, children: [`${i + 1}: ${it}`] })) },
+    { tag: 'button', onclick: () => { s.items = [...s.items, `item-0${s.items.length + 1}`]; }, children: ['Append'] },
+  ],
+}));
+</script>
+```
+
+When you press Append while it is open, the list animates as it grows taller. Note that
+`s.items` is **replaced** with `[...s.items, newItem]` rather than changed with `push()` (the reason
+is "shallow tracking" in chapter 15).
+
+By the way, HTML has the `<details>` / `<summary>` tags, which are "exactly an accordion". When I
+wrote the JAVIS article they could not be animated, but now more and more browsers let you put a
+transition on `::details-content`. ricdom provides the accordion as a component (`createAccordion`,
+with keyboard operation and a11y), so use that one in a real app. What I wanted to show here is the
+division of roles: "state → compute the style → CSS animates by itself".
+
+## 10. Putting it to work: Animation with SVG
+
+Here is the SVG you have been waiting for. SVG tags (`svg` / `rect` / `circle`) can be placed with
+exactly the same notation as HTML tags.
+
+Here, 200 points bounce around inside a frame. The display fits in the following 4 lines. Inside the
+`svg` there is a background `rect`, and after it 200 `circle`s are expanded with `map()`. That is
+all.
+
+```js
+{ tag: 'svg', width: W + 10, height: H + 10, stroke: '#111', fill: '#ddd', children: [
+  { tag: 'rect', x: 0, y: 0, width: W + 10, height: H + 10 },
+  ...s.points.map((p) => ({ tag: 'circle', cx: p.x + 5, cy: p.y + 5, r: 5, fill: `hsl(${p.hue}, 75%, 75%)` })),
+] }
+```
+
+The animation runs at 20fps with `setInterval()`, and after moving the points we
+**replace the array** with `app.points = [...app.points]`. What ricdom tracks is assignment at the
+top level and one level down, so it does not notice when you only move the points inside the array directly with
+`p.x += ...`. When you have finished moving them, replace. This is the ricdom way (chapter 15).
+
+```html live
+<div id="app"></div>
+<script>
+const W = 333, H = 111;
+const makePoint = () => ({
+  x: Math.random() * W, y: Math.random() * H,
+  vx: Math.random() - 0.5, vy: Math.random() - 0.5,
+  hue: Math.floor(Math.random() * 360),
+});
+const move = (p, speed) => {
+  p.x += p.vx * speed; p.y += p.vy * speed;
+  if (p.x < 0) { p.x = 0; p.vx *= -1; }  if (p.x > W) { p.x = W; p.vx *= -1; }
+  if (p.y < 0) { p.y = 0; p.vy *= -1; }  if (p.y > H) { p.y = H; p.vy *= -1; }
+};
+
+const app = ricdom.createApp('#app', { points: Array.from({ length: 200 }, makePoint), speed: 10 }, (s) => ({
+  tag: 'div',
+  onwheel: (ev) => { s.speed += ev.deltaY <= 0 ? 1 : -1; ev.preventDefault(); },
+  children: [
+    { tag: 'svg', width: W + 10, height: H + 10, stroke: '#111', fill: '#ddd', children: [
+      { tag: 'rect', x: 0, y: 0, width: W + 10, height: H + 10 },
+      ...s.points.map((p) => ({ tag: 'circle', cx: p.x + 5, cy: p.y + 5, r: 5, fill: `hsl(${p.hue}, 75%, 75%)` })),
+    ] },
+    { tag: 'div', children: ['speed: ',
+      { tag: 'input', type: 'range', min: -10, max: 30, value: s.speed, oninput: (ev) => { s.speed = Number(ev.target.value); } },
+      s.speed] },
+  ],
+}));
+
+setInterval(() => {
+  for (const p of app.points) move(p, app.speed);
+  app.points = [...app.points];   // replace once they have moved → drawn on the next frame
+}, 1000 / 20);
+</script>
+```
+
+The point is that
+**we update the data whenever we like, without caring about the timing of the display**. We assign
+at 20fps, but ricdom renders in one go on the next frame with `requestAnimationFrame`, so however
+many assignments there are within the same frame, it renders once. For the 200 `circle`s, too, only
+the attributes that changed (`cx` / `cy`) are written to the DOM.
+
+## 11. Putting it to work: canvas and "islands"
+
+In the JAVIS article I apologized that "canvas can simply be written in the ordinary way, and is not
+a particularly good match". ricdom has just one tool for canvas. It is the **island**.
+
+ricdom compares the object returned by the render function with the DOM and writes the differences,
+so if you put something "drawn outside ricdom", like the contents of a canvas, under the management
+of ricdom, it may be erased on the next render. ricdom does not touch the **inside** of an element
+marked with `island: true` at all.
+
+```html live
+<div id="app"></div>
+<script>
+// Drawing is done outside ricdom. After changing the state, wait for that render to finish (nextRender) and draw it yourself.
+const paint = () => {
+  const cv = app.refs.get('cv');
+  const ctx = cv.getContext('2d');
+  ctx.fillStyle = `rgb(${app.r}, ${app.g}, ${app.b})`;
+  ctx.fillRect(0, 0, cv.width, cv.height);
+  ctx.fillStyle = '#111';
+  ctx.font = '16px sans-serif';
+  ctx.fillText(`rgb(${app.r}, ${app.g}, ${app.b})`, 10, 48);
+};
+const onRange = (k) => (ev) => { app[k] = Number(ev.target.value); app.nextRender().then(paint); };
+
+const app = ricdom.createApp('#app', { r: 120, g: 180, b: 220 }, (s) => ({
+  tag: 'div', children: [
+    { tag: 'canvas', island: true, width: 320, height: 80, ref: 'cv', style: { display: 'block', border: '1px solid #999' } },
+    { tag: 'div', children: ['R: ', { tag: 'input', type: 'range', min: 0, max: 255, value: s.r, oninput: onRange('r') }] },
+    { tag: 'div', children: ['G: ', { tag: 'input', type: 'range', min: 0, max: 255, value: s.g, oninput: onRange('g') }] },
+    { tag: 'div', children: ['B: ', { tag: 'input', type: 'range', min: 0, max: 255, value: s.b, oninput: onRange('b') }] },
+  ],
+}));
+paint();
+</script>
+```
+
+An element marked with `ref: 'cv'` can be taken out with `app.refs.get('cv')`. `app.nextRender()` is
+a Promise that resolves "once the scheduled render has finished"; if you call it right after an
+assignment, you can wait for the render caused by that assignment to complete. ricdom manages the
+attributes of the canvas (`width` / `height` / `style`), and you draw the picture inside yourself.
+Being able to draw this boundary with the single word `island: true` is an improvement over v1 (in
+v1 the rule was the implicit "omit `ctx` and it is an island", which could not be told apart from
+simply forgetting to write it).
+
+## 12. Comparing with Vue
+
+The JAVIS article lined up samples for Vue.js and React. For ricdom, too, just one: the ToDo list
+from the Vue tutorial.
+
+```js
+// Vue (split across three places: template / data / methods)
+template: `<ol><li v-for="(it, idx) in items">{{ it }} <button v-on:click="del(idx)">x</button></li></ol>
+           <input v-model="item" /> <button v-on:click="add()">Add</button>`,
+data: { items: ['aaa', 'bbb', 'ccc'], item: 'Hello' },
+methods: { add() { this.items.push(this.item) }, del(idx) { this.items.splice(idx, 1) } }
+```
+
+```html live
+<div id="app"></div>
+<script>
+ricdom.createApp('#app', { items: ['aaa', 'bbb', 'ccc'], item: 'Hello ricdom' }, (s) => ({
+  tag: 'div', children: [
+    { tag: 'ol', children: s.items.map((it, i) => ({ tag: 'li', children: [
+      it, ' ', { tag: 'button', onclick: () => { s.items = s.items.filter((_, j) => j !== i); }, children: ['x'] },
+    ] })) },
+    { tag: 'input', value: s.item, oninput: (ev) => { s.item = ev.target.value; } },
+    { tag: 'button', onclick: () => { s.items = [...s.items, s.item]; }, children: ['Add'] },
+  ],
+}));
+</script>
+```
+
+The `template` / `data` / `methods` of Vue fit into a single render function in ricdom. There are no
+extended attributes such as `v-model` or `v-on:click`; we use
+**the standard attributes as they are**: `value` and `oninput` on `<input>`, and `onclick` on
+`<button>`. The reason ricdom can stay small is that there is nothing more to learn beyond "HTML and
+JavaScript".
+
+(The React sample was a comparison from the era of class components, so I left it out this time.)
+
+## 13. How the UI components were born
+
+At the end of the JAVIS article, under "testing it as a library", there were `ui_range(_d, 'r')`,
+`ui_hover(...)`, and "`create_ui(_d)`, which generates the view automatically from the data". That
+was the beginning of RicUI, and of `ricdom/ui`.
+
+Remember the `control()` we made for HSLA in chapter 8. Just by gathering it into
+**a function that returns an object**, it became a component. The 29 components of `ricdom/ui` are
+the same at the root.
+
+```js
+// Inside, uiRange of ricdom/ui is pretty much this (the real one adds the CSS class of the theme and a11y attributes)
+const uiRange = ({ value, min = 0, max = 100, oninput }) =>
+  ({ tag: 'input', type: 'range', value, min, max, oninput, class: 'ric-range' });
+```
+
+And "generating the UI automatically from the data" became **`createTweakPanel`**. Pass it an
+object, and it automatically grows a slider for a number, a checkbox for a boolean, an input field
+for a string, and a collapsible folder for a nested object. It is the same idea as dat.GUI or
+Tweakpane, but **you can pass the state of ricdom as is**, so the values you adjust take effect in
+the app directly.
+
+```js
+// Turn the state of the SVG animation in chapter 10 into a tweak panel as is (it is a component, so register it with app.use())
+const tweak = app.use(createTweakPanel());
+// inside render: tweak({ data: s, keys: { speed: { min: -10, max: 30 } } })
+```
+
+Validation can be written with the same idea, too. "The button cannot be pressed while the input is
+not valid" is just a matter of computing `disabled: !isValid(s)` inside render. A UI where "can
+press / cannot press" changes in real time is kinder to the user than a UI that checks and then
+scolds with an alert when something is wrong. For this, the JAVIS article prepared a separate
+library called SimpleValidator.js, but in ricdom an expression inside the render function is enough.
+
+For the details of how to make and use components, see §4–§8 of [GUIDE.md](GUIDE.md), and
+[the samples](../examples/index.html) from 02 onward.
+
+## 14. API
+
+Here I explain the API of the ricdom core. I said "one", but to be exact it is
+**`createApp()` and the four methods and one property that its return value has**.
+
+### `createApp(target, state, render, options?)`
+
+| Argument | Type | Description |
+|---|---|---|
+| `target` | string or element | Where to render. A string is passed to `document.querySelector()`. If it is not found, it waits once for `DOMContentLoaded`, and if it is still not there, it calls `console.error` and returns an app that does nothing (it does not throw) |
+| `state` | object | The data to track. It is tracked **shallowly** (the top level and one level down. For the second level and deeper, see chapter 15) |
+| `render` | function `(s) => node` | The render function. `s` receives the state (the tracked version of it). Returns an object / array / string / number / `null` |
+| `options.setup` | function `(app) => void` | Called just before the first render (used to register components. [GUIDE.md](GUIDE.md) §5) |
+
+**Return value**: a Proxy (`app`) that tracks `state`. Assigning to it, as in `app.hu = 1`,
+schedules a re-render. `createApp()` does **the first render synchronously**, so the DOM is there by
+the time it returns.
+
+Methods and properties of the return value `app`:
+
+| Name | Description |
+|---|---|
+| `app.renderNow()` | Renders synchronously right now, without waiting for the schedule |
+| `app.nextRender()` | A Promise that resolves once the scheduled render has finished. It does not resolve when nothing is scheduled (if you "just want to guarantee that it has been applied", use `renderNow()`) |
+| `app.use(part)` | Registers a component that has state (dialog / popup / splitter and so on) ([GUIDE.md](GUIDE.md) §5) |
+| `app.unmount()` | Stops the tracking and disposes of the components. This settles JAVIS's "`bind()` cannot be removed" |
+| `app.ignore` | Data placed under this is not tracked (a place for things unrelated to the screen, such as caches) |
+
+### Render timing
+
+JAVIS.js **polled** the state at `_Hz` (144 by default). ricdom uses a Proxy, so it knows at the
+moment of assignment, and renders in one go on the next frame with `requestAnimationFrame` (even if
+you assign 100 times within the same frame, it renders once). For environments where rAF stops
+because the window is hidden (a minimized Electron window, for example), a 200ms setTimeout is in
+place alongside it.
+
+## 15. What I have not touched on so far
+
+This document covered only the same range as the JAVIS article (the core). ricdom goes further than
+this.
+
+- **Shallow tracking, and how to assign deep down**: up to `s.user.name = 'x'` is tracked, but
+  `s.user.address.city = 'y'` is not. You copy the levels you changed and replace them
+  (`s.user = { ...s.user, address: { ...s.user.address, city: 'y' } }`). This is why chapters 9, 10,
+  and 12 replaced the arrays with `[...s.items, x]` / `filter()` instead of `push()` / `splice()`.
+  In the development build, a `console.warn` tells you about a deep assignment that did not lead to
+  a re-render
+- **`key`**: a key for reusing the DOM when a list is reordered. Make it unique among siblings
+- **Islands**: write `{ tag: 'div', island: true }` and ricdom does not touch the inside. It is the place for `<canvas>` or external libraries
+- **UI components `ricdom/ui`**: 29 components, such as buttons, inputs, dialog, popup, toast,
+  tooltip, dropdown, splitter, tabs, accordion, the tweak panel, and Markdown display. The
+  accordion, tabs, pull-down, and splitter that I wrote I would be "grateful for" in the JAVIS
+  retrospective are all there. The CSS is one file, and there are 7 themes (including glass, a
+  frosted-glass look)
+- **Accessibility**: the components look after the dialog's focus trap, the menu's arrow keys, the tabs' roving tabindex, and so on
+
+For what comes next, go on to §3 onward of [GUIDE.md](GUIDE.md) (the practical guide that covers
+components, themes, Electron, and migrating from v1) and to the samples in
+[examples/](../examples/index.html).
 
 ---
 
-## 11. Next steps
+## Looking back: What became of the drawbacks of JAVIS in ricdom
 
-- [SPEC.md](SPEC.md) — the full contract: diffing rules, reactivity, the scheduler,
-  `use()`, portals, themes, every component's props and ARIA behavior.
-- `examples/` — six build-free demo pages you can open directly in a browser
-  (`examples/index.html` is the index).
-- [CHANGELOG.md](../CHANGELOG.md) — what changed release to release, and the breaking
-  changes from v1 if you're migrating an existing RicDOM v1 app.
-- [CONTRIBUTING.md](../CONTRIBUTING.md) — if you want to work on ricdom itself.
+At the end of the JAVIS article there was a retrospective note from 2024. Here I line up what became
+of each point in ricdom (v2).
+
+| Drawback of JAVIS (2024) | ricdom (2026) |
+|---|---|
+| Not well known | Unchanged. This is a matter of getting the word out rather than of how good the library is, so I start by publishing this document and the samples |
+| The JSAN notation is its own invention and hard to spread | Plain objects instead of arrays. It is the same shape as JSON, so it needs no explanation. TypeScript types apply, too |
+| Few UI components; you have no choice but to make your own | 29 components in `ricdom/ui`. Their holes were plugged by being used in 14 in-house apps |
+| The resize event lags one beat behind | splitter / scrollPane follow by measuring with rAF. The polling (`_Hz`) itself is gone |
+| `bind()` cannot be removed | `app.unmount()` |
+| I want local CSS | The CSS is distributed as one file + the `--ric-*` CSS variables. A theme can be applied per element with `applyTheme()` (different themes can coexist on the same page) |
+
+The advantages (light, easy to use, fast because it updates the DOM directly) are carried over as
+they are. The core is about 5KB gzipped.

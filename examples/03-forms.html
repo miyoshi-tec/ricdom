@@ -2,30 +2,48 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>ricdom — 03 Forms and controls (no build step)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ricdom — 03 Forms (no build step)</title>
 <!-- ricdom-ui.css styles ricdom's UI components (load it before your own CSS). _fonts.css only sets this site's fonts.
      ricdom-ui.css は ricdom の UI 部品の見た目です (自分の CSS より先に読み込みます)。_fonts.css はこのサイトのフォント設定だけです。 -->
 <link rel="stylesheet" href="../dist/ricdom-ui.css">
 <link rel="stylesheet" href="_fonts.css">
 <style>
-  h1 { font-size: 1.1rem; }
-  h2 { font-size: 0.95rem; margin: 0 0 4px; }
+  /* Every rule below targets a class that only this page's own elements carry, so none of them
+     reaches inside a ricdom component.
+     下の規則はどれも、このページ自身の要素にだけ付けたクラスを対象にしています。ricdom の部品の中には届きません。 */
+  main { padding: 2rem; max-width: 720px; }
+  .page-title { font-size: 1.3rem; }
+  .section { font-size: 1rem; margin: 2rem 0 0.25rem; }
+  .note { margin: 0.75rem 0 0.5rem; color: var(--ric-color-fg-muted); }
+  /* One demo: the controls stacked, no wider than a typical form column.
+     実演 1 つ分です。コントロールを縦に積み、フォームの 1 列ぶんほどの幅に収めます。 */
+  .demo { max-width: 28rem; }
+  .demo > * + * { margin-top: 0.6rem; }
+  /* The line under a control that shows what is in state right now.
+     コントロールの下に、いま状態に入っている値を表示する行です。 */
+  .value { display: block; color: var(--ric-color-fg-muted); overflow-wrap: anywhere; }
+  .state { margin: 0; padding: 0.75rem 1rem; border-radius: 8px; overflow-x: auto; background: var(--ric-code-bg); color: var(--ric-code-fg); }
 </style>
 </head>
 <body>
 <!--
-  03 Forms and controls: the controls, layout boxes and text components of ricdom/ui on one page.
-  Each one is a plain function that returns an object, so no app.use() registration is needed.
+  03 Forms: the form controls of ricdom/ui.
+  They all work the same way: pass the current value from state, and write the new value back in
+  oninput or onchange. The last section shows bind*, a shorthand for exactly that.
   No build step: two scripts (ricdom, then ricdom/ui) and one stylesheet.
 
-  03 フォームとコントロール: ricdom/ui のコントロール・レイアウト・テキスト部品を 1 ページに並べています。
-  どれも「オブジェクトを返すただの関数」なので、app.use() での登録は要りません。
+  03 フォーム: ricdom/ui のフォーム用コントロールです。
+  使い方はどれも同じです。状態から今の値を渡し、oninput か onchange で新しい値を状態に書き戻します。
+  最後の節では、それをそのまま短く書くための bind* を紹介します。
   ビルド不要: <script> 2 本 (ricdom → ricdom/ui) と CSS 1 本で動きます。
 -->
-<div id="app"></div>
+<main>
+  <div id="app"></div>
+</main>
 
-<!-- Optional: highlight.js colours code (the code block and the JSON below, and this site's Source view). ricdom does not need it.
-     任意: highlight.js はコードを色分けします (下のコードブロックと JSON、このサイトの「ソース」表示)。ricdom 自体には不要です。 -->
+<!-- Optional: highlight.js colours the code in this site's Source view. ricdom does not need it.
+     任意: highlight.js はこのサイトの「ソース」表示を色分けします。ricdom 自体には不要です。 -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
 <!-- ricdom itself: the core first, then the UI components. They define the globals ricdom and ricdomUI.
      ricdom 本体: コア → UI 部品の順に読み込みます。グローバル変数 ricdom と ricdomUI ができます。 -->
@@ -39,27 +57,39 @@
   // UI 部品を短い名前で呼べるようにします。
   const U = ricdomUI;
 
-  // Site helper: t(text, { ja: '...' }) returns the text in the chosen language. Every string on this
-  // page is used once, so its Japanese is written right where it is used.
-  // サイトの補助: t(文字列, { ja: '…' }) は選択中の言語の文字列を返します。このページの文字列は
-  // どれも 1 回しか使わないので、使う場所に日本語を書いています。
-  const { t, onLangChange } = ricdomI18n;
+  // Site helper: t(text, { ja: '...' }) returns the text in the chosen language, with the Japanese
+  // written where the string is used. The two strings that appear twice on this page go into
+  // addDict instead, so their translation is written once.
+  // サイトの補助: t(文字列, { ja: '…' }) は選択中の言語の文字列を返します。日本語は使う場所に書きます。
+  // このページで 2 回使う 2 つの文字列だけは、訳を 1 回で済ませるために addDict に登録しています。
+  const { t, addDict, onLangChange } = ricdomI18n;
+  addDict('ja', {
+    'Your name': '名前',
+    'I agree to the terms of use': '利用規約に同意する',
+  });
 
-  // Icon data (SVG paths) comes from `npx ricdom-icon <name>` (here: check, trash-2). Copy it; do not write it by hand.
-  // アイコンのデータ (SVG のパス) は `npx ricdom-icon <名前>` で取得します (ここでは check と trash-2)。手書きはしません。
-  const ICON_CHECK = { p: 'M20 6 9 17l-5-5' };
-  const ICON_TRASH = { p: ['M3 6h18', 'M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6', 'M10 11v6', 'M14 11v6', 'M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2'] };
+  // Icon data (SVG paths) is the output of `npx ricdom-icon arrow-up arrow-down`, pasted as it is. Do not write it by hand.
+  // アイコンのデータ (SVG のパス) は `npx ricdom-icon arrow-up arrow-down` の出力を、そのまま貼ったものです。手書きはしません。
+  const ICONS = {
+    "arrow-up": {"p":"M12 19V5M5 12l7-7 7 7"},
+    "arrow-down": {"p":"M12 5v14M19 12l-7 7-7-7"},
+  };
 
   const state = {
     name: 'Alex',
     memo: 'Notes can span\nseveral lines.',
     agree: true,
+    order: 'asc',
     role: 'editor',
-    locale: 'ja',
+    locale: '',
     volume: 40,
     bg: '#2563eb',
     overlay: 'rgba(37,99,235,0.35)',
   };
+
+  // A helper for this page: one line that shows what a state key holds right now.
+  // このページのための補助です。状態のキー 1 つに、いま何が入っているかを 1 行で表示します。
+  const shown = (s, key) => ({ tag: 'code', class: 'value', children: [`s.${key} = ${JSON.stringify(s[key])}`] });
 
   // `s` (the render argument) is the reactive state, a Proxy that createApp makes from `state`.
   // Writing through `s` redraws the page; writing to the original `state` object does not.
@@ -68,120 +98,226 @@
   const app = ricdom.createApp(
     '#app',
     state,
-    (s) =>
-      U.uiPanel({
-        style: { maxWidth: '720px', margin: '2rem auto' },
-        children: [
-          { tag: 'h1', children: [t('ricdom — controls', { ja: 'ricdom — コントロール一覧' })] },
-          U.uiSeparator(),
+    (s) => ({
+      tag: 'div',
+      children: [
+        { tag: 'h1', class: 'page-title', children: [t('Forms', { ja: 'フォーム' })] },
+        { tag: 'p', class: 'note', children: [t(
+          'Every control works the same way: pass the current value from state, and write the new value back in an event handler. Assigning to state redraws the page, so the line under each control changes as you use it.',
+          { ja: 'どのコントロールも使い方は同じです。状態から今の値を渡し、イベントの処理の中で新しい値を状態に書き戻します。状態に代入すると画面が描き直されるので、操作するたびに各コントロールの下の行が変わります。' },
+        )] },
 
-          // Controls. bindInput(s, 'name') is an input wired both ways to s.name; uiSelect next to it
-          // shows the same wiring written out by hand (value + onchange).
-          // コントロール。bindInput(s, 'name') は s.name と双方向につながった入力欄です。
-          // 隣の uiSelect は、同じつなぎ方を手で書いた形 (value + onchange) です。
-          U.uiCol({
-            children: [
-              { tag: 'h2', children: ['control'] },
-              U.uiRow({
-                children: [
-                  U.bindInput(s, 'name', { placeholder: t('Name', { ja: '名前' }) }),
-                  U.uiSelect({ value: s.role, options: ['viewer', 'editor', 'admin'], onchange: (e) => (s.role = e.target.value) }),
-                ],
-              }),
-              // autoResize grows the textarea with its content, between 2 and 6 rows.
-              // autoResize は内容に合わせて textarea の高さを 2〜6 行の範囲で伸び縮みさせます。
-              U.bindTextarea(s, 'memo', { autoResize: { minRows: 2, maxRows: 6 } }),
-              U.uiRow({
-                children: [
-                  U.bindCheckbox(s, 'agree', { children: [t('I agree to the terms of use', { ja: '利用規約に同意する' })] }),
-                  // An option label can mix an icon and text.
-                  // 選択肢のラベルには、アイコンと文字を混ぜて書けます。
-                  U.uiRadiobutton({
-                    name: 'locale',
-                    value: s.locale,
-                    onchange: (e) => (s.locale = e.target.value),
-                    options: [
-                      { value: 'ja', label: [U.uiIcon(ICON_CHECK, { size: 16 }), ' 日本語'] },
-                      { value: 'en', label: 'English' },
-                    ],
-                  }),
-                ],
-              }),
-              U.uiRow({
-                children: [
-                  U.bindRange(s, 'volume', { min: 0, max: 100 }),
-                  // An icon-only button needs `label` so screen readers can name it.
-                  // アイコンだけのボタンには、読み上げ用の名前として `label` を付けます。
-                  U.uiButton({ variant: 'ghost', children: [U.uiIcon(ICON_TRASH, { size: 16, label: t('Delete', { ja: '削除' }) })] }),
-                ],
-              }),
-              // uiColor accepts #rrggbb, or rgba(...) with an extra alpha slider.
-              // uiColor は #rrggbb を受け付け、rgba(...) を渡すと透明度のスライダーも付きます。
-              U.uiRow({
-                children: [U.uiColor({ value: s.bg, oninput: (e) => (s.bg = e.target.value) }), U.uiColor({ value: s.overlay, oninput: (e) => (s.overlay = e.target.value) })],
-              }),
-              // uiProgress shows how far a long task has got. `value` is 0 to 1; here it follows the
-              // slider above. `children` is a detail line under the bar, `action` a button beside it.
-              // uiProgress は、時間のかかる処理の進み具合を表示します。`value` は 0〜1 で、ここでは上の
-              // スライダーに合わせています。`children` は棒の下の補足、`action` はその横のボタンです。
-              U.uiProgress({
-                value: s.volume / 100,
-                label: t('Analysing…', { ja: '解析しています…' }),
-                children: [t('Move the slider above', { ja: '上のスライダーを動かしてみてください' })],
-                action: U.uiButton({ size: 'sm', children: [t('Reset', { ja: 'リセット' })], onclick: () => (s.volume = 0) }),
-              }),
-              // Leave out `value` when the amount of work is unknown: the bar keeps moving.
-              // 全体の量が分からないときは `value` を渡しません。棒が動き続けます。
-              U.uiProgress({ label: t('Waiting for a connection…', { ja: '接続を待っています…' }) }),
-            ],
-          }),
+        // ── uiInput ──
+        // Every keystroke assigns to s.name, and every assignment redraws the page. Your typing is
+        // safe: while an input, textarea or select has the focus, a redraw does not overwrite its
+        // value. (One without the focus is set to the value in state on every redraw.)
+        // `type` (default 'text'), `placeholder`, `maxlength` and `disabled` work as on <input>.
+        // 1 文字打つたびに s.name に代入し、代入のたびに画面が描き直されます。それでも入力中の文字は
+        // 消えません。input・textarea・select は、フォーカスがある間、再描画で値を上書きされないからです。
+        // (フォーカスが無いものは、再描画のたびに状態の値に合わせられます。)
+        // `type` (既定は 'text')・`placeholder`・`maxlength`・`disabled` は <input> と同じ意味です。
+        { tag: 'h2', class: 'section', children: ['uiInput'] },
+        { tag: 'p', class: 'note', children: [t('value shows what is in state; oninput runs on every keystroke and stores what you typed.', { ja: 'value で状態の値を表示し、oninput (1 文字打つごとに呼ばれます) で入力された文字を状態に入れます。' })] },
+        {
+          tag: 'div',
+          class: 'demo',
+          children: [
+            U.uiInput({
+              value: s.name,
+              placeholder: t('Your name'),
+              oninput: (e) => { s.name = e.target.value; },
+            }),
+            shown(s, 'name'),
+          ],
+        },
 
-          U.uiSeparator(),
+        // ── uiTextarea ──
+        // autoResize follows the content as you type: here never shorter than 2 rows, and from
+        // 6 rows on the text scrolls inside.
+        // autoResize は、入力に合わせて高さを変えます。ここでは 2 行より低くはならず、
+        // 6 行を超えると中でスクロールします。
+        { tag: 'h2', class: 'section', children: ['uiTextarea'] },
+        { tag: 'p', class: 'note', children: [t('Several lines of text, wired like uiInput. With autoResize the box grows and shrinks with what you type.', { ja: '複数行の文字です。つなぎ方は uiInput と同じです。autoResize を付けると、入力に合わせて高さが伸び縮みします。' })] },
+        {
+          tag: 'div',
+          class: 'demo',
+          children: [
+            U.uiTextarea({
+              value: s.memo,
+              autoResize: { minRows: 2, maxRows: 6 },
+              oninput: (e) => { s.memo = e.target.value; },
+            }),
+            shown(s, 'memo'),
+          ],
+        },
 
-          // Layout boxes: uiRow (side by side), uiCol (stacked), uiGrid (columns), uiPanel (a framed box).
-          // レイアウト用の箱: uiRow (横並び)・uiCol (縦積み)・uiGrid (段組み)・uiPanel (枠付きの箱)。
-          U.uiCol({
-            children: [
-              { tag: 'h2', children: ['layout'] },
-              U.uiGrid({
-                columns: 3,
-                gap: 8,
-                children: [1, 2, 3, 4, 5, 6].map((n) => U.uiPanel({ layout: 'row', children: [String(n)] })),
-              }),
-            ],
-          }),
+        // ── uiCheckbox ──
+        // The value of a checkbox is `checked` (true or false), and it reports a change with onchange.
+        // チェックボックスの値は `checked` (true か false) で、変更は onchange で受け取ります。
+        { tag: 'h2', class: 'section', children: ['uiCheckbox'] },
+        { tag: 'p', class: 'note', children: [t('checked is true or false, and onchange reads e.target.checked. The text beside the box goes into children.', { ja: 'checked は true か false で、onchange の中で e.target.checked を読みます。横に出す文字は children に書きます。' })] },
+        {
+          tag: 'div',
+          class: 'demo',
+          children: [
+            U.uiCheckbox({
+              checked: s.agree,
+              children: [t('I agree to the terms of use')],
+              onchange: (e) => { s.agree = e.target.checked; },
+            }),
+            shown(s, 'agree'),
+          ],
+        },
 
-          U.uiSeparator(),
+        // ── uiRadiobutton ──
+        // `name` is what makes the browser treat the buttons as one group, so give every separate
+        // group on a page its own name. An option is a string, or { value, label } when the text
+        // shown differs from the value; a label can mix an icon and text.
+        // `name` が同じボタンを、ブラウザは 1 つのグループとして扱います。ページ内の別々のグループには、
+        // 必ず別の name を付けてください。選択肢は文字列か、表示する文字が値と違うときは { value, label } で
+        // 書きます。label にはアイコンと文字を混ぜられます。
+        { tag: 'h2', class: 'section', children: ['uiRadiobutton'] },
+        { tag: 'p', class: 'note', children: [t('One choice out of a few. value is the chosen option, and onchange reads e.target.value.', { ja: 'いくつかの中から 1 つを選びます。value が選ばれている選択肢で、onchange の中で e.target.value を読みます。' })] },
+        {
+          tag: 'div',
+          class: 'demo',
+          children: [
+            U.uiRadiobutton({
+              name: 'order',
+              value: s.order,
+              options: [
+                { value: 'asc', label: [U.uiIcon(ICONS['arrow-up'], { size: 16 }), t('Ascending', { ja: '昇順' })] },
+                { value: 'desc', label: [U.uiIcon(ICONS['arrow-down'], { size: 16 }), t('Descending', { ja: '降順' })] },
+                { value: 'none', label: t('Unsorted', { ja: '並べ替えない' }) },
+              ],
+              onchange: (e) => { s.order = e.target.value; },
+            }),
+            shown(s, 'order'),
+          ],
+        },
 
-          // Text: uiMdPre draws Markdown; uiCodePre shows an object as JSON and follows the state live.
-          // テキスト: uiMdPre は Markdown を描画し、uiCodePre はオブジェクトを JSON で表示します (状態に追従します)。
-          U.uiCol({
-            children: [
-              { tag: 'h2', children: ['text'] },
-              U.uiMdPre({
-                children: [
-                  [
-                    '# ' + t('Heading', { ja: '見出し' }),
-                    '',
-                    t('**bold**, *italic*, `code` and a [link](https://example.com)', { ja: '**太字**・*斜体*・`code`・[リンク](https://example.com)' }),
-                    '',
-                    '- ' + t('Item A', { ja: '項目 A' }),
-                    '- ' + t('Item B', { ja: '項目 B' }),
-                    '',
-                    '1. ' + t('Step 1', { ja: '手順 1' }),
-                    '2. ' + t('Step 2', { ja: '手順 2' }),
-                    '',
-                    '```js',
-                    "console.log('hello');",
-                    '```',
-                  ].join('\n'),
-                ],
-              }),
-              U.uiCodePre({ obj: { role: s.role, volume: s.volume, locale: s.locale } }),
-            ],
-          }),
-        ],
-      }),
+        // ── uiSelect ──
+        // The first select takes plain strings (the value is also the text shown). The second uses
+        // { value, label }, and `placeholder` adds a first line that cannot be chosen; it is what
+        // you see while the value is ''.
+        // 1 つ目は文字列をそのまま並べる形です (値がそのまま表示されます)。2 つ目は { value, label } の形で、
+        // `placeholder` は選べない行を先頭に足します。値が '' の間は、その行が表示されます。
+        { tag: 'h2', class: 'section', children: ['uiSelect'] },
+        { tag: 'p', class: 'note', children: [t('A drop-down list. options is a list of strings or of { value, label }; onchange reads e.target.value.', { ja: 'ドロップダウンの一覧です。options には文字列か { value, label } を並べ、onchange の中で e.target.value を読みます。' })] },
+        {
+          tag: 'div',
+          class: 'demo',
+          children: [
+            U.uiSelect({
+              value: s.role,
+              options: ['viewer', 'editor', 'admin'],
+              onchange: (e) => { s.role = e.target.value; },
+            }),
+            shown(s, 'role'),
+            U.uiSelect({
+              value: s.locale,
+              placeholder: t('Choose a language', { ja: '言語を選んでください' }),
+              options: [
+                { value: 'en', label: 'English' },
+                { value: 'ja', label: '日本語' },
+              ],
+              onchange: (e) => { s.locale = e.target.value; },
+            }),
+            shown(s, 'locale'),
+          ],
+        },
+
+        // ── uiRange ──
+        // The value arrives as a string (as with every <input>), so convert it with Number().
+        // Turning the mouse wheel over the slider also moves it, one `step` at a time.
+        // 値は (どの <input> でも同じく) 文字列で届くので、Number() で数値に直します。
+        // スライダーの上でマウスホイールを回しても、`step` 1 つ分ずつ動きます。
+        { tag: 'h2', class: 'section', children: ['uiRange'] },
+        { tag: 'p', class: 'note', children: [t('A slider with its value shown beside it. min, max and step set the range.', { ja: 'スライダーです。横に今の値が表示されます。min・max・step で範囲と刻みを決めます。' })] },
+        {
+          tag: 'div',
+          class: 'demo',
+          children: [
+            U.uiRange({
+              value: s.volume,
+              min: 0,
+              max: 100,
+              step: 5,
+              oninput: (e) => { s.volume = Number(e.target.value); },
+            }),
+            shown(s, 'volume'),
+          ],
+        },
+
+        // ── uiColor ──
+        // The form of the value you pass decides the form you get back: #rrggbb stays #rrggbb, and
+        // rgba(...) stays rgba(...) and adds a slider for the alpha (opacity).
+        // 渡した値の形式が、そのまま返ってくる値の形式になります。#rrggbb なら #rrggbb のまま、
+        // rgba(...) なら rgba(...) のままで、アルファ (不透明度) のスライダーが付きます。
+        { tag: 'h2', class: 'section', children: ['uiColor'] },
+        { tag: 'p', class: 'note', children: [t('A colour picker. Pass #rrggbb for a plain colour, or rgba(...) to also choose the opacity.', { ja: '色を選びます。#rrggbb を渡すとふつうの色、rgba(...) を渡すと不透明度も選べます。' })] },
+        {
+          tag: 'div',
+          class: 'demo',
+          children: [
+            U.uiColor({ value: s.bg, oninput: (e) => { s.bg = e.target.value; } }),
+            shown(s, 'bg'),
+            U.uiColor({ value: s.overlay, oninput: (e) => { s.overlay = e.target.value; } }),
+            shown(s, 'overlay'),
+          ],
+        },
+
+        // ── uiProgress ──
+        // uiProgress shows how far a long task has got. `value` is 0 to 1; here it follows the
+        // slider above. `children` is a detail line under the bar, `action` a button beside it.
+        // uiProgress は、時間のかかる処理の進み具合を表示します。`value` は 0〜1 で、ここでは上の
+        // スライダーに合わせています。`children` は棒の下の補足、`action` はその横のボタンです。
+        { tag: 'h2', class: 'section', children: ['uiProgress'] },
+        { tag: 'p', class: 'note', children: [t('A progress bar. It only displays: your code passes in how far the work has got.', { ja: '進捗棒です。表示するだけの部品で、どこまで進んだかは自分のコードから渡します。' })] },
+        {
+          tag: 'div',
+          class: 'demo',
+          children: [
+            U.uiProgress({
+              value: s.volume / 100,
+              label: t('Analysing…', { ja: '解析しています…' }),
+              children: [t('Move the uiRange slider above', { ja: '上の uiRange のスライダーを動かしてみてください' })],
+              action: U.uiButton({ size: 'sm', children: [t('Reset', { ja: 'リセット' })], onclick: () => { s.volume = 0; } }),
+            }),
+            // Leave out `value` when the amount of work is unknown: the bar keeps moving.
+            // 全体の量が分からないときは `value` を渡しません。棒が動き続けます。
+            U.uiProgress({ label: t('Waiting for a connection…', { ja: '接続を待っています…' }) }),
+          ],
+        },
+
+        // ── bind* ──
+        // bindInput(s, 'name', options) is exactly uiInput({ ...options, value: s.name,
+        // oninput: (e) => { s.name = e.target.value; } }): the same wiring as above, written for you.
+        // There is one for each control: bindInput, bindTextarea, bindCheckbox, bindRadiobutton,
+        // bindSelect, bindRange and bindColor. The first argument is `s`, the second a key of it.
+        // bindInput(s, 'name', options) は uiInput({ ...options, value: s.name,
+        // oninput: (e) => { s.name = e.target.value; } }) とまったく同じです。上で手で書いたつなぎ方を、
+        // 代わりに書いてくれます。コントロールごとに 1 つずつあります: bindInput・bindTextarea・bindCheckbox・
+        // bindRadiobutton・bindSelect・bindRange・bindColor。1 番目の引数は `s`、2 番目はそのキーです。
+        { tag: 'h2', class: 'section', children: ['bind*'] },
+        { tag: 'p', class: 'note', children: [t(
+          'A shorter way to write the same thing. These five use the same state as the controls above: change one and the other follows. Below them is the whole state.',
+          { ja: '同じことを短く書くための補助です。この 5 つは、上のコントロールと同じ状態を使っています。片方を変えると、もう片方も変わります。その下は状態の全体です。' },
+        )] },
+        {
+          tag: 'div',
+          class: 'demo',
+          children: [
+            U.bindInput(s, 'name', { placeholder: t('Your name') }),
+            U.bindTextarea(s, 'memo', { rows: 3 }),
+            U.bindCheckbox(s, 'agree', { children: [t('I agree to the terms of use')] }),
+            U.bindSelect(s, 'role', { options: ['viewer', 'editor', 'admin'] }),
+            U.bindRange(s, 'volume', { min: 0, max: 100, step: 5 }),
+            { tag: 'pre', class: 'state', children: [JSON.stringify(s, null, 2)] },
+          ],
+        },
+      ],
+    }),
   );
 
   // Site helper: t() returns a plain string, so draw again once when the language changes.

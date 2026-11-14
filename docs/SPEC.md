@@ -2,8 +2,8 @@
 
 This document states the **contract** of `ricdom` (core), `ricdom/ui`, and `ricdom/icons`:
 what is guaranteed to be true, and what is guaranteed to stay true across patch/minor
-releases. It contains facts, not recipes — for task-oriented walkthroughs see
-[TUTORIAL.md](TUTORIAL.md); for design rationale see the (Japanese) internal design
+releases. It contains facts, not recipes — for an introduction see
+[TUTORIAL.md](TUTORIAL.md), for task-oriented walkthroughs [GUIDE.md](GUIDE.md); for design rationale see the (Japanese) internal design
 record `docs/DESIGN.ja.md`.
 
 Everything here describes **current, released behavior**. Where v1 (`RicDOM`) behaved
@@ -975,7 +975,7 @@ renders translucent as normal, rather than failing.
 subscription. An app that wants to react to the user changing this OS setting while the
 page is open must re-call `applyTheme` itself, e.g. from a
 `matchMedia(...).addEventListener('change', ...)` handler (see
-[TUTORIAL.md §6](TUTORIAL.md#6-theme-and-css) for a snippet).
+[GUIDE.md §6](GUIDE.md#6-theme-and-css) for a snippet).
 
 ### FACT: `--ric-color-bg: transparent` works, for Electron's transparent-window themes
 
@@ -986,7 +986,7 @@ paint is `color`/`font-size` (§ below) — there is no other opaque background 
 the attribute selector that would block it. This is the mechanism a `glass`/`glass-dark`
 consumer uses to let an Electron `BrowserWindow`'s own transparency (`backgroundMaterial:
 'acrylic'`/`'mica'`, `vibrancy`, or `transparent: true`) show through instead of the
-theme's built-in wallpaper-gradient `--ric-color-bg` — see TUTORIAL.md §6. `backgroundColor`
+theme's built-in wallpaper-gradient `--ric-color-bg` — see GUIDE.md §6. `backgroundColor`
 must also be transparent (e.g. `'#00000000'`) — an opaque `backgroundColor` on the
 `BrowserWindow` (even Electron's own default) blocks acrylic/mica outright on Windows,
 independent of anything `--ric-color-bg` does.

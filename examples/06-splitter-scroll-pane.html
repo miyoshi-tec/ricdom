@@ -2,27 +2,36 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>ricdom — 06 Splitter, scroll pane and more (no build step)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ricdom — 06 Splitter and scroll pane (no build step)</title>
 <!-- ricdom-ui.css styles ricdom's UI components (load it before your own CSS). _fonts.css only sets this site's fonts.
      ricdom-ui.css は ricdom の UI 部品の見た目です (自分の CSS より先に読み込みます)。_fonts.css はこのサイトのフォント設定だけです。 -->
 <link rel="stylesheet" href="../dist/ricdom-ui.css">
 <link rel="stylesheet" href="_fonts.css">
 <style>
-  h1 { font-size: 1.1rem; }
-  h2 { font-size: 0.95rem; margin: 1.5rem 0 4px; }
-  .app-shell { max-width: 900px; margin: 0 auto; }
+  .page { box-sizing: border-box; width: calc(100% - 2rem); max-width: 720px; margin: 1.5rem auto; }
+  .page > h1 { font-size: 1.1rem; margin: 0; }
+  .demo { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+  .demo > h2 { font-size: 0.95rem; margin: 0; }
+  .demo > p { margin: 0; }
+  .demo > .frame, .demo > .wide { align-self: stretch; }
+  .frame { box-sizing: border-box; border: 1px solid var(--ric-color-border); border-radius: var(--ric-radius); }
+  .pad { padding: 8px; }
+  .wrap { flex-wrap: wrap; }
 </style>
 </head>
 <body>
 <!--
-  06 Splitter, scroll pane and more: components for building the screen layout of an app.
-  splitter, scrollPane, collapseBox, accordion, tabs, dropdown and the popup behind the row menus
-  keep state, so each is registered with app.use().
+  06 Splitter and scroll pane: the two components that give an app screen its frame.
+  createSplitter divides an area into a side panel and a main panel with a divider you can drag.
+  createScrollPane is a scrolling area that keeps showing the newest content, like a chat or a log.
+  Both keep state (the size, whether to follow), so each is registered with app.use().
   No build step: two scripts (ricdom, then ricdom/ui) and one stylesheet.
 
-  06 スプリッター・スクロールペインほか: アプリの画面の骨組みを作る部品です。
-  splitter・scrollPane・collapseBox・accordion・tabs・dropdown と、行メニューに使う popup は状態を持つので、
-  それぞれ app.use() で登録します。
+  06 スプリッターとスクロールペイン: アプリの画面の骨組みを作る 2 つの部品です。
+  createSplitter は、領域をサイドパネルとメインパネルに分け、仕切り線をドラッグして大きさを変えられるようにします。
+  createScrollPane は、チャットやログのように、いちばん新しい内容を表示し続けるスクロール領域です。
+  どちらも状態 (大きさ、追従するかどうか) を持つので、それぞれ app.use() で登録します。
   ビルド不要: <script> 2 本 (ricdom → ricdom/ui) と CSS 1 本で動きます。
 -->
 <div id="app"></div>
@@ -43,287 +52,267 @@
   const U = ricdomUI;
 
   // Site helper: t(text, { ja: '...' }) returns the text in the chosen language, with the Japanese
-  // written where the string is used. The entries in addDict are strings chosen at run time
-  // (t(row), t(m) below): there is no single place to write their Japanese, so they go in the dictionary.
+  // written where the string is used. addDict holds the t`...${value}...` forms, which put a value
+  // into the text, and the strings chosen at run time (t(m.text) below): neither has one place
+  // in the code to carry its Japanese.
   // サイトの補助: t(文字列, { ja: '…' }) は選択中の言語の文字列を返します。日本語は使う場所に書きます。
-  // addDict の分は、実行時に決まる文字列 (下の t(row)・t(m)) です。日本語を書く場所が 1 か所に決まらないので、辞書に登録します。
+  // addDict には、値を差し込む t`…${値}…` の形と、実行時に決まる文字列 (下の t(m.text)) を登録します。
+  // どちらも、日本語を書く場所がコードの 1 か所に決まらないためです。
   const { t, addDict, onLangChange } = ricdomI18n;
   addDict('ja', {
-    'Row A': '行 A',
-    'Row B': '行 B',
-    // The first chat messages are kept as English text and translated when drawn, so a message
-    // the user types (which has no entry here) is shown exactly as typed.
-    // 最初のチャットメッセージは英語のまま持ち、描画するときに翻訳します。
+    'Side panel: {0}px (min 100, max 320)': 'サイドパネル: {0}px (最小 100、最大 320)',
+    'Opened {0}': '{0} を開きました',
+    'Contents of {0}': '{0} の中身',
+    'Incoming message {0}': '届いたメッセージ {0}',
+    // The first messages are kept as English text and translated when drawn, so a message the
+    // user types (which has no entry here) is shown exactly as typed.
+    // 最初のメッセージは英語のまま持ち、描画するときに翻訳します。
     // ユーザーが入力したメッセージ (ここに訳が無い) は、入力したとおりに表示されます。
     'Welcome!': 'ようこそ！',
-    'This is a createScrollPane demo.': 'これは createScrollPane のデモです。',
-    'Sending a message scrolls to the end automatically.': 'メッセージを送ると自動で末尾までスクロールします。',
+    'Sending a message jumps to the newest one.': 'メッセージを送ると、最新のメッセージまで移動します。',
+    'Scroll away to read older ones: new messages then leave the view where it is.': 'スクロールして古いメッセージを読んでいる間は、新しいメッセージが届いても表示位置は動きません。',
   });
 
-  // Icon data (SVG paths) comes from `npx ricdom-icon settings`. Copy it; do not write it by hand.
-  // アイコンのデータ (SVG のパス) は `npx ricdom-icon settings` で取得します。手書きはしません。
-  const ICON_GEAR = { p: ['M12 2v2', 'M12 20v2', 'M4.93 4.93l1.41 1.41', 'M17.66 17.66l1.41 1.41', 'M2 12h2', 'M20 12h2', 'M4.93 19.07l1.41-1.41', 'M17.66 6.34l1.41-1.41', 'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z'] };
-
-  // App state, in order: the splitter, the chat (scroll pane), the details box, the sort dropdown and the row menus.
-  // アプリの状態です。上から順に、スプリッター・チャット (スクロールペイン)・詳細の開閉・並び順のドロップダウン・行のメニューで使います。
+  // App state: the first splitter (demo 1), the file list and its log (demo 2), the messages (demo 3).
+  // アプリの状態です。最初のスプリッター (実演 1)、ファイル一覧とそのログ (実演 2)、メッセージ (実演 3) で使います。
   const state = {
-    sidebarCollapsed: false,
-    messages: ['Welcome!', 'This is a createScrollPane demo.', 'Sending a message scrolls to the end automatically.'],
+    sideCollapsed: false,
+    sideSize: 180,
+    file: 'main.js',
+    log: ['main.js'],
+    messages: [
+      { text: 'Welcome!' },
+      { text: 'Sending a message jumps to the newest one.' },
+      { text: 'Scroll away to read older ones: new messages then leave the view where it is.' },
+    ],
     draft: '',
-    detailsOpen: false,
-    sort: 'name',
-    menuRow: null,
-    lastAction: '',
+    incoming: false,
+    count: 0,
   };
 
   // Components that keep state are registered with app.use(). They are assigned in `setup` at the
   // bottom, which runs once before the first render, so render needs no "is it ready yet" check.
   // 状態を持つ部品は app.use() で登録します。登録は下の `setup` で行います。
   // setup は最初の描画の前に 1 回だけ実行されるので、render 側で「準備できたか」を確かめる必要はありません。
-  let split, pane, box, acc, tabs, sortDD, actionsDD, rowMenu;
+  let split, outerSplit, innerSplit, logPane, chatPane, newestPane;
 
-  // createSplitter: a side panel and a main area with a draggable divider. Passing `collapsed` and
-  // `onCollapseChange` keeps the collapsed state in your own state.
-  // createSplitter: サイドパネルとメイン領域を、ドラッグできる仕切り線で分けます。
-  // `collapsed` と `onCollapseChange` を渡すと、折りたたみの状態を自分の state で持てます。
+  // One demo on this page: a heading, a sentence that says what to try, then the live components.
+  // このページの実演 1 つ分です: 見出し、試すことを書いた 1 文、その下に実際に動く部品を並べます。
+  const demo = (title, text, ...children) => ({
+    tag: 'section',
+    class: 'demo',
+    children: [{ tag: 'h2', children: [title] }, { tag: 'p', children: [text] }, ...children],
+  });
+
+  // Demo 1. The splitter fills its parent, so give the parent a height. `side` and `main` are the
+  // contents of the two panels. Passing `collapsed` and `onCollapseChange` keeps "is the side panel
+  // folded away" in your own state, so a button elsewhere on the page can fold it too.
+  // split.setSize(px) sets the size from code. The size limits and onResizeEnd are options of
+  // createSplitter: see `setup` at the bottom.
+  // 実演 1。スプリッターは親要素いっぱいに広がるので、親に高さを指定します。`side` と `main` が 2 つのパネルの中身です。
+  // `collapsed` と `onCollapseChange` を渡すと、「サイドパネルを折りたたんでいるか」を自分の state で持てるので、
+  // ページの別の場所にあるボタンからも折りたためます。split.setSize(px) は、コードから大きさを設定します。
+  // 大きさの上限・下限と onResizeEnd は createSplitter のオプションです (いちばん下の `setup` を見てください)。
   const splitterDemo = (s) =>
-    U.uiCol({
-      children: [
-        { tag: 'h2', children: ['createSplitter'] },
-        {
-          tag: 'div',
-          style: { height: '180px', border: '1px solid var(--ric-color-border)', borderRadius: 'var(--ric-radius)' },
-          children: [
-            split({
-              collapsed: s.sidebarCollapsed,
-              onCollapseChange: (v) => { s.sidebarCollapsed = v; },
-              side: [{ tag: 'div', style: { padding: '8px' }, children: [U.uiText({ children: [t('Side panel', { ja: 'サイドパネル' })] })] }],
-              main: [{ tag: 'div', style: { padding: '8px' }, children: [U.uiText({ children: [t(
-                'Main panel (drag the divider, or focus it and use the arrow keys)',
-                { ja: 'メインパネル (仕切り線をドラッグ、またはフォーカスして矢印キー)' },
-              )] })] }],
-            }),
-          ],
-        },
-      ],
-    });
-
-  // createScrollPane with follow: 'bottom' stays at the end as content is added, like a chat log.
-  // pane.scrollToBottom() jumps to the end from code.
-  // createScrollPane に follow: 'bottom' を指定すると、内容が増えても末尾に追従します (チャットのログのように)。
-  // pane.scrollToBottom() でコードから末尾へ移動できます。
-  const scrollPaneDemo = (s) =>
-    U.uiCol({
-      children: [
-        { tag: 'h2', children: ['createScrollPane (follow: "bottom")'] },
-        pane({
-          style: { height: '140px', border: '1px solid var(--ric-color-border)', borderRadius: 'var(--ric-radius)', padding: '8px' },
-          children: s.messages.map((m) => ({ tag: 'div', children: [t(m)] })),
-        }),
-        U.uiRow({
-          children: [
-            U.bindInput(s, 'draft', { placeholder: t('Message', { ja: 'メッセージ' }) }),
-            U.uiButton({
-              variant: 'primary',
-              children: [t('Send', { ja: '送信' })],
-              onclick: () => {
-                if (!s.draft) return;
-                s.messages = [...s.messages, s.draft];
-                s.draft = '';
-              },
-            }),
-            U.uiButton({ variant: 'ghost', children: [t('To the end', { ja: '末尾へ' })], onclick: () => pane.scrollToBottom() }),
-          ],
-        }),
-      ],
-    });
-
-  // createCollapseBox animates showing and hiding its content. box.idFor() gives the id to put in
-  // aria-controls on your own toggle button.
-  // createCollapseBox は中身の表示・非表示をアニメーションで切り替えます。
-  // box.idFor() は、自分で作った開閉ボタンの aria-controls に入れる id を返します。
-  const collapseBoxDemo = (s) =>
-    U.uiCol({
-      children: [
-        { tag: 'h2', children: ['createCollapseBox'] },
-        U.uiButton({
-          id: 'details-toggle',
-          'aria-expanded': String(s.detailsOpen),
-          'aria-controls': box.idFor(),
-          children: [s.detailsOpen ? t('Hide details', { ja: '詳細を隠す' }) : t('Show details', { ja: '詳細を表示' })],
-          onclick: () => { s.detailsOpen = !s.detailsOpen; },
-        }),
-        box({ visible: s.detailsOpen, children: [U.uiPanel({ children: [t(
-          'The details go here. Opening and closing is animated.',
-          { ja: 'ここに詳細な説明文が入ります。開閉はアニメーションします。' },
-        )] })] }),
-      ],
-    });
-
-  // createAccordion: with multi: false, opening one item closes the others. defaultOpen (in setup)
-  // opens q1 at the start.
-  // createAccordion: multi: false にすると、1 つを開けば他は閉じます。setup の defaultOpen で最初に q1 を開いています。
-  const accordionDemo = () =>
-    U.uiCol({
-      children: [
-        { tag: 'h2', children: ['createAccordion'] },
-        acc({
-          items: [
-            {
-              id: 'q1',
-              title: t('Do I need a build?', { ja: 'ビルドは必要ですか？' }),
-              children: [U.uiText({ children: [t('No. Two IIFE bundles and one CSS <link> are enough.', { ja: 'いいえ。IIFE 2 本と CSS の <link> 1 本だけで動きます。' })] })],
+    demo(
+      'createSplitter',
+      t(
+        'Drag the divider, or move to it with Tab and press ← or →. The side panel stays between 100px and 320px. The small button on the divider (it appears when the pointer is over the splitter) folds the side panel away.',
+        { ja: '仕切り線をドラッグするか、Tab キーで仕切り線に移動して ← → を押してください。サイドパネルの幅は 100px〜320px の範囲に収まります。仕切り線の上の小さなボタン (ポインターをスプリッターに乗せると現れます) で、サイドパネルを折りたためます。' },
+      ),
+      {
+        tag: 'div',
+        class: 'frame',
+        style: { height: '160px' },
+        children: [
+          split({
+            collapsed: s.sideCollapsed,
+            onCollapseChange: (v) => { s.sideCollapsed = v; },
+            side: [{ tag: 'div', class: 'pad', children: [t('Side panel', { ja: 'サイドパネル' })] }],
+            main: [{ tag: 'div', class: 'pad', children: [t('Main panel: it takes all the space that is left.', { ja: 'メインパネル: 残りの領域をすべて使います。' })] }],
+          }),
+        ],
+      },
+      U.uiRow({
+        class: 'wrap',
+        children: [
+          U.uiButton({
+            children: [s.sideCollapsed ? t('Show the side panel', { ja: 'サイドパネルを表示' }) : t('Hide the side panel', { ja: 'サイドパネルを隠す' })],
+            onclick: () => { s.sideCollapsed = !s.sideCollapsed; },
+          }),
+          U.uiButton({
+            children: [t('Back to 180px', { ja: '180px に戻す' })],
+            onclick: () => {
+              split.setSize(180);
+              s.sideSize = 180;
             },
-            {
-              id: 'q2',
-              title: t('How do I register a stateful component?', { ja: '状態を持つ部品はどう登録しますか？' }),
-              children: [U.uiText({ children: [t('Explicitly, with app.use(createX()).', { ja: 'app.use(createX()) で明示的に登録します。' })] })],
-            },
-          ],
-          multi: false,
-        }),
-      ],
-    });
+          }),
+          U.uiText({ variant: 'muted', children: [t`Side panel: ${s.sideSize}px (min 100, max 320)`] }),
+        ],
+      }),
+    );
 
-  // createTabs remembers the selected tab by itself (uncontrolled), so no state is needed here.
-  // createTabs は選択中のタブを自分で覚えるので (uncontrolled)、ここでは state を使いません。
-  const tabsDemo = () =>
-    U.uiCol({
-      children: [
-        { tag: 'h2', children: ['createTabs (uncontrolled)'] },
-        tabs({
-          items: [
-            {
-              key: 'a',
-              label: t('Profile', { ja: 'プロフィール' }),
-              children: [U.uiText({ children: [t('Contents of the profile tab', { ja: 'プロフィールタブの中身' })] })],
-            },
-            {
-              key: 'b',
-              label: t('Notifications', { ja: '通知設定' }),
-              children: [U.uiText({ children: [t('Contents of the notifications tab', { ja: '通知設定タブの中身' })] })],
-            },
-            {
-              key: 'c',
-              label: t('Billing', { ja: '請求' }),
-              children: [U.uiText({ children: [t('Contents of the billing tab', { ja: '請求タブの中身' })] })],
-            },
-          ],
-        }),
-      ],
-    });
-
-  // createDropdown: a button that opens a menu, shown as a text label or as an icon. Call close()
-  // after a choice is made.
-  // createDropdown: メニューを開くボタンで、文字のラベルでもアイコンでも表示できます。項目を選んだら close() を呼びます。
-  const dropdownDemo = (s) =>
-    U.uiCol({
-      children: [
-        { tag: 'h2', children: ['createDropdown (label / icon modes)'] },
-        U.uiRow({
-          children: [
-            sortDD({
-              label: t('Sort: ', { ja: '並び順: ' }) + s.sort,
-              chevron: true,
-              children: ['name', 'date', 'size'].map((v) =>
-                U.uiButton({ variant: v === s.sort ? 'primary' : 'ghost', children: [v], onclick: () => { s.sort = v; sortDD.close(); } }),
-              ),
-            }),
-            actionsDD({
-              icon: U.uiIcon(ICON_GEAR, { size: 16 }),
-              ghost: true,
-              children: [
-                U.uiButton({ variant: 'ghost', children: [t('Export', { ja: 'エクスポート' })], onclick: () => actionsDD.close() }),
-                U.uiButton({ variant: 'ghost', children: [t('Import', { ja: 'インポート' })], onclick: () => actionsDD.close() }),
-              ],
-            }),
-          ],
-        }),
-      ],
-    });
-
-  // A "⋯" menu on every row, with one createPopup for all rows. Called without `trigger`, it draws
-  // no button of its own; each row's "⋯" opens it with rowMenu.openAt(button). The menu opens under
-  // the button, or above it when there is no room below, and closes on Escape, on a choice, on a
-  // click elsewhere or when the list or page scrolls. Which row it acts on lives in state.menuRow.
-  // The items have keys: one menu serves every row, and keys keep each action on its own element
-  // when the items differ from row to row.
-  // 行ごとの「…」メニューを、全行で 1 つの createPopup でまかないます。trigger を渡さないので自分のボタンは描かず、
-  // 各行の「…」から rowMenu.openAt(ボタン) で開きます。ボタンの下に開き、下に余地が無ければ上に開きます。
-  // Escape・項目の選択・外側のクリック・一覧やページのスクロールで閉じます。どの行に対するメニューかは state.menuRow で持ちます。
-  // 項目には key を付けます。1 つのメニューを全行で使うので、行ごとに項目が変わるときも、操作ごとに別の要素が保たれます。
-  const rowMenuDemo = (s) =>
-    U.uiCol({
-      children: [
-        { tag: 'h2', children: ['createPopup + openAt (a "⋯" menu on every row)'] },
-        rowMenu({
-          children: [
-            U.uiButton({ key: 'rename', children: [t('Rename', { ja: '名前を変更' })], onclick: () => { s.lastAction = `${t('Rename', { ja: '名前を変更' })}: ${t(s.menuRow)}`; } }),
-            U.uiButton({ key: 'delete', children: [t('Delete', { ja: '削除' })], onclick: () => { s.lastAction = `${t('Delete', { ja: '削除' })}: ${t(s.menuRow)}`; } }),
-          ],
-        }),
-        U.uiCol({
-          children: ['Row A', 'Row B'].map((row) => ({
-            tag: 'div',
-            style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 8px', border: '1px solid var(--ric-color-border)', borderRadius: 'var(--ric-radius)' },
-            children: [
-              t(row),
-              U.uiButton({
-                variant: 'ghost',
-                // The row buttons are your own elements, so give them the menu-button attributes yourself.
-                // 行のボタンは自分の要素なので、メニューボタンであることを示す属性は自分で付けます。
-                'aria-haspopup': 'menu',
-                'aria-label': t('Row actions', { ja: '行の操作' }),
-                children: ['⋯'],
-                onclick: (e) => {
-                  s.menuRow = row;
-                  rowMenu.openAt(e.currentTarget);
-                },
+  // Demo 2. A splitter can sit inside another one. The outer one puts the file list on the left;
+  // the inner one (side: 'bottom') puts a log under the "editor". The log is a createScrollPane
+  // that fills its panel (height: 100%) and follows its end as lines are added.
+  // 実演 2。スプリッターは入れ子にできます。外側のスプリッターはファイル一覧を左に置き、
+  // 内側のスプリッター (side: 'bottom') は「エディタ」の下にログを置きます。ログは createScrollPane で、
+  // パネルいっぱいに広げ (height: 100%)、行が増えるたびに末尾へ追従します。
+  const FILES = ['main.js', 'app.css', 'index.html', 'README.md'];
+  const layoutDemo = (s) =>
+    demo(
+      t('An app layout: a splitter inside a splitter', { ja: 'アプリらしい配置: スプリッターの入れ子' }),
+      t(
+        'Three panels, two dividers: one moves sideways, the other up and down (↑ ↓ on the keyboard). Click a file name to add a line to the log at the bottom.',
+        { ja: '3 つのパネルと 2 本の仕切り線です。1 本は左右に、もう 1 本は上下に動きます (キーボードでは ↑ ↓)。ファイル名をクリックすると、下のログに 1 行増えます。' },
+      ),
+      {
+        tag: 'div',
+        class: 'frame',
+        style: { height: '260px' },
+        children: [
+          outerSplit({
+            side: [
+              U.uiCol({
+                class: 'pad',
+                gap: 2,
+                children: FILES.map((f) =>
+                  U.uiButton({
+                    variant: f === s.file ? 'primary' : 'ghost',
+                    size: 'sm',
+                    children: [f],
+                    onclick: () => {
+                      s.file = f;
+                      s.log = [...s.log, f];
+                    },
+                  }),
+                ),
               }),
             ],
-          })),
-        }),
-        U.uiText({ variant: 'muted', children: [s.lastAction] }),
-      ],
-    });
+            main: [
+              innerSplit({
+                main: [{ tag: 'div', class: 'pad', children: [t`Contents of ${s.file}`] }],
+                side: [
+                  logPane({
+                    class: 'pad',
+                    style: { boxSizing: 'border-box', height: '100%' },
+                    children: s.log.map((f) => ({ tag: 'div', children: [t`Opened ${f}`] })),
+                  }),
+                ],
+              }),
+            ],
+          }),
+        ],
+      },
+    );
+
+  // Demo 3. createScrollPane({ follow }) is a scrolling box that goes back to its newest edge each time
+  // the page is drawn, but only if the view was already at that edge (within 50px unless you
+  // pass `threshold`); once the reader has scrolled away, it leaves the view alone.
+  // pane.scrollToBottom() and pane.scrollToTop() jump there regardless.
+  // The two panes below show the same messages: oldest first with follow: 'bottom', and newest
+  // first with follow: 'top'.
+  // 実演 3。createScrollPane({ follow }) は、画面が描き直されるたびに新しい側の端へ移動するスクロール領域です。
+  // ただし移動するのは、表示位置がすでにその端にあったとき (`threshold` を渡さなければ 50px 以内) だけです。
+  // 読み手がスクロールして端を離れている間は、表示位置を動かしません。
+  // pane.scrollToBottom() と pane.scrollToTop() は、どこを見ていてもそこへ移動します。
+  // 下の 2 つのペインは同じメッセージを表示しています。古い順は follow: 'bottom'、新しい順は follow: 'top' です。
+  const messageLine = (m) => ({ tag: 'div', children: [m.n ? t`Incoming message ${m.n}` : t(m.text)] });
+  const scrollPaneDemo = (s) =>
+    demo(
+      'createScrollPane',
+      t(
+        'Start the incoming messages: both panes keep the newest one in view. Now scroll one pane away from its newest end: it stops following until you scroll back, or press the button that jumps there.',
+        { ja: '「メッセージの受信」を始めると、どちらのペインも最新のメッセージを表示し続けます。次に、片方のペインをスクロールして最新の端から離してください。端まで戻すか、端へ移動するボタンを押すまで、追従が止まります。' },
+      ),
+      U.uiGrid({
+        class: 'wide',
+        columns: 'auto-fit 240px',
+        gap: 8,
+        children: [
+          U.uiCol({
+            gap: 4,
+            children: [
+              U.uiText({ variant: 'label', children: ["follow: 'bottom'"] }),
+              chatPane({ class: 'frame pad', style: { height: '130px' }, children: s.messages.map(messageLine) }),
+            ],
+          }),
+          U.uiCol({
+            gap: 4,
+            children: [
+              U.uiText({ variant: 'label', children: ["follow: 'top'"] }),
+              newestPane({ class: 'frame pad', style: { height: '130px' }, children: [...s.messages].reverse().map(messageLine) }),
+            ],
+          }),
+        ],
+      }),
+      U.uiRow({
+        class: 'wrap',
+        children: [
+          U.bindInput(s, 'draft', { 'aria-label': t('Message', { ja: 'メッセージ' }), placeholder: t('Message', { ja: 'メッセージ' }), style: { width: '160px' } }),
+          U.uiButton({
+            variant: 'primary',
+            children: [t('Send', { ja: '送信' })],
+            onclick: () => {
+              if (!s.draft) return;
+              s.messages = [...s.messages, { text: s.draft }];
+              s.draft = '';
+              chatPane.scrollToBottom();
+              newestPane.scrollToTop();
+            },
+          }),
+          U.uiButton({
+            children: [s.incoming ? t('Stop the incoming messages', { ja: 'メッセージの受信を止める' }) : t('Start the incoming messages', { ja: 'メッセージの受信を始める' })],
+            onclick: () => { s.incoming = !s.incoming; },
+          }),
+          U.uiButton({ variant: 'ghost', children: [t('To the end', { ja: '末尾へ' })], onclick: () => chatPane.scrollToBottom() }),
+          U.uiButton({ variant: 'ghost', children: [t('To the top', { ja: '先頭へ' })], onclick: () => newestPane.scrollToTop() }),
+        ],
+      }),
+    );
 
   const app = ricdom.createApp(
     '#app',
     state,
     (s) =>
       U.uiPanel({
-        class: 'app-shell',
-        style: { margin: '2rem auto' },
+        class: 'page',
         children: [
-          { tag: 'h1', children: [t('ricdom — splitter, scroll pane and more', { ja: 'ricdom — スプリッター・スクロールペインほか' })] },
+          { tag: 'h1', children: [t('ricdom — splitter and scroll pane', { ja: 'ricdom — スプリッターとスクロールペイン' })] },
           splitterDemo(s),
           U.uiSeparator(),
+          layoutDemo(s),
+          U.uiSeparator(),
           scrollPaneDemo(s),
-          U.uiSeparator(),
-          collapseBoxDemo(s),
-          U.uiSeparator(),
-          accordionDemo(),
-          U.uiSeparator(),
-          tabsDemo(),
-          U.uiSeparator(),
-          dropdownDemo(s),
-          U.uiSeparator(),
-          rowMenuDemo(s),
         ],
       }),
     {
       setup: (a) => {
-        split = a.use(U.createSplitter({ side: 'left', size: 180, min: 100, max: 320 }));
-        pane = a.use(U.createScrollPane({ follow: 'bottom' }));
-        box = a.use(U.createCollapseBox());
-        acc = a.use(U.createAccordion({ defaultOpen: { q1: true } }));
-        tabs = a.use(U.createTabs());
-        sortDD = a.use(U.createDropdown());
-        actionsDD = a.use(U.createDropdown());
-        rowMenu = a.use(U.createPopup());
+        // side: which edge the side panel sits on ('left', 'right', 'top' or 'bottom'). size, min and
+        // max are in px. onResizeEnd gets the final size once when a drag ends, and once per arrow
+        // key press: the place to save the size. Here it only copies the size into the state.
+        // side: サイドパネルを置く辺です ('left'・'right'・'top'・'bottom')。size・min・max の単位は px です。
+        // onResizeEnd は、ドラッグが終わったときに 1 回、矢印キーでは押すたびに 1 回、確定した大きさを受け取ります。
+        // 大きさを保存するならここです。この例では state に写すだけにしています。
+        split = a.use(U.createSplitter({ side: 'left', size: 180, min: 100, max: 320, onResizeEnd: (size) => { a.sideSize = size; } }));
+        outerSplit = a.use(U.createSplitter({ side: 'left', size: 130, min: 90, max: 220 }));
+        innerSplit = a.use(U.createSplitter({ side: 'bottom', size: 90, min: 50, max: 150 }));
+        logPane = a.use(U.createScrollPane({ follow: 'bottom' }));
+        chatPane = a.use(U.createScrollPane({ follow: 'bottom' }));
+        newestPane = a.use(U.createScrollPane({ follow: 'top' }));
       },
     },
   );
+
+  // For demo 3: while s.incoming is true, a message arrives every second. Arrays in the state are
+  // replaced with a new array instead of being pushed to; the assignment is what redraws the page.
+  // 実演 3 のために、s.incoming が true の間、1 秒ごとにメッセージを 1 件追加します。state の中の配列は、
+  // push せずに新しい配列で置き換えます。この代入をきっかけに、画面が描き直されます。
+  setInterval(() => {
+    if (!app.incoming) return;
+    app.count += 1;
+    app.messages = [...app.messages, { n: app.count }];
+  }, 1000);
 
   // Site helper: t() returns a plain string, so draw again once when the language changes.
   // サイトの補助: t() の戻り値はただの文字列なので、言語が変わったら 1 回描き直します。

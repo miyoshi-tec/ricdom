@@ -500,7 +500,7 @@ Append を押すと、開いている間は高さが伸びる方向にアニメ�
 
 お待ちかねの SVG です。SVG のタグ (`svg` / `rect` / `circle`) も、HTML のタグとまったく同じ書き方で置けます。
 
-ここでは 200 個の点が枠の中を跳ね回ります。表示は次の 6 行に収まっています。`svg` の中に背景の `rect` があり、その後ろに
+ここでは 200 個の点が枠の中を跳ね回ります。表示は次の 4 行に収まっています。`svg` の中に背景の `rect` があり、その後ろに
 200 個の `circle` が `map()` で展開される、それだけです。
 
 ```js
@@ -511,7 +511,7 @@ Append を押すと、開いている間は高さが伸びる方向にアニメ�
 ```
 
 アニメーションは `setInterval()` で 20fps、点を動かしたあとに `app.points = [...app.points]` と**配列を差し替えて**います。
-ricdom が監視しているのはトップレベルの代入なので、配列の中の点を `p.x += ...` と直接動かしただけでは気づきません。
+ricdom が監視しているのはトップレベルと 1 段目までの代入なので、配列の中の点を `p.x += ...` と直接動かしただけでは気づきません。
 動かし終わったら差し替える。これが ricdom の作法です (15 章)。
 
 ```html live
@@ -599,7 +599,7 @@ Promise で、代入の直後に呼ぶと、その代入による描画の完了
 JAVIS の記事では Vue.js と React のサンプルを並べていました。ricdom でも 1 つだけ。Vue のチュートリアルにある ToDo リストです。
 
 ```js
-// Vue (template / data / methods の 3 か所に分かれる、21 行)
+// Vue (template / data / methods の 3 か所に分かれる)
 template: `<ol><li v-for="(it, idx) in items">{{ it }} <button v-on:click="del(idx)">x</button></li></ol>
            <input v-model="item" /> <button v-on:click="add()">Add</button>`,
 data: { items: ['aaa', 'bbb', 'ccc'], item: 'Hello' },
@@ -646,7 +646,7 @@ checkbox、文字列には入力欄、入れ子のオブジェクトには折り
 **ricdom の state をそのまま渡せる**ので、調整した値がそのままアプリに効きます。
 
 ```js
-// 9 章のアコーディオンの state をそのまま調整パネルにする (部品なので app.use() で登録する)
+// 10 章の SVG アニメーションの state をそのまま調整パネルにする (部品なので app.use() で登録する)
 const tweak = app.use(createTweakPanel());
 // render 内: tweak({ data: s, keys: { speed: { min: -10, max: 30 } } })
 ```
@@ -655,31 +655,31 @@ const tweak = app.use(createTweakPanel());
 計算するだけです。チェックして、ダメなら alert で叱る UI より、押せる・押せないがリアルタイムに変わる UI の方が、利用者に優しい。
 JAVIS の記事ではこのために SimpleValidator.js という別ライブラリを用意していましたが、ricdom では render 関数の中の式で足ります。
 
-部品の作り方と使い方の詳細は、英語版 [TUTORIAL.md](TUTORIAL.md) の §4〜§8 と、[サンプル](../examples/index.html) の 02 以降へ。
+部品の作り方と使い方の詳細は、[GUIDE.md](GUIDE.md) (実践ガイド、英語) の §4〜§8 と、[サンプル](../examples/index.html) の 02 以降へ。
 
 ## 14. API
 
-ここで ricdom コアの API を解説します。「1 つ」と言いましたが、正確には **`createApp()` と、その戻り値が持つ 4 つのメソッド**です。
+ここで ricdom コアの API を解説します。「1 つ」と言いましたが、正確には **`createApp()` と、その戻り値が持つ 4 つのメソッドと 1 つのプロパティ**です。
 
 ### `createApp(target, state, render, options?)`
 
 | 引数 | 型 | 説明 |
 |---|---|---|
 | `target` | 文字列 or 要素 | 描画先。文字列なら `document.querySelector()` に渡される。見つからなければ `DOMContentLoaded` を 1 回待ち、それでも無ければ `console.error` して何もしない app を返す (例外は投げない) |
-| `state` | オブジェクト | 監視するデータ。**浅く**監視する (トップレベルと 1 段目まで。2 段目以降は 10 章) |
+| `state` | オブジェクト | 監視するデータ。**浅く**監視する (トップレベルと 1 段目まで。2 段目以降は 15 章) |
 | `render` | 関数 `(s) => node` | 描画関数。`s` に state (の監視版) が渡る。オブジェクト / 配列 / 文字列 / 数値 / `null` を返す |
-| `options.setup` | 関数 `(app) => void` | 初回描画の直前に呼ばれる (部品の登録に使う。[TUTORIAL.md](TUTORIAL.md) §5) |
+| `options.setup` | 関数 `(app) => void` | 初回描画の直前に呼ばれる (部品の登録に使う。[GUIDE.md](GUIDE.md) §5) |
 
 **戻り値**: `state` を監視する Proxy (`app`)。`app.hu = 1` のように代入すると再描画が予約されます。`createApp()` は
 **同期で初回描画**するので、戻った時点で DOM はできています。
 
-戻り値 `app` のメソッド:
+戻り値 `app` のメソッドとプロパティ:
 
-| メソッド | 説明 |
+| 名前 | 説明 |
 |---|---|
 | `app.renderNow()` | 予約を待たず、今すぐ同期で描画する |
 | `app.nextRender()` | 予約されている描画が終わったら解決する Promise。予約が無いと解決しない (「反映済みを保証したいだけ」なら `renderNow()`) |
-| `app.use(part)` | 状態を持つ部品 (dialog / popup / splitter など) を登録する ([TUTORIAL.md](TUTORIAL.md) §5) |
+| `app.use(part)` | 状態を持つ部品 (dialog / popup / splitter など) を登録する ([GUIDE.md](GUIDE.md) §5) |
 | `app.unmount()` | 監視を止め、部品を破棄する。JAVIS の「`bind()` が外せない」はこれで解消 |
 | `app.ignore` | この下に置いたデータは監視しない (キャッシュなど、画面に関係ないものの置き場) |
 
@@ -704,7 +704,7 @@ JAVIS.js は `_Hz` (既定 144) で state を**ポーリング**していまし�
   CSS は 1 枚、テーマは 7 種 (曇りガラスの glass を含む)
 - **アクセシビリティ**: dialog の focus trap、menu の矢印キー、tabs の roving tabindex などは部品が面倒を見ます
 
-続きは英語版 [TUTORIAL.md](TUTORIAL.md) の §3 以降と、[examples/](../examples/index.html) のサンプルへ。
+続きは [GUIDE.md](GUIDE.md) (部品・テーマ・Electron・v1 からの移行を扱う実践ガイド、英語) の §3 以降と、[examples/](../examples/index.html) のサンプルへ。
 
 ---
 

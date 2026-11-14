@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ricdom — 08 Themes and frosted glass (no build step)</title>
 <!-- ricdom-ui.css styles ricdom's UI components (load it before your own CSS). _fonts.css only sets this site's fonts.
      ricdom-ui.css は ricdom の UI 部品の見た目です (自分の CSS より先に読み込みます)。_fonts.css はこのサイトのフォント設定だけです。 -->
@@ -12,11 +13,11 @@
   body { min-height: 100vh; }
   /* A stand-in desktop wallpaper made only of CSS gradients and blurred circles, so you can see
      that the translucent glass / glass-dark surfaces really blur what is behind them. In an
-     Electron app with a transparent window, the real desktop shows through instead (Tutorial,
-     section 6, "Frosted glass over the desktop").
+     Electron app with a transparent window, the real desktop shows through instead (the guide,
+     chapter 6, "Frosted glass over the desktop").
      CSS のグラデーションとぼかした円だけで作った「壁紙」の代わりです。glass / glass-dark の半透明の面が、
      背後をちゃんとぼかしているかを目で確かめるためのものです。透明ウィンドウの Electron アプリでは、
-     代わりに本物のデスクトップが透けて見えます (英語版チュートリアル 6 章「Frosted glass over the desktop」)。 */
+     代わりに本物のデスクトップが透けて見えます (ガイド 6 章「Frosted glass over the desktop」、英語)。 */
   .wallpaper {
     position: fixed;
     inset: 0;
