@@ -7,8 +7,8 @@
 //
 // The order is "most used first, then by difficulty": the basics (01-04), components that keep
 // state (05-07), themes and the larger components (08-10), then how ricdom fits into a page and
-// how lists are reconciled (11-12), the less common floating components (13), and two small but
-// complete tools built from all of the above (14-15).
+// how lists are reconciled (11-12), the less common floating components (13), and three small but
+// complete tools built from all of the above (14-16).
 window.RICDOM_SAMPLES = [
   {
     file: '01-hello.html',
@@ -128,6 +128,14 @@ window.RICDOM_SAMPLES = [
     blurb: {
       en: 'A chat that draws a streamed reply as Markdown while it arrives: a demo mode that needs no server, and a settings dialog for OpenAI-compatible servers.',
       ja: '届いている途中の応答を Markdown で描くチャット。サーバー不要のデモと、OpenAI 互換サーバーの接続設定ダイアログつき。',
+    },
+  },
+  {
+    file: '16-svg-editor.html',
+    title: { en: 'SVG editor', ja: 'SVG エディタ' },
+    blurb: {
+      en: 'The objects in the state are the SVG: drag shapes, edit their attributes, add and delete them.',
+      ja: '状態のオブジェクトがそのまま SVG になる: 図形をドラッグし、属性を編集し、足して消す。',
     },
   },
 ];

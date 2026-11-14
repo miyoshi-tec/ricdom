@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ricdom — 16 SVG editor (no build step)</title>
+<!-- ricdom-ui.css styles ricdom's UI components (load it before your own CSS). _fonts.css only sets this site's fonts.
+     ricdom-ui.css は ricdom の UI 部品の見た目です (自分の CSS より先に読み込みます)。_fonts.css はこのサイトのフォント設定だけです。 -->
+<link rel="stylesheet" href="../dist/ricdom-ui.css">
+<link rel="stylesheet" href="_fonts.css">
+<style>
+  /* The page's own layout. None of these rules is needed by ricdom.
+     このページ自身のレイアウトです。ricdom に必要な規則はありません。 */
+  .page { max-width: 960px; margin: 0 auto; padding: 1.5rem; }
+  .page > h1 { font-size: 1.2rem; margin: 0 0 4px; }
+  .editor { display: grid; grid-template-columns: minmax(0, 320px) minmax(0, 1fr); gap: 16px; align-items: start; margin-top: 12px; }
+  /* On a narrow screen the two parts are stacked, the drawing first, so that it stays in view while the list below grows.
+     狭い画面では 2 つを縦に並べ、絵を先に置きます。下の一覧が長くなっても、絵が見えたままになります。 */
+  @media (max-width: 720px) { .editor { grid-template-columns: minmax(0, 1fr); } .editor > .canvas { order: -1; } }
+
+  /* The drawing. It is white in every theme, like a sheet of paper. touch-action: none lets a finger drag a shape instead of scrolling the page.
+     絵を描く面です。紙のように、どのテーマでも白にしています。touch-action: none は、指で図形をドラッグしたときにページがスクロールしないようにする指定です。 */
+  .canvas { display: block; width: 100%; height: auto; background: #fff; border: 1px solid var(--ric-color-border); border-radius: var(--ric-radius); touch-action: none; }
+  .shape { cursor: move; }
+  /* The selected shape gets a dashed outline. An outline follows the shape's bounding box, so no size has to be calculated.
+     選択中の図形には破線の枠を付けます。outline は図形を囲む箱に沿って描かれるので、大きさを計算する必要がありません。 */
+  .shape.is-selected { outline: 1.5px dashed #f59e0b; outline-offset: 3px; }
+
+  /* The list of shapes: each row shows the markup of one shape.
+     図形の一覧です。1 行が、図形 1 つぶんのマークアップです。 */
+  .rows { display: flex; flex-direction: column; gap: 2px; }
+  .row { box-sizing: border-box; width: 100%; padding: 3px 8px; border: 0; border-radius: 4px; background: none; color: inherit; cursor: pointer; text-align: left; font-family: Consolas, "Liberation Mono", Menlo, monospace; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row:hover { background: color-mix(in srgb, var(--ric-color-accent) 14%, transparent); }
+  .row.is-selected { background: var(--ric-color-accent); color: var(--ric-color-accent-fg); }
+  .field { display: grid; grid-template-columns: 6em minmax(0, 1fr); align-items: center; gap: 8px; }
+  .wrap { flex-wrap: wrap; }
+</style>
+</head>
+<body>
+<!--
+  16 SVG editor: the objects in the state are the SVG.
+  Each shape is a plain object such as { tag: 'circle', cx: 80, cy: 100, r: 40, fill: '#3b82f6' }.
+  ricdom draws those objects as they are, so editing the drawing means replacing an object:
+  dragging replaces its position, a field in the panel replaces one attribute.
+  No build step: two scripts (ricdom, then ricdom/ui) and one stylesheet.
+
+  16 SVG エディタ: 状態の中のオブジェクトが、そのまま SVG になります。
+  図形 1 つは { tag: 'circle', cx: 80, cy: 100, r: 40, fill: '#3b82f6' } のような普通のオブジェクトです。
+  ricdom はそのオブジェクトをそのまま描くので、絵を編集することは、オブジェクトを差し替えることです。
+  ドラッグは位置を差し替え、パネルの欄は属性を 1 つ差し替えます。
+  ビルド不要: <script> 2 本 (ricdom → ricdom/ui) と CSS 1 本で動きます。
+-->
+<div id="app"></div>
+
+<!-- Optional: highlight.js colours the code in this site's Source view. ricdom does not need it.
+     任意: highlight.js はこのサイトの「ソース」表示を色分けします。ricdom 自体には不要です。 -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
+<!-- ricdom itself: the core first, then the UI components. They define the globals ricdom and ricdomUI.
+     ricdom 本体: コア → UI 部品の順に読み込みます。グローバル変数 ricdom と ricdomUI ができます。 -->
+<script src="../dist/ricdom.iife.min.js"></script>
+<script src="../dist/ricdom-ui.iife.min.js"></script>
+<!-- Docs-site helpers, not part of ricdom: the nav bar (theme, language, previous / next page) and t() for translations.
+     このサイト専用の補助で、ricdom の一部ではありません: ナビバー (テーマ・言語・前後のページ) と翻訳用の t() です。 -->
+<script src="_i18n.js"></script><script src="_samples.js"></script><script src="_nav.js"></script>
+<script>
+  // A short name for the UI components.
+  // UI 部品を短い名前で呼べるようにします。
+  const U = ricdomUI;
+
+  // Site helper: t(text, { ja: '...' }) returns the text in the chosen language.
+  // サイトの補助: t(文字列, { ja: '…' }) は選択中の言語の文字列を返します。
+  const { t, onLangChange } = ricdomI18n;
+
+  // Icon data (SVG paths) comes from `npx ricdom-icon plus trash-2`. Copy it; do not write it by hand.
+  // アイコンのデータ (SVG のパス) は `npx ricdom-icon plus trash-2` で取得します。手書きはしません。
+  const ICONS = {
+    plus: { p: 'M12 5v14M5 12h14' },
+    'trash-2': { p: 'M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6' },
+  };
+
+  // ── The data ─────────────────────────────────────────────────────────────────────────────────
+  // A shape is the object that ricdom draws: `tag` and the SVG attributes, as they are.
+  // `key` tells ricdom which element belongs to which shape, so an element stays with its shape
+  // when shapes are added or removed (and while one is being dragged).
+  // 図形は、ricdom が描くオブジェクトそのものです。`tag` と SVG の属性を、そのまま書きます。
+  // `key` は「どの要素がどの図形のものか」を ricdom に伝えます。図形を足したり消したりしても
+  // (ドラッグの途中でも)、要素は自分の図形に付いたままになります。
+  const state = {
+    shapes: [
+      { key: 1, tag: 'circle', cx: 80, cy: 110, r: 40, fill: '#3b82f6' },
+      { key: 2, tag: 'rect', x: 160, y: 60, width: 100, height: 100, rx: 8, fill: '#10b981' },
+      { key: 3, tag: 'text', x: 150, y: 36, 'font-size': 18, 'text-anchor': 'middle', fill: '#111827', children: ['Hello SVG'] },
+    ],
+    selected: 1,
+  };
+  let nextKey = 4;
+
+  // What a new shape looks like.
+  // 新しく足す図形の初期値です。
+  const NEW_SHAPE = {
+    circle: () => ({ tag: 'circle', cx: 150, cy: 100, r: 30, fill: '#f59e0b' }),
+    rect: () => ({ tag: 'rect', x: 110, y: 70, width: 80, height: 60, rx: 0, fill: '#8b5cf6' }),
+    text: () => ({ tag: 'text', x: 150, y: 180, 'font-size': 16, 'text-anchor': 'middle', fill: '#111827', children: ['Text'] }),
+  };
+
+  // The attributes that hold the position of each kind of shape.
+  // 図形の種類ごとの、位置を表す属性です。
+  const POSITION = { circle: ['cx', 'cy'], rect: ['x', 'y'], text: ['x', 'y'] };
+
+  // Every change goes through here: build a new array in which one shape is a new object, and
+  // assign it. Assigning to s.shapes is what makes ricdom draw again.
+  // すべての変更はここを通ります。図形 1 つだけを新しいオブジェクトにした新しい配列を作り、代入します。
+  // s.shapes への代入が、ricdom に描き直させます。
+  const change = (s, key, patch) => {
+    s.shapes = s.shapes.map((shape) => (shape.key === key ? { ...shape, ...patch } : shape));
+  };
+
+  // ── Dragging ─────────────────────────────────────────────────────────────────────────────────
+  // The drag in progress is kept outside the state: nothing on the screen shows it, so it does
+  // not need to cause a redraw. `from` is the pointer position and `origin` the shape's position,
+  // both at the moment the drag began; each move adds the distance from `from` to `origin`.
+  // ドラッグの途中経過は、状態の外に持ちます。画面には出ないので、描き直す必要が無いからです。
+  // `from` はドラッグを始めたときのポインターの位置、`origin` はそのときの図形の位置です。
+  // 動くたびに、`from` からの距離を `origin` に足します。
+  let drag = null;
+
+  // Where the pointer is, in the coordinates of the drawing (the viewBox), whatever size the
+  // drawing is shown at.
+  // ポインターの位置を、絵の座標 (viewBox) に直します。絵がどんな大きさで表示されていても同じです。
+  const toDrawing = (svg, e) => new DOMPoint(e.clientX, e.clientY).matrixTransform(svg.getScreenCTM().inverse());
+
+  const startDrag = (s, shape, e) => {
+    const svg = e.currentTarget.ownerSVGElement;
+    const [xName, yName] = POSITION[shape.tag];
+    s.selected = shape.key;
+    drag = { key: shape.key, xName, yName, from: toDrawing(svg, e), origin: { x: shape[xName], y: shape[yName] } };
+    // From here on, pointer events go to the <svg> even when the pointer leaves it.
+    // これ以降、ポインターが <svg> の外へ出ても、イベントは <svg> に届きます。
+    svg.setPointerCapture(e.pointerId);
+  };
+  const moveDrag = (s, e) => {
+    if (!drag) return;
+    const now = toDrawing(e.currentTarget, e);
+    change(s, drag.key, {
+      [drag.xName]: Math.round(drag.origin.x + now.x - drag.from.x),
+      [drag.yName]: Math.round(drag.origin.y + now.y - drag.from.y),
+    });
+  };
+  const endDrag = () => { drag = null; };
+
+  // ── Drawing ──────────────────────────────────────────────────────────────────────────────────
+  // The picture: the shapes from the state, each with a class and a handler added. Nothing else
+  // is converted, which is the point of this page.
+  // 絵の部分です。状態の図形に、class とハンドラを足しただけです。ほかには何も変換しません。
+  // それがこのページで見せたいことです。
+  const drawing = (s) => ({
+    tag: 'svg',
+    class: 'canvas',
+    viewBox: '0 0 300 200',
+    role: 'img',
+    'aria-label': t('The drawing', { ja: '描いている絵' }),
+    // A press on the empty part of the drawing clears the selection.
+    // 絵の何も無いところを押すと、選択を外します。
+    onpointerdown: (e) => { if (e.target === e.currentTarget) s.selected = null; },
+    onpointermove: (e) => moveDrag(s, e),
+    onpointerup: endDrag,
+    onpointercancel: endDrag,
+    children: s.shapes.map((shape) => ({
+      ...shape,
+      class: shape.key === s.selected ? 'shape is-selected' : 'shape',
+      onpointerdown: (e) => startDrag(s, shape, e),
+    })),
+  });
+
+  // One shape as markup, for the list.
+  // 図形 1 つをマークアップの文字にします。一覧に使います。
+  const markup = (shape) => {
+    const attrs = Object.entries(shape)
+      .filter(([name]) => name !== 'key' && name !== 'tag' && name !== 'children')
+      .map(([name, value]) => ` ${name}="${value}"`)
+      .join('');
+    return shape.children ? `<${shape.tag}${attrs}>${shape.children[0]}</${shape.tag}>` : `<${shape.tag}${attrs} />`;
+  };
+
+  // The fields for the selected shape: one per attribute, made from the object itself.
+  // A number gets a number field, `fill` a colour picker, and a text shape one more field for
+  // its text. Each field replaces one attribute through change().
+  // 選択中の図形の欄です。オブジェクトそのものから、属性 1 つにつき 1 つ作ります。
+  // 数値は数値の欄、`fill` は色の選択、text の図形には文字の欄を 1 つ足します。
+  // どの欄も、change() で属性を 1 つ差し替えます。
+  const fields = (s, shape) => [
+    ...Object.entries(shape)
+      .filter(([name, value]) => name === 'fill' || typeof value === 'number')
+      .filter(([name]) => name !== 'key')
+      .map(([name, value]) => ({
+        tag: 'label',
+        class: 'field',
+        children: [
+          U.uiText({ variant: 'muted', children: [name] }),
+          name === 'fill'
+            ? U.uiColor({ value, oninput: (e) => change(s, shape.key, { fill: e.target.value }) })
+            : U.uiInput({
+                type: 'number',
+                value: String(value),
+                oninput: (e) => {
+                  // An empty or half-typed field is not a number yet: wait for the next keystroke.
+                  // 空の欄や打ちかけの欄は、まだ数値ではありません。次の入力を待ちます。
+                  if (e.target.value !== '' && Number.isFinite(Number(e.target.value))) change(s, shape.key, { [name]: Number(e.target.value) });
+                },
+              }),
+        ],
+      })),
+    shape.tag === 'text'
+      ? {
+          tag: 'label',
+          class: 'field',
+          children: [
+            U.uiText({ variant: 'muted', children: [t('text', { ja: '文字' })] }),
+            U.uiInput({ value: shape.children[0], oninput: (e) => change(s, shape.key, { children: [e.target.value] }) }),
+          ],
+        }
+      : null,
+  ];
+
+  const app = ricdom.createApp('#app', state, (s) => {
+    const selected = s.shapes.find((shape) => shape.key === s.selected);
+    return {
+      tag: 'div',
+      class: 'page',
+      children: [
+        { tag: 'h1', children: [t('ricdom — SVG editor', { ja: 'ricdom — SVG エディタ' })] },
+        U.uiText({
+          children: [t('Drag a shape to move it. Click a shape, or its row in the list, to edit its attributes.', { ja: '図形をドラッグすると動きます。図形か、一覧の行をクリックすると、属性を編集できます。' })],
+        }),
+        {
+          tag: 'div',
+          class: 'editor',
+          children: [
+            U.uiPanel({
+              children: [
+                // The list: one button per shape, so a shape can be chosen with the keyboard too.
+                // 一覧です。図形 1 つにつきボタン 1 つなので、キーボードでも図形を選べます。
+                {
+                  tag: 'div',
+                  class: 'rows',
+                  children: s.shapes.map((shape) => ({
+                    tag: 'button',
+                    key: shape.key,
+                    class: shape.key === s.selected ? 'row is-selected' : 'row',
+                    'aria-pressed': shape.key === s.selected ? 'true' : 'false',
+                    onclick: () => { s.selected = shape.key; },
+                    children: [markup(shape)],
+                  })),
+                },
+                U.uiRow({
+                  class: 'wrap',
+                  children: Object.keys(NEW_SHAPE).map((tag) =>
+                    U.uiButton({
+                      children: [U.uiIcon(ICONS.plus, { size: 14 }), tag],
+                      // The new shape goes to the end of the array, so it is drawn on top.
+                      // 新しい図形は配列の末尾に入るので、いちばん手前に描かれます。
+                      onclick: () => {
+                        s.shapes = [...s.shapes, { key: nextKey, ...NEW_SHAPE[tag]() }];
+                        s.selected = nextKey;
+                        nextKey += 1;
+                      },
+                    }),
+                  ),
+                }),
+                U.uiSeparator(),
+                selected
+                  ? U.uiCol({
+                      children: [
+                        ...fields(s, selected),
+                        U.uiButton({
+                          variant: 'ghost',
+                          children: [U.uiIcon(ICONS['trash-2'], { size: 14 }), t('Delete this shape', { ja: 'この図形を削除' })],
+                          onclick: () => {
+                            s.shapes = s.shapes.filter((shape) => shape.key !== selected.key);
+                            s.selected = null;
+                          },
+                        }),
+                      ],
+                    })
+                  : U.uiText({ variant: 'muted', children: [t('Nothing is selected.', { ja: '何も選択されていません。' })] }),
+              ],
+            }),
+            drawing(s),
+          ],
+        },
+      ],
+    };
+  });
+
+  // Site helper: t() returns a plain string, so draw again once when the language changes.
+  // サイトの補助: t() の戻り値はただの文字列なので、言語が変わったら 1 回描き直します。
+  onLangChange(() => app.renderNow());
+</script>
+</body>
+</html>
