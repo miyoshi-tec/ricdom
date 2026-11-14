@@ -16,7 +16,7 @@
 // md-editor 単体使用時の技術的な必須順序ではない。
 
 export { createMdEditor } from './mdEditor.js';
-export type { MdEditorProps, MdEditorInstance } from './mdEditor.js';
+export type { MdEditorProps, MdEditorInstance, CreateMdEditorOptions } from './mdEditor.js';
 
 export { tokenizeMarkdown } from './tokenizer.js';
 export type { MdToken } from './tokenizer.js';

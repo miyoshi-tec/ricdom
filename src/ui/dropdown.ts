@@ -37,14 +37,17 @@ import { uiIcon } from './icon.js';
 const CHEVRON_DOWN = { p: 'm6 9 6 6 6-6' };
 
 export interface DropdownProps {
+  // v1 の旧 dropdown に当たるモード。型は 2.0.0-alpha.12 で string 限定から広げ、
+  // `PopupTriggerObject.label` と揃えた (線茶からの報告。旧 string 限定だと `uiIcon(...)` を
+  // 混ぜたラベルが組めなかった)。
   /**
-   * ラベルモード (旧 dropdown)。ポップオーバーはトリガー幅を最小幅として広がる。icon と排他。
-   * `RicNode | RicNode[]` (2.0.0-alpha.12、`PopupTriggerObject.label` と型を揃えた —
-   * 線茶からの報告。旧 string 限定だと `uiIcon(...)` を混ぜたラベル (例: `[uiIcon(ICON),
-   * ' テーマ']`) が組めなかった)。文字列 1 つを渡す従来の使い方はそのまま動く。
+   * ラベルモード。ポップオーバーはトリガー幅を最小幅として広がる。icon と排他。
+   * 文字列 1 つのほか `RicNode | RicNode[]` を渡せるので、`uiIcon(...)` を混ぜたラベル
+   * (例: `[uiIcon(ICON), ' テーマ']`) も組める。
    */
   label?: RicNode | RicNode[];
-  /** アイコンモード (旧 menu)。正方形ボタン、ポップオーバーは min-width:160px。label と排他。 */
+  // v1 の旧 menu に当たるモード。
+  /** アイコンモード。正方形ボタン、ポップオーバーは min-width:160px。label と排他。 */
   icon?: RicNode;
   /** label モードのみ有効。開閉インジケータ (▼) を付ける (開くと 180° 回転)。 */
   chevron?: boolean;
@@ -151,7 +154,7 @@ export const createDropdown = (): DropdownInstance => {
     guard.dispose();
   };
 
-  inst.close = (): void => menu.close();
+  inst.close = (): void => menu.closeFromApi();
   inst.isOpen = (): boolean => menu.isOpen();
 
   return inst;

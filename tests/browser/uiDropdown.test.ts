@@ -7,7 +7,8 @@ import { userEvent } from '@vitest/browser/context';
 import { createApp } from '../../src/app.js';
 import { createDropdown } from '../../src/ui/dropdown.js';
 import { injectStyles } from '../../src/ui/injectStyles.js';
-import { flush, setupApp } from '../_helpers/dom.js';
+import { applyTheme } from '../../src/ui/theme.js';
+import { flush, settled, setupApp, until } from '../_helpers/dom.js';
 
 injectStyles(document);
 
@@ -176,5 +177,73 @@ describe('実ブラウザ: createDropdown の light dismiss (2.0.0-alpha.12)', (
     // 反応してしまっていると、toggle 側の closeAndRestoreFocus() が isClosing ガードで
     // 早期 return し、フォーカスが復帰しなくなる — この assert がその回帰を検知する。
     expect(document.activeElement).toBe(trigger);
+  });
+});
+
+// 2.0.0-alpha.36: サンプル 13 を書く過程で見つかった 2 件。
+describe('実ブラウザ: createDropdown の close() とフォーカス / chevron のすき間 (2.0.0-alpha.36)', () => {
+  const body = (): HTMLElement | null => document.querySelector('[data-ricdom-role="dropdown"]');
+
+  // 本体の中のボタンから dd.close() を呼ぶと、そのボタンは本体ごと DOM から消える。フォーカスを
+  // 戻さないと <body> に落ち、キーボードの利用者は位置を見失う (以前は Escape とトリガーの
+  // toggle だけがフォーカスを戻していた)。
+  it('本体の中から close() を呼ぶと、フォーカスがトリガーへ戻る', async () => {
+    const app = setupApp();
+    let dd: ReturnType<typeof createDropdown>;
+    const handle = createApp('#app', {}, () =>
+      dd ? dd({ label: '並び順', children: [{ tag: 'button', id: 'pick', onclick: () => dd.close(), children: ['名前順'] }] }) : null,
+    );
+    dd = handle.use(createDropdown());
+    await flush();
+    const trigger = app.querySelector('button') as HTMLElement;
+
+    await userEvent.click(trigger);
+    await settled(body);
+    await userEvent.click(document.getElementById('pick')!);
+    await until(() => body() === null, '本体が消える');
+    expect(document.activeElement, 'フォーカスはトリガーに戻る (body に落ちない)').toBe(trigger);
+    handle.unmount();
+  });
+
+  it('フォーカスが本体の外にあるときの close() は、フォーカスを動かさない', async () => {
+    const app = setupApp();
+    let dd: ReturnType<typeof createDropdown>;
+    const handle = createApp('#app', {}, () => ({
+      tag: 'div',
+      children: [dd ? dd({ label: '並び順', children: [{ tag: 'div', children: ['項目'] }] }) : null, { tag: 'input', id: 'elsewhere' }],
+    }));
+    dd = handle.use(createDropdown());
+    await flush();
+
+    await userEvent.click(app.querySelector('button')!);
+    await settled(body);
+    const elsewhere = document.getElementById('elsewhere') as HTMLInputElement;
+    elsewhere.focus(); // プログラムからのフォーカス移動 (pointerdown を伴わないので、外側クリック扱いにはならない)
+    expect(body(), '前提: まだ開いている').not.toBeNull();
+    dd.close();
+    await until(() => body() === null, '本体が消える');
+    expect(document.activeElement, 'フォーカスは奪わない').toBe(elsewhere);
+    handle.unmount();
+  });
+
+  // ラベル形のトリガーは「文字 + ⌄」。幅が中身で決まるとき (width: auto)、space-between は
+  // すき間を作らないので「並び順: name⌄」とくっついて見えていた。
+  it('ラベル形 + chevron: 文字と ⌄ の間にすき間がある', async () => {
+    const app = setupApp();
+    applyTheme(app, { theme: 'light' }); // すき間は --ric-gap なので、テーマが無いと 0 になる
+    let dd: ReturnType<typeof createDropdown>;
+    const handle = createApp('#app', {}, () => (dd ? { tag: 'div', style: { display: 'flex' }, children: [dd({ label: '並び順: name', chevron: true, children: [{ tag: 'div', children: ['項目'] }] })] } : null));
+    dd = handle.use(createDropdown());
+    await flush();
+
+    const trigger = app.querySelector('button') as HTMLElement;
+    const chevron = trigger.querySelector('.ric-dropdown__chevron') as SVGElement;
+    const range = document.createRange();
+    range.selectNodeContents(trigger.firstChild!); // 文字のノード
+    const textRight = range.getBoundingClientRect().right;
+    const gapVar = parseFloat(getComputedStyle(trigger).columnGap);
+    expect(gapVar, '前提: テーマのすき間が当たっている').toBeGreaterThan(0);
+    expect(chevron.getBoundingClientRect().left - textRight, '文字の右端から ⌄ の左端まで').toBeGreaterThanOrEqual(gapVar - 0.5);
+    handle.unmount();
   });
 });

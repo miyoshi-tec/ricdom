@@ -49,7 +49,9 @@ export interface UiMdPreProps {
   transformText?: MdTransformText;
   transformImageSrc?: MdTransformImageSrc;
   class?: import('../types.js').ClassValue;
-  /** rest スプレッド経由で常に透過されていたが、型に無かった (LCP の指摘、2.0.0-alpha.9)。 */
+  // rest スプレッド経由で常に透過されていたが、型に無かった (LCP の指摘、2.0.0-alpha.9)。
+  /** inline style。任意の属性と同じく要素にそのまま渡る (型の補完用に宣言している)。
+   *  変換結果を包む外側の .ric-md-pre に付く。 */
   style?: StyleValue;
   [key: string]: unknown;
 }

@@ -1334,6 +1334,7 @@ const DROPDOWN_CSS = `
 .ric-dropdown__trigger:hover { border-color: ${ac}; }
 .ric-dropdown__trigger--label {
   width: auto; justify-content: space-between;
+  gap: ${g};
   padding: 0 ${px};
   font-size: 1em;
 }
@@ -1586,7 +1587,7 @@ const MD_EDITOR_CSS = `
 const STYLESHEET_MARKER_COMMENT = '/*! ricdom-ui */';
 
 /**
- * ricdom/ui の CSS 1 枚分の文字列を組み立てる (設計書 §4)。
+ * ricdom/ui の CSS 1 枚分の文字列を組み立てる。
  * `injectStyles()` (実行時注入) と `dist/ricdom-ui.css` 生成スクリプト
  * (`scripts/build-css.mjs`) の両方から、同じ関数を単一ソースとして使う。
  */

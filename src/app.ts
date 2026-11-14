@@ -31,12 +31,13 @@ const NOOP_INSTANCE: object = new Proxy(noopFunction, {
   deleteProperty: () => true,
 });
 
+// 実体は v1 と同じ universal proxy。throw しない・グルーコードを連鎖破壊しない、という
+// v1 の哲学 A9 を型安全なまま継承する (設計書 §3.6 / B14)。
 /**
  * 無効な target・state・render に対して返す「型付き NOOP App」。
- * 実体は v1 と同じ universal proxy だが、戻り値の型は `App<S>` を満たすため、
+ * 実体は何を読んでも・呼んでも自分自身を返す Proxy だが、戻り値の型は `App<S>` を満たすため、
  * 呼び出し側の TypeScript コードは分岐なしに `app.count` や `app.renderNow()` を
- * そのまま書ける (throw しない・グルーコードを連鎖破壊しない、という v1 の哲学 A9 を
- * 型安全なまま継承する。設計書 §3.6 / B14)。
+ * そのまま書ける (throw しない・グルーコードを連鎖破壊しない)。
  */
 export const createNoopApp = <S extends object>(): App<S> => NOOP_INSTANCE as unknown as App<S>;
 

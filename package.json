@@ -1,6 +1,6 @@
 {
   "name": "ricdom",
-  "version": "2.0.0-alpha.35",
+  "version": "2.0.0-alpha.36",
   "description": "Write UI as plain objects. Assign to state. The real DOM updates. No build step, typed, accessible.",
   "type": "module",
   "license": "MIT",
@@ -24,7 +24,9 @@
     "typescript",
     "no-build"
   ],
-  "sideEffects": false,
+  "sideEffects": [
+    "**/*.css"
+  ],
   "exports": {
     ".": {
       "import": {

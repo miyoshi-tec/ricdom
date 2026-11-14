@@ -1,6 +1,7 @@
 # ricdom SPEC
 
-This document states the **contract** of `ricdom` (core), `ricdom/ui`, and `ricdom/icons`:
+This document states the **contract** of `ricdom` (core), `ricdom/ui`, `ricdom/icons` and
+`ricdom/md-editor`:
 what is guaranteed to be true, and what is guaranteed to stay true across patch/minor
 releases. It contains facts, not recipes — for task-oriented walkthroughs see
 [TUTORIAL.md](TUTORIAL.md); for design rationale see the (Japanese) internal design
@@ -21,6 +22,7 @@ differently, that is noted only when it helps someone migrating — this is not 
 - [10. Components](#10-components)
 - [11. `data-ricdom-role` registry](#11-data-ricdom-role-registry)
 - [12. Icons](#12-icons)
+- [13. `ricdom/md-editor` (opt-in subpath)](#13-ricdommd-editor-opt-in-subpath)
 
 ---
 
@@ -260,7 +262,7 @@ patch path applies attributes before children, so the first `value` assignment i
 left as if `value` had never been set at all (falling back to its own "select the first
 option" default, or staying on the previously selected option) — fixed in 2.0.0-alpha.15.
 Consumers never need to work around option/value construction order themselves, in either
-path. As with any other `value` write, this re-apply still honors the editing guard (§3.2):
+path. As with any other `value` write, this re-apply still honors the editing guard (§2.4):
 while the `<select>` is `document.activeElement`, it is not force-corrected.
 
 **`<selectedcontent>` is kept current (`2.0.0-alpha.35`).** `<selectedcontent>` is the standard
@@ -645,7 +647,7 @@ table above).
 so a `ref` on an element returned from a stateful component's `renderPortal()` (a dialog
 body input, say) is already present in `app.refs` by the time that render's `nextRender()`
 promise resolves — there is no "wait one extra render" step. This is what makes
-`createFocusWhen` (§10.3.1a) usable on the very render a dialog opens.
+`createFocusWhen` (§10.3.2) usable on the very render a dialog opens.
 
 ---
 
@@ -1351,14 +1353,14 @@ the accessibility contract, which is FACT that is easy to miss by reading types 
 
 | Component | Notes |
 |---|---|
-| `uiButton(props)` | `variant`: `'default' \| 'primary' \| 'ghost' \| 'link'` (`'link'` restored from v1 in 2.0.0-alpha.8, pilots 5-7/Rancha — strips background/border/height-constraint for a text-like button, e.g. breadcrumbs/inline links). `size`: `'sm' \| 'md' \| 'lg'`, default `'md'` (`'md'` adds no size class — it *is* the core `.ric-button` size; `'link'` ignores `size` the way it ignores density's height, matching v1). Rest-spread contract (§10.5) |
+| `uiButton(props)` | `variant`: `'default' \| 'primary' \| 'ghost' \| 'link'` (`'link'` restored from v1 in 2.0.0-alpha.8, pilots 5-7/Rancha — strips background/border/height-constraint for a text-like button, e.g. breadcrumbs/inline links). `size`: `'sm' \| 'md' \| 'lg'`, default `'md'` (`'md'` adds no size class — it *is* the core `.ric-button` size; `'link'` with no `size` has no fixed height at all, not even the density's; an explicit `size` applies to `'link'` exactly as to any other variant — corrected in `2.0.0-alpha.36`, earlier versions of this table said `'link'` ignores `size`, which neither v1 nor v2 ever did). Rest-spread contract (§10.5) |
 | `uiInput(props)` | Text input, controlled. `value` is always emitted (even `''`) so it participates in `FORCE_REAPPLY`/the editing guard |
-| `uiTextarea(props)` | `autoResize?: { minRows?, maxRows? }` grows/shrinks height to content, clamped, with overflow scrolling past `maxRows`. **IME note**: a controlled textarea can have its value overwritten mid-composition before IME confirmation — consider driving updates from `onchange` instead of `oninput` for CJK-heavy input |
+| `uiTextarea(props)` | `autoResize?: { minRows?, maxRows? }` grows/shrinks height to content, clamped, with overflow scrolling past `maxRows`. **The height is recomputed on `input` events only**: a long initial `value`, or a `value` changed from state, keeps the previous height (`minRows` at first) until the user next types. **IME note**: a controlled textarea can have its value overwritten mid-composition before IME confirmation — consider driving updates from `onchange` instead of `oninput` for CJK-heavy input |
 | `uiCheckbox(props)` | Renders `<label><input type=checkbox>…</label>`; `checked`/`onchange` are isolated to the inner `<input>` (rest props go on the outer `<label>`) |
 | `uiRadiobutton(props)` | `options: (string \| { value, label, ...attrs })[]` (`label` defaults to `value`). Per-option extra attributes are forwarded to that option's `<label>`. **Known browser constraint**: `name` groups radios natively — give every independent group its own `name`, or they will merge |
 | `uiSelect(props)` | Native `<select>`; `options: (string \| { value, label })[]` (`label` defaults to `value`), optional non-selectable `placeholder` option. A long selected label is cut with "…" on one line (FACT below) |
-| `uiRange(props)` | Slider + live value display; mouse wheel over the control steps the value by `step` |
-| `uiColor(props)` | Accepts and emits either `#rrggbb` hex or `rgba(r,g,b,a)`, auto-detected from `value`; rgba mode adds an alpha slider |
+| `uiRange(props)` | Slider + live value display; mouse wheel over the control steps the value by `step`. `oninput` receives the native event for a drag or key press, but **for a wheel step it receives a minimal object `{ target: { value } }`** (there is no native `input` event to forward) — read `ev.target.value` only |
+| `uiColor(props)` | Accepts and emits either `#rrggbb` hex or `rgba(r,g,b,a)`, auto-detected from `value`; rgba mode adds an alpha slider. In rgba mode `oninput` receives a minimal object `{ target: { value } }` carrying the combined `rgba(...)` string (two native inputs make one value) — read `ev.target.value` only |
 | `uiSeparator(props)` | `<hr>` |
 | `uiProgress(props)` | Progress bar: `value` 0–1 (omit for indeterminate), `label`, `children` (detail line), `action`. FACT below (`2.0.0-alpha.33`) |
 | `uiText(props)` | `variant`: `'default' \| 'muted' \| 'title' (h2) \| 'label' (<label>)` |
@@ -1366,8 +1368,8 @@ the accessibility contract, which is FACT that is easy to miss by reading types 
 | `uiMdPre(props)` | See §10.4 |
 | `uiCodePre(props)` | See §10.4 |
 
-`bindInput`/`bindTextarea`/`bindCheckbox`/`bindSelect`/`bindRange` are two-way-binding
-sugar: `bindInput(s, 'name', options)` is exactly
+`bindInput`/`bindTextarea`/`bindCheckbox`/`bindSelect`/`bindRange`/`bindRadiobutton`/`bindColor`
+are two-way-binding sugar: `bindInput(s, 'name', options)` is exactly
 `uiInput({ ...options, value: s.name, oninput: (ev) => { s.name = ev.target.value; } })`
 — `options` is applied *before* the computed `value`/`on*` so it can never accidentally
 override the binding.
@@ -1572,7 +1574,7 @@ uiProgress({
 | Component | Notes |
 |---|---|
 | `uiCol(props)` | Vertical flex container. `gap?: string \| number` (a number is px) writes to `style.gap`. No color/background of its own — inherits theme from an ancestor `applyTheme`d element |
-| `uiRow(props)` | Horizontal flex container. Same `gap` as `uiCol` |
+| `uiRow(props)` | Horizontal flex container. Same `gap` as `uiCol`. Children are vertically centered (`align-items: center`) and do not wrap; anything else is plain CSS in `style` (`alignItems: 'stretch'`, `flexWrap: 'wrap'`, `justifyContent`) |
 | `uiGrid(props)` | CSS grid. `columns`/`rows`: a number expands to `N` × `1fr`; a string passes through to `grid-template-*` as-is; `'auto-fit 200px'`/`'auto-fill 120px'` expand to `repeat(auto-fit, minmax(200px, 1fr))`. `gap` is the same as `uiCol`/`uiRow` |
 | `uiPanel(props)` | Surface/background/border container. `layout: 'col' \| 'row'`. `disabled: true` sets the native `inert` attribute (disables focus, click, and text selection on every descendant) — dims via `.ric-panel[inert]` CSS, not inline style |
 
@@ -1588,8 +1590,34 @@ completes even without `ricdom-ui.css` present, it just skips the animation.
 | `createDialog()` | Modal. `role="dialog"` + `aria-modal="true"` + `aria-labelledby`/`aria-describedby`. Opening moves focus to body → footer → close-button → root, in that priority order (visible-element–filtered, `[autofocus]` wins over all of it — §10.3.1c); `Tab`/`Shift+Tab` are trapped inside (plain DOM order, unaffected by the above); `Escape` closes and returns focus to the triggering element; every sibling of the portal is set `inert` while open. Three usage modes: uncontrolled + auto trigger (`triggerChildren` given → call returns a trigger `RicNode`), uncontrolled + your own trigger (`triggerChildren` omitted → call `dlg.open()`/`dlg.close()`), or controlled (`open`/`onClose(reason)` where `reason` is `'overlay' \| 'close-button' \| 'escape' \| 'api'`). `returnFocus` (§10.3.1) controls where focus goes on close. `triggerVariant?: UiButtonVariant` styles the auto trigger built from `triggerChildren` (default `'primary'`, same as v1's `trigger_variant`; pass `'default'` for a plain button — `2.0.0-alpha.14`, restored from v1 after the parity audit) |
 | `createPopup()` | `role="menu"` dropdown. Trigger gets `aria-haspopup="menu"` + `aria-expanded`; every menu child is auto-wrapped with `role="menuitem"`, its `class` merged (not replaced) with `.ric-popup__item`. `ArrowUp`/`ArrowDown`/`Home`/`End` move focus among items; `Escape` closes and restores focus to the trigger. Activating a menuitem (click; for a `<button>` item, `Enter`/`Space` fire a native click) closes the menu and returns focus to the trigger too (APG menu button pattern) — set `closeOnSelect: false` to opt out (checkbox-style menus); a `disabled: true`/`aria-disabled="true"` item, or one whose `role` was overridden away from `'menuitem'` (e.g. a separator), never triggers this regardless of `closeOnSelect` (§10.3.1d). `openAt({x,y} \| MouseEvent)` opens at an arbitrary point instead of a trigger button — the same close-on-select behavior applies to menus opened this way. `trigger` accepts a `RicNode`/`RicNode[]` (used as-is) or a `{ icon?, label?, ghost?, size?, class?, style? }` object (§10.3.1a); omitting `trigger` renders nothing (an `openAt`-only menu), and `openAt(element)` opens anchored to that element like a trigger — the canon for a "⋯" menu on every row (§10.3.1f, `2.0.0-alpha.27`). Menu-open state is exclusive with `createDropdown` within the same app (opening one closes any other open popup/dropdown) |
 | `createToast()` | `toast.show(msg, { type, duration })` queues a notification; `type: 'error'` renders `role="alert"`/`aria-live="assertive"`, everything else `role="status"`/`aria-live="polite"`. `duration: 0` disables auto-dismiss (manual close only). Never steals focus |
-| `createTooltip()` | `aria-describedby` links trigger ↔ popup; shown on hover or focus, dismissed on blur/mouseleave/`Escape`. `dir: 'auto' \| 'top' \| 'bottom' \| 'right' \| 'left'`, `'auto'` picks a direction that fits the viewport |
+| `createTooltip()` | `aria-describedby` is put on the **first element child** (the element that takes focus; a value you set there is kept and the tooltip id appended), or on the wrapper `<span>` when the children are text only. Shown on hover or when focus enters the wrapper (keyboard `Tab` included), dismissed when focus leaves, on mouseleave, and on `Escape` — also when it was shown by hover alone. FACT below (`2.0.0-alpha.36`). `dir: 'auto' \| 'top' \| 'bottom' \| 'right' \| 'left'`, `'auto'` picks a direction that fits the viewport |
 | `createDropdown()` | Generic popover (not a menu): trigger gets `aria-haspopup="dialog"` + `aria-expanded`; body content's semantics are entirely up to you. `label`+`chevron` mode or `icon` mode for the trigger. Shares position-flip logic and the exclusive-open registry with `createPopup` |
+
+### FACT: keyboard and focus behavior of the floating components (`2.0.0-alpha.36`)
+
+- **`createTooltip` appears on keyboard focus.** The component listens for `focusin`/`focusout`
+  on `document` while it is registered and shows the tooltip when focus is inside its wrapper.
+  Before `2.0.0-alpha.36` it put `onfocus`/`onblur` on the wrapper `<span>`; those events do not
+  bubble, the focused element is the child, and so the tooltip never appeared for keyboard users
+  (hover only), although this table said "hover or focus".
+- **`Escape` dismisses a tooltip however it was shown** — a `keydown` listener on `document`
+  exists only while the tooltip is visible. It does not stop the event: an open dialog around it
+  closes on the same `Escape`, as before.
+- **`aria-describedby` goes on the element that takes focus** (see the table). Screen readers
+  announce the description of the focused element only, so the attribute on the wrapper was
+  never read.
+- **Arrow keys in a `createPopup` menu skip natively `disabled` items.** A `disabled`
+  `<button>` cannot take focus; before `2.0.0-alpha.36` `ArrowDown` stopped in front of it and the
+  items after it could not be reached with the arrow keys. `Home`/`End` go to the first/last
+  focusable item. An `aria-disabled="true"` item takes focus and is still visited (and still
+  does not close the menu, §10.3.1d).
+- **`popup.close()` / `dropdown.close()` return focus when it would otherwise be lost.** If focus
+  is inside the body when `close()` is called (the usual case: a button in the body calls it),
+  focus goes back to the element that opened the body, as `Escape` does. If focus is elsewhere,
+  `close()` does not move it.
+- **`toast()` need not be called in `render`.** Registering with `app.use(createToast())` is
+  enough for `toast.show()`; the call form exists only for symmetry with the other components
+  and renders nothing.
 
 ### FACT: `createPopup`/`createDropdown` horizontal position rule
 
@@ -1967,7 +1995,7 @@ bodies (`.ric-tweak-folder__body`), both `role="region"`. While closed, the body
 | Component | Notes |
 |---|---|
 | `uiMdPre(props)` | Renders a practical Markdown subset (headings, bold/italic, inline code, fenced code blocks with `` ``` ``/`~~~`, bullet and ordered lists with a `start` attribute, blockquotes, tables with alignment, horizontal rules, links, images) to a `RicNode` tree — no external parser dependency. `href` values with a `javascript:`/`data:`/`vbscript:` scheme (case-insensitively, after stripping control characters) are rendered without an `href` attribute at all; every other scheme (including custom ones like `app://`) passes through unmodified — this is a blocklist, not a whitelist, by design. `transformText(str)` post-processes plain-prose text nodes only (never code); `transformImageSrc(src, alt)` rewrites image sources before they're used. Both hooks fall back to the untransformed input and log `console.error` if they throw or return the wrong type — a broken hook degrades the rendered output, it does not break the page |
-| `uiCodePre(props)` | `<pre><code>` for a code string or (`obj` prop) a `JSON.stringify`'d object. Always dark-themed (`--ric-code-bg`/`-fg`), regardless of the ambient theme — matching the general code-block convention. If `window.hljs` (highlight.js) is present, output is syntax-highlighted; if not, one `console.warn` per session explains how to enable it, and plain text is shown |
+| `uiCodePre(props)` | `<pre><code>` for a code string or (`obj` prop) a `JSON.stringify`'d object. Colored by the theme's `--ric-code-bg`/`--ric-code-fg`, which every bundled theme defines (light themes use a light code background, e.g. `#f6f8fa` in `light`). If `window.hljs` (highlight.js) is present, output is syntax-highlighted; if not, one `console.warn` per session explains how to enable it, and plain text is shown |
 
 ### 10.5 Rest-spread contract
 

@@ -19,7 +19,7 @@ export { buildStylesheet } from './cssTemplates.js';
 export { injectStyles } from './injectStyles.js';
 
 export { uiButton } from './button.js';
-export type { UiButtonProps, UiButtonVariant } from './button.js';
+export type { UiButtonProps, UiButtonVariant, UiButtonSize } from './button.js';
 
 export { uiInput } from './input.js';
 export type { UiInputProps } from './input.js';
@@ -81,7 +81,7 @@ export { createDialog } from './dialog.js';
 export type { DialogProps, DialogInstance, DialogCloseReason, DialogOpenOptions } from './dialog.js';
 
 export { createPopup } from './popup.js';
-export type { PopupProps, PopupInstance, PopupPoint } from './popup.js';
+export type { PopupProps, PopupInstance, PopupPoint, PopupTriggerObject } from './popup.js';
 
 export { createToast } from './toast.js';
 export type { ToastInstance, ToastShowOptions, ToastType } from './toast.js';

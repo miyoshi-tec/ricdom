@@ -21,8 +21,10 @@ export interface UiCheckboxProps {
   checked?: boolean;
   disabled?: boolean;
   class?: ClassValue;
-  /** rest スプレッド経由で常に透過されていたが、型に無かった (LCP の指摘、2.0.0-alpha.9)。
-   *  外側の <label> ラッパーに付く (checked/onchange は内部 input 隔離、上のコメント参照)。 */
+  // rest スプレッド経由で常に透過されていたが、型に無かった (LCP の指摘、2.0.0-alpha.9)。
+  // 隔離契約はファイル先頭のコメント参照。
+  /** inline style。任意の属性と同じく要素にそのまま渡る (型の補完用に宣言している)。
+   *  外側の <label> ラッパーに付く (checked/onchange だけが内部の input に付く)。 */
   style?: StyleValue;
   onchange?: (ev: Event) => void;
   [key: string]: unknown;

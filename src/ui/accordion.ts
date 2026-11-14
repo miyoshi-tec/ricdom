@@ -59,7 +59,8 @@ const CHEVRON_DOWN = { p: 'm6 9 6 6 6-6' };
 
 export interface AccordionItem {
   id: string;
-  /** VDOM ノード可 (アイコン混在等、v1 継承の契約) */
+  // v1 継承の契約。
+  /** VDOM ノード可 (アイコン混在等) */
   title: RicNode | RicNode[];
   children?: RicNode | RicNode[];
 }

@@ -12,10 +12,12 @@
 // class / style
 // =====================================================================
 
-/** class の 3 形態 (v1 は文字列/配列のみ。v2 は React 由来の Record<string,boolean> も足す) */
+// v1 は文字列/配列のみ。v2 は React 由来の Record<string,boolean> も足した。
+/** class の 3 形態 (文字列 / 配列 / 真偽値マップ `Record<string, boolean>`) */
 export type ClassValue = string | string[] | Record<string, boolean>;
 
-/** style は object 限定 (v1 の string/object/array 3 形態を 1 つに統一、設計書 §3.1) */
+// v1 の string/object/array 3 形態を 1 つに統一した (設計書 §3.1)。
+/** inline style の値。object 限定 */
 export type StyleValue = Record<string, string | number>;
 
 // =====================================================================
@@ -58,16 +60,17 @@ interface BaseNodeProps {
   id?: string;
   /** class の 3 形態 (文字列 / 配列 / 真偽値マップ) */
   class?: ClassValue;
-  /** inline style。object のみ (v1 の string/array 形態は廃止) */
+  // v1 の string/array 形態は廃止した。
+  /** inline style。object のみ */
   style?: StyleValue;
-  /** 子要素 (v1 の `ctx` 後継、設計書 §3.1 で確定) */
+  // 命名は設計書 §3.1 で確定。
+  /** 子要素 (v1 の `ctx` に当たる) */
   children?: RicNode | RicNode[];
-  /**
-   * 島フラグ。true の要素は子孫の diff/build を一切行わない
-   * (v1 の「ctx 省略で島扱い」を廃止し、明示フラグに変更。設計書 §3.1 判断 e)。
-   */
+  // v1 の「ctx 省略で島扱い」を廃止し、明示フラグに変更した (設計書 §3.1 判断 e)。
+  /** 島フラグ。true の要素は子孫の diff/build を一切行わない。 */
   island?: true;
-  /** key-based reconciliation 用の論理 ID (設計書 §3.2 / v1 A5 継承) */
+  // 設計書 §3.2 / v1 A5 継承。
+  /** key-based reconciliation 用の論理 ID */
   key?: string | number;
   /** app.refs.get(name) で参照できる名前 (data-ricdom-ref 属性として管理) */
   ref?: string;
@@ -96,19 +99,21 @@ type KnownElementNode = {
  */
 type GenericElementNode = { tag: string } & BaseNodeProps & TagAttrs<HTMLElement> & EventProps<HTMLElement>;
 
+// 設計書 §3.1 の `Element`。tag 必須は設計書 §12: v1 は `raw_node.tag ?? 'div'` で暗黙に
+// div 扱いだったが、v2 では「省略」という無記名の入力を許さず、明示を要求する。
+// 実行時の扱い (throw しない方針の継承) は normalize.ts 参照。
 /**
- * ノード木の要素表現 (設計書 §3.1 の `Element`)。
- * `tag` は型上必須 (設計書 §12)。`{}` のような tag 省略は
- * 型エラーになる (v1 は `raw_node.tag ?? 'div'` で暗黙に div 扱いだったが、v2 では
- * 「省略」という無記名の入力を許さず、明示を要求する)。実行時に tag が文字列でない
+ * ノード木の要素表現。
+ * `tag` は型上必須。`{}` のような tag 省略は型エラーになる。実行時に tag が文字列でない
  * ノードが渡された場合 (JS 利用側が型チェックをすり抜けた場合) は console.error を出し
- * 不可視ノードとして扱う (throw しない方針の継承、normalize.ts 参照)。
+ * 不可視ノードとして扱う (throw しない)。
  */
 export type RicElementNode = KnownElementNode | GenericElementNode;
 
+// 設計書 §3.1 の `Node`。不可視値の扱いは v1 継承。
 /**
- * ノード木の全体表現 (設計書 §3.1 の `Node`)。
- * 文字列/数値はテキスト、null/false/undefined は不可視 (v1 継承)。
+ * ノード木の全体表現。
+ * 文字列/数値はテキスト、null/false/undefined は不可視。
  */
 export type RicNode = string | number | null | false | undefined | RicElementNode | RicNode[];
 
@@ -116,10 +121,11 @@ export type RicNode = string | number | null | false | undefined | RicElementNod
 // App / createApp
 // =====================================================================
 
+// 設計書 §3.4 (portal は §3.5)。
 /**
- * `app.use(part)` が part に渡すホストコンテキスト (設計書 §3.4)。
+ * `app.use(part)` が part に渡すホストコンテキスト。
  * `{ notify(): void; portal: Element; app: App }` 相当。
- * portal は「この app に 1 つ」の portal 要素 (§3.5、`createApp` の第 4 引数
+ * portal は「この app に 1 つ」の portal 要素 (`createApp` の第 4 引数
  * `portalTo` を指定しなければ自動生成される)。
  */
 export interface Host {
@@ -127,62 +133,65 @@ export interface Host {
   notify(): void;
   /** この app の portal 要素。`use()` された部品はここへ描画する。 */
   portal: Element;
+  // state を props 経由で明示的に渡す設計は v1 踏襲。
   /**
    * この part を登録した app インスタンス。
    * `App<S>` の `S` は part 側からは未知なので `App<any>` で受ける (`UsePart`/`Component<P>`
    * は特定の state 型に依存しない汎用部品契約であるため。state を読みたい場合は
-   * render 側で `dlg(props)` の props 経由で明示的に渡す設計、v1 踏襲)。
+   * render 側で `dlg(props)` の props 経由で明示的に渡す)。
    */
   app: App<any>;
 }
 
+// 設計書 §3.4 / B1 の解消: v1 の `__notify` 暗黙注入と違い、置き場所を間違えようがない構造。
 /**
- * `app.use(part)` に渡す部品の契約 (設計書 §3.4)。
+ * `app.use(part)` に渡す部品の契約。
  * 状態を持つ部品 (dialog/popup/toast/tooltip 等、`ricdom/ui` の `Component<P>` はこれを実装する)
  * はこのインターフェースを実装し、`app.use()` を経由して初めて `notify`/`portal` を受け取る。
  * **`use()` を経由しない呼び出しは host が無いため、部品側が「初回だけ console.error して
- * 何も描画しない」ことで検知する** (v1 の `__notify` 暗黙注入と違い、置き場所を間違えようが
- * ない構造。設計書 §3.4 / B1 の解消)。
+ * 何も描画しない」ことで検知する**。
  */
 export interface UsePart {
   /** app.use() に登録された瞬間に呼ばれる。host (notify/portal/app) を受け取る。 */
   attach?: (host: Host) => void;
   /** app.unmount() 等で登録解除される際に呼ばれる。以後 attach 済みでも再度呼ばれない。 */
   dispose?: () => void;
+  // v1 の `_page_portal_queue` (push/drain のグローバルバッファ) の後継 — page への
+  // 依存を排除し、「自分の app の portal」に描画先が閉じる (設計書 §3.5 / B2 の解消)。
   /**
    * app の render サイクルごとに 1 回呼ばれ、portal 要素に描画すべき現在の内容を返す。
    * 未実装 (portal を使わない part) なら無視される。
-   * v1 の `_page_portal_queue` (push/drain のグローバルバッファ) の後継 — page への
-   * 依存を排除し、「自分の app の portal」に描画先が閉じる (設計書 §3.5 / B2 の解消)。
    */
   renderPortal?: () => RicNode;
 }
 
+// state は v1 の shared_proxy 相当。render を第 3 引数に分離したのは設計書 §12
+// (state に同梱すると `S` の推論が自己参照になるため)。
 /**
- * render 関数の型。現在の state (S、v1 の shared_proxy 相当で renderNow/refs 等の
- * instance API は含まない) を受け取り木を返す。
- * `createApp(target, state, render)` の第 3 引数として渡す (設計書 §12)。
- * render を state から分離することで `S` が `state` 引数から素直に推論され、
- * render コールバック内の `s` も (無理な自己参照無しに) 完全に型付く。
+ * render 関数の型。現在の state (S。renderNow/refs 等の instance API は含まない) を
+ * 受け取り木を返す。
+ * `createApp(target, state, render)` の第 3 引数として渡す。
+ * `S` は `state` 引数から推論され、render コールバック内の `s` も完全に型付く。
  */
 export type RenderFn<S extends object> = (state: S) => RicNode;
 
 /** createApp が返すインスタンスハンドル。state そのもの (Proxy) + 操作 API。 */
 export type App<S extends object> = S & {
+  // 差し替え可能・差し替えで同期再描画、は v1 踏襲。
   /**
    * 現在の render 関数。`createApp` の第 3 引数として渡した関数がここに入る。
-   * 後から `app.render = fn` で差し替えることもできる (v1 踏襲) — 差し替えは
+   * 後から `app.render = fn` で差し替えることもできる — 差し替えは
    * 同期的に再描画をトリガーする。
    */
   render: RenderFn<S>;
-  /** 保留中の描画があればキャンセルして同期的に即描画する (v1 の render_now 継承) */
+  // v1 の render_now 継承。
+  /** 保留中の描画があればキャンセルして同期的に即描画する */
   renderNow(): void;
-  /**
-   * 次に完了する render を待つ Promise。render 予約が無ければ resolve しない
-   * (v1 の next_render 契約継承、設計書 §3.3)。
-   */
+  // v1 の next_render 契約継承、設計書 §3.3。
+  /** 次に完了する render を待つ Promise。render 予約が無ければ resolve しない。 */
   nextRender(): Promise<void>;
-  /** 部品を登録し、host (notify/portal/app) を渡す。戻り値は渡した part 自身 (設計書 §3.4)。 */
+  // 設計書 §3.4。
+  /** 部品を登録し、host (notify/portal/app) を渡す。戻り値は渡した part 自身。 */
   use<T extends UsePart>(part: T): T;
   /** インスタンスを破棄し、以降の再描画・タイマーを止める */
   unmount(): void;
@@ -190,16 +199,17 @@ export type App<S extends object> = S & {
   readonly refs: ReadonlyMap<string, Element>;
 };
 
+// `portalTo`: 設計書 §3.5、v1 の `portal_to` 要望を吸収。
+// `setup`: パイロット移行 (歯車DXFジェネレーター) の報告 #5 対応 (設計書に言及なし、
+// 実装からのフィードバックで追加)。`setup` が無かった間は、初回だけ「プレースホルダを返し、
+// use() 後に renderNow()」の 2 段構えが必要になっていた。
 /**
  * `createApp` の第 4 引数 (省略可)。
- * `portalTo`: portal の描画先を任意の要素に差し替える (設計書 §3.5、v1 の `portal_to` 要望を吸収)。
+ * `portalTo`: portal の描画先を任意の要素に差し替える。
  * 省略時は `createApp` が target 直下に `<div data-ricdom-role="portal">` を自動生成する。
- * `setup`: パイロット移行 (歯車DXFジェネレーター) の報告 #5 対応。初回 render の直前
- * (app と portal が用意された後) に 1 回だけ呼ばれる。ここで `app.use()` した部品は
- * 初回 render から使える — `setup` を使わない場合、`app.use()` は初回 render の
- * *後*にしか実行できないため (`createApp` は生成時に同期初回描画する)、初回だけは
- * 「プレースホルダを返し、use() 後に renderNow()」の 2 段構えが必要になっていた
- * (設計書に言及なし、実装からのフィードバックで追加)。
+ * `setup`: 初回 render の直前 (app と portal が用意された後) に 1 回だけ呼ばれる。
+ * ここで `app.use()` した部品は初回 render から使える — `setup` を使わない場合、
+ * `app.use()` は初回 render の*後*にしか実行できない (`createApp` は生成時に同期初回描画する)。
  */
 export interface CreateAppOptions<S extends object = any> {
   portalTo?: Element;

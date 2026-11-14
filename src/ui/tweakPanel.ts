@@ -77,9 +77,11 @@ const isPlainObject = (v: unknown): v is Record<string, unknown> =>
 const HEX_COLOR_RE = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
 const RGBA_COLOR_RE = /^rgba?\s*\(/;
 
-/** 行の type 明示指定が無いとき、値から UI コントロール種別を推論する (v1 の infer_type)。 */
+/** 値から推論されるコントロールの種別。 */
 export type TweakInferredType = 'checkbox' | 'number' | 'color' | 'text' | 'folder' | 'json';
 
+// v1 の infer_type に当たる。
+/** 行の type 明示指定が無いとき、値から UI コントロール種別を推論する。 */
 export const inferTweakType = (value: unknown): TweakInferredType => {
   if (typeof value === 'boolean') return 'checkbox';
   if (typeof value === 'number') return 'number';
@@ -96,13 +98,15 @@ export const inferTweakType = (value: unknown): TweakInferredType => {
 // 型・props
 // ─────────────────────────────────────────────────────────────
 
+// 明示指定でのみ到達する種別があるのは v1 と同じ設計。
 /** 行の種別 (`keys[k].type` で明示指定できる範囲。'range'/'select'/'radiobutton' は
- *  値の型だけからは推論できないため、明示指定でのみ到達する — v1 と同じ設計)。 */
+ *  値の型だけからは推論できないため、明示指定でのみ到達する)。 */
 export type TweakRowType = 'number' | 'range' | 'checkbox' | 'text' | 'select' | 'radiobutton' | 'color';
 
+// leaf 行と folder で同じ形を共用するのは v1 と同じ設計。
 /** `keys` で 1 プロパティ (行 or folder) を部分上書きする指定。leaf 行用のフィールドと
  *  folder 用のフィールド (`open`/`keys`/`rows`) を同じ形に持たせ、データの形 (plain object か否か)
- *  でどちらとして解釈するかが決まる (v1 と同じ設計)。 */
+ *  でどちらとして解釈するかが決まる。 */
 export interface TweakKeyOverride {
   /** 表示ラベル (省略時はプロパティ名) */
   label?: string;
@@ -118,9 +122,10 @@ export interface TweakKeyOverride {
   placeholder?: string;
   /** text 行の maxlength */
   maxlength?: number;
+  // v1 の `<details open>` が初回のみ有効な属性だったのと同じ位置づけ。
   /** folder の初期展開状態 (省略時 false)。2 回目以降の render では無視される
-   *  (state は inst 内部の openMap が正、v1 の `<details open>` は初回のみ有効な属性
-   *  だったのと同じ「初期値」としての位置づけ)。props の `open` (controlled モード) が
+   *  (state は inst 内部の openMap が正で、これは「初期値」としての位置づけ)。
+   *  props の `open` (controlled モード) が
    *  渡されているときは常に無視される (controlled では props が唯一の真実) */
   open?: boolean;
   /**
@@ -133,14 +138,15 @@ export interface TweakKeyOverride {
   summary?: string | RicNode;
   /** folder の子プロパティに対する再帰的な上書き */
   keys?: TweakKeys;
+  // パイロット移行の報告 #1 で判明した不足への対応。
   /**
    * folder 本体の末尾に並べる自由 RicNode (Tier3 `rows` の folder 版)。パネル全体の
-   * `rows` は末尾追記専用だが、これはこの folder の中の特定位置 (末尾) に置ける
-   * (パイロット移行の報告 #1 で判明した不足)。
+   * `rows` は末尾追記専用だが、これはこの folder の中の特定位置 (末尾) に置ける。
    */
   rows?: RicNode[];
+  // 「中心距離 = module から逆算」は歯車DXF の移行で出た例。
   /**
-   * この行の読み取りを `data[k]` の代わりに委ねる (歯車DXF の「中心距離 = module から
+   * この行の読み取りを `data[k]` の代わりに委ねる (「中心距離 = module から
    * 逆算」のような、data に無い計算値の行を作るための指定)。`get` だけ指定して行を
    * 宣言でき、そのとき `data` 側に同名キーが存在する必要は無い (data 由来の行の後ろに
    * 追加される。宣言順は `keys` のキー順)。get が例外を投げても render は落とさない
@@ -150,13 +156,14 @@ export interface TweakKeyOverride {
   /**
    * この行の書き込みを `data[k] = v` の代わりに委ねる。`get`/`set` のどちらか一方だけの
    * 指定も可能 (get のみ = 読み取り専用の計算値行、set のみ = 表示は `undefined` 扱いだが
-   * 書き込みだけ横取りする、通常は get と対で使う)。書き込み後は `ctx.notify()` が呼ばれる。
+   * 書き込みだけ横取りする、通常は get と対で使う)。書き込み後は再描画が要求される。
    * set が例外を投げても render は落とさない (console.error のみ)。
    */
   set?: (v: unknown) => void;
 }
 
-/** `false` を指定すると、そのプロパティの行 (or folder) を非表示にする (v1 継承)。 */
+// `false` で非表示にする指定は v1 継承。
+/** `false` を指定すると、そのプロパティの行 (or folder) を非表示にする。 */
 export type TweakKeys = Record<string, TweakKeyOverride | false>;
 
 export interface TweakPanelProps {
@@ -175,7 +182,7 @@ export interface TweakPanelProps {
    * `isOpen(path)` と同じ dot 連結のキー鎖、例 `'outer.inner'`)。表示は常にこの map に従い
    * (キーが無い folder は閉じている扱い)、`keys[k].open` の初期値は無視される。ヘッダクリック
    * (Enter/Space 含む) は内部状態を一切更新せず `onToggle` を呼ぶだけ。省略すれば
-   * uncontrolled (内部状態で管理、従来どおり)。createAccordion の controlled と同じ契約
+   * uncontrolled (内部状態で管理)。createAccordion の controlled と同じ契約
    * (SPEC §10.3.3a)。
    */
   open?: Record<string, boolean>;
@@ -203,7 +210,8 @@ interface RowArgs {
   value: unknown;
   set?: (v: unknown) => void;
   override?: TweakKeyOverride;
-  /** dot 連結のキー鎖 (`data-ricdom-tweak-key` に出す安定フック、パイロット移行の報告 #2) */
+  // 安定フックはパイロット移行の報告 #2 で追加。
+  /** dot 連結のキー鎖 (`data-ricdom-tweak-key` に出す安定フック) */
   path: string;
 }
 

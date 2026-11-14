@@ -27,11 +27,12 @@ import { UI_ROLE, mergeClass } from './internal/pureHelpers.js';
 import { registerExclusive, unregisterExclusive } from './internal/exclusiveRegistry.js';
 import { createFloatingMenu } from './internal/floatingMenu.js';
 
+// 2.0.0-alpha.2、v1 parity — v1 の icon/ghost トリガーが再現できず consumer が
+// 構造セレクタで CSS 上書きしていた報告への対応。
 /**
  * トリガーの見た目を `uiButton` 相当 (icon + ghost の丸ボタン等) にしたいケース向けの
- * オブジェクト形 (2.0.0-alpha.2、v1 parity — v1 の icon/ghost トリガーが再現できず
- * consumer が構造セレクタで CSS 上書きしていた報告への対応)。`trigger` に直接
- * `RicNode`/`RicNode[]` (中身をそのままボタンに詰める、既存の形) を渡すのと二者択一。
+ * オブジェクト形。`trigger` に直接 `RicNode`/`RicNode[]` (中身をそのままボタンに詰める形)
+ * を渡すのと二者択一。
  */
 export interface PopupTriggerObject {
   icon?: RicNode;
@@ -40,25 +41,28 @@ export interface PopupTriggerObject {
   size?: 'sm' | 'md' | 'lg';
   class?: ClassValue;
   style?: StyleValue;
-  /** ツールチップ。アイコンだけのトリガーでは `aria-label` と合わせて付ける (2.0.0-alpha.28) */
+  // title と属性の素通しは 2.0.0-alpha.28 で追加。
+  /** ツールチップ。アイコンだけのトリガーでは `aria-label` と合わせて付ける */
   title?: string;
-  /** その他の属性 (aria-label, data-*, id 等) はボタンへ素通しする (2.0.0-alpha.28)。
+  /** その他の属性 (aria-label, data-*, id 等) はボタンへ素通しする。
    *  class・data-ricdom-role・aria-haspopup・aria-expanded・onclick は契約側が優先 */
   [key: string]: unknown;
 }
 
 export interface PopupProps {
+  // trigger の省略 (openAt 専用のメニュー) は 2.0.0-alpha.27 で追加。
   /** トリガーボタンの中身。`RicNode`/`RicNode[]` (中身をそのまま詰める) か、
    *  見た目を指定する `PopupTriggerObject` のどちらか。
    *  省略すると何も描かず (戻り値 null)、`openAt()` 専用のメニューになる — 行ごとの「…」
-   *  メニューを 1 インスタンスで賄う使い方 (2.0.0-alpha.27、SPEC §10.3.1f)。 */
+   *  メニューを 1 インスタンスで賄う使い方 (SPEC §10.3.1f)。 */
   trigger?: RicNode | RicNode[] | PopupTriggerObject;
   /** メニュー項目 (各要素に role="menuitem" が自動付与される) */
   children?: RicNode[];
+  // 2.0.0-alpha.3 #10 で追加。
   /**
    * menuitem の活性化 (click。button 項目なら Enter/Space は native click として発火する)
-   * で自動的に閉じてトリガーへフォーカス復帰するか (APG menu button パターン、既定 true、
-   * 2.0.0-alpha.3 #10)。チェック型メニュー (選択後も開いたままにしたい) 向けの opt-out。
+   * で自動的に閉じてトリガーへフォーカス復帰するか (APG menu button パターン、既定 true)。
+   * チェック型メニュー (選択後も開いたままにしたい) 向けの opt-out。
    * `disabled: true` または `aria-disabled="true"` の項目には無関係に効かない (そもそも
    * 活性化とみなさない)。role を明示的に上書きした項目 (`role !== 'menuitem'`、例:
    * separator) にも効かない。
@@ -82,11 +86,12 @@ export interface PopupPoint {
 export interface PopupInstance extends Component<PopupProps> {
   close(): void;
   isOpen(): boolean;
+  // 点に開く形は v1 v0.4.3 継承。要素を渡す形は 2.0.0-alpha.27 で追加。
   /**
    * trigger ボタンを使わずに開く。
-   * - `openAt({ x, y })` / `openAt(mouseEvent)`: その点に開く (右クリックのコンテキストメニュー等、v1 v0.4.3 継承)
+   * - `openAt({ x, y })` / `openAt(mouseEvent)`: その点に開く (右クリックのコンテキストメニュー等)
    * - `openAt(element)`: その要素の下端の直下 (入らなければ上端の直上) に、トリガーから開くときと
-   *   同じ規則で開く。行ごとの「…」ボタンを渡す使い方 (2.0.0-alpha.27)。同じ要素で開いている
+   *   同じ規則で開く。行ごとの「…」ボタンを渡す使い方。同じ要素で開いている
    *   ときに再度呼ぶと閉じ、別の要素なら 1 回でそちらへ開き直す。閉じたらその要素へフォーカスを戻す
    */
   openAt(point: PopupPoint | Element): void;
@@ -94,7 +99,8 @@ export interface PopupInstance extends Component<PopupProps> {
 
 let nextPopupId = 0;
 
-/** wrapMenuItem に渡す「閉じる」側の依存 (#10)。close は closeAndRestoreFocus を渡す。 */
+// #10 (menuitem の活性化で閉じる) のための依存。
+/** wrapMenuItem に渡す「閉じる」側の依存。close は closeAndRestoreFocus を渡す。 */
 interface WrapMenuItemOptions {
   closeOnSelect: boolean;
   close: () => void;
@@ -175,8 +181,11 @@ export const createPopup = (): PopupInstance => {
   };
 
   // メニューの中のキー操作 (矢印・Home・End)。Escape は共有の本体が受ける。
+  // native の disabled な項目はフォーカスを受けないので、巡る対象から外す。外さないと、↓ がその
+  // 項目に focus() して何も起きず「いまの位置」が進まないので、無効な項目の手前で止まる
+  // (2.0.0-alpha.36)。aria-disabled="true" の項目はフォーカスを受けるので残す (読み上げで存在が伝わる)。
   const handleMenuKey = (ev: KeyboardEvent): void => {
-    const items = getMenuItems();
+    const items = getMenuItems().filter((el) => !el.matches(':disabled'));
     if (items.length === 0) return;
     const currentIndex = items.indexOf(document.activeElement as HTMLElement);
     if (ev.key === 'ArrowDown') {
@@ -288,7 +297,7 @@ export const createPopup = (): PopupInstance => {
     guard.dispose();
   };
 
-  inst.close = (): void => menu.close();
+  inst.close = (): void => menu.closeFromApi();
   inst.isOpen = (): boolean => menu.isOpen();
 
   inst.openAt = (point: PopupPoint | Element): void => {

@@ -12,12 +12,13 @@ export interface UiInputProps {
   placeholder?: string;
   value?: string;
   type?: string;
-  /** 最大入力文字数 (v1 ui_input.js 継承、v1→v2 パリティ一括監査 #6。属性名は v1 と同じ
-   *  小文字 `maxlength` — uiTextarea 側の既存の同名プロパティと揃える)。 */
+  // v1 ui_input.js 継承、v1→v2 パリティ一括監査 #6。属性名も v1 と同じ。
+  /** 最大入力文字数。属性名は小文字 `maxlength` (uiTextarea の同名プロパティと揃えている)。 */
   maxlength?: number;
   disabled?: boolean;
   class?: ClassValue;
-  /** rest スプレッド経由で常に透過されていたが、型に無かった (LCP の指摘、2.0.0-alpha.9)。 */
+  // rest スプレッド経由で常に透過されていたが、型に無かった (LCP の指摘、2.0.0-alpha.9)。
+  /** inline style。任意の属性と同じく要素にそのまま渡る (型の補完用に宣言している)。 */
   style?: StyleValue;
   oninput?: (ev: Event) => void;
   [key: string]: unknown;

@@ -38,8 +38,9 @@ export type DialogCloseReason = 'overlay' | 'close-button' | 'escape' | 'api';
 export interface DialogProps {
   /** uncontrolled + 自動トリガーのときのボタン中身。省略すると trigger ボタンを出さない。 */
   triggerChildren?: RicNode | RicNode[];
-  /** 自動トリガーボタンの見た目 (uiButton と同じ variant、v1 `create_ui_dialog.js` の
-   *  `trigger_variant` 継承、v1→v2 パリティ一括監査 #4)。既定 'primary' (v1 と同じ)。
+  // v1 `create_ui_dialog.js` の `trigger_variant` 継承、v1→v2 パリティ一括監査 #4。
+  // 既定値も v1 と同じ。
+  /** 自動トリガーボタンの見た目 (uiButton と同じ variant)。既定 'primary'。
    *  triggerChildren を渡さない場合は無視される。 */
   triggerVariant?: UiButtonVariant;
   title?: string;
@@ -48,12 +49,14 @@ export interface DialogProps {
   actions?: RicNode[];
   /** controlled mode の開閉状態。指定すると controlled になる。 */
   open?: boolean;
-  /** controlled mode の close 通知。reason で発生源を分岐できる (v1 A18 継承)。 */
+  // v1 A18 継承。
+  /** controlled mode の close 通知。reason で発生源を分岐できる。 */
   onClose?: (reason: DialogCloseReason) => void;
   /** ダイアログ幅 (px 数値 or 任意の CSS 長さ文字列)。省略時は CSS 既定 (min(360px,90vw))。 */
   width?: number | string;
+  // パイロット移行の報告 #4 で追加。
   /**
-   * controlled mode でのフォーカス復帰先の制御 (パイロット移行の報告 #4)。省略時は
+   * controlled mode でのフォーカス復帰先の制御。省略時は
    * APG どおり「開く直前の `document.activeElement`」へ復帰する。フォーカス不可能な
    * 起動元 (span 等) 経由で開いた場合、既定では「開く直前にたまたまフォーカスされていた
    * 無関係な要素」(例: 直前に触っていた数値入力) へ復帰してしまう — `false` を指定すると
@@ -76,7 +79,8 @@ export interface DialogInstance extends Component<DialogProps> {
   open(opts?: DialogOpenOptions): void;
   /** 外部から閉じる (両モード対応。未 open での呼出は no-op)。既定 reason は 'api'。 */
   close(reason?: DialogCloseReason): void;
-  /** uncontrolled モードで現在表示中か (controlled では常に false、v1 継承) */
+  // controlled で常に false を返すのは v1 継承。
+  /** uncontrolled モードで現在表示中か (controlled では常に false) */
   isOpen(): boolean;
 }
 

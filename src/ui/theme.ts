@@ -366,9 +366,10 @@ const THEME_NAMES: readonly ThemeName[] = ['light', 'dark', 'teal', 'cyber', 'aq
 const DENSITY_NAMES: readonly DensityName[] = ['comfortable', 'compact', 'tight'];
 const FONT_SIZE_NAMES: readonly FontSizeName[] = ['sm', 'md', 'lg'];
 
+// 2.0.0-alpha.7 で追加。
 /**
  * 無効な theme/density/fontSize の文字列値を検知して console.warn する
- * (2.0.0-alpha.7、dev ビルドのみ — focusWhen と同じ慣例)。object (ThemeVars)
+ * (dev ビルドのみ — focusWhen と同じ慣例)。object (ThemeVars)
  * や既知の名前、`undefined` (= 省略。既定値を使う正常系) は対象外。
  */
 const warnIfInvalidName = <T extends string>(kind: string, value: T | ThemeVars | undefined, validNames: readonly T[], fallbackLabel: string): void => {
@@ -427,9 +428,9 @@ const resolveFontVars = (fontSize: FontSizeName | ThemeVars | undefined): ThemeV
   return fontSize === 'sm' ? FONT_VARS_SM : fontSize === 'lg' ? FONT_VARS_LG : FONT_VARS_MD;
 };
 
+// v1 の make_css_vars 本体 (文字列化する直前の object 表現) に当たる。
 /**
- * theme/density/fontSize から実際に適用する CSS 変数一式を計算する
- * (v1 の make_css_vars 本体。文字列化する直前の object 表現)。
+ * theme/density/fontSize から実際に適用する CSS 変数一式 (object) を計算する。
  */
 const computeThemeVars = ({ theme, density, fontSize }: ApplyThemeOptions): ThemeVars => {
   const color = resolveColorVars(theme);
@@ -447,30 +448,34 @@ const computeThemeVars = ({ theme, density, fontSize }: ApplyThemeOptions): Them
   return vars;
 };
 
+// v1 の make_css_vars 後継 (`:root` を使わないのは設計書 §4)。`color-scheme` の設定は
+// v1 v0.4.2 由来。
+// `data-ricdom-theme` 属性は設計書 §13 で確定した方式: v1 はページ全体のスクロールバー既定
+// スタイルを `.ric-page, .ric-page *` に適用していたが、v2 に page 部品が無いため、この属性を
+// CSS 側のスコープ用マーカーとして使う (cssTemplates.ts 参照)。el 自身に background/color を
+// 塗る規則は #11、2.0.0-alpha.3 (v1 の create_ui_page が `.ric-page` に塗っていたパリティ)。
+// 属性値は 2.0.0-alpha.19 まではキー ("") 固定だった (自前パレットで空文字列になるのはその名残)。
 /**
  * 要素にテーマ CSS 変数 (`--ric-*` + `color-scheme`) を inline style として当てる
- * (v1 の make_css_vars 後継。`:root` は使わない — 同一ページ内で複数要素が別テーマを
- * 持てる、設計書 §4)。`color-scheme` を設定するので、要素の子孫にあるネイティブ部品
- * (スクロールバー・select・checkbox・日付ピッカー等) も自動でライト/ダークに追従する
- * (v1 v0.4.2 由来)。
+ * (`:root` は使わない — 同一ページ内で複数要素が別テーマを持てる)。
+ * `color-scheme` を設定するので、要素の子孫にあるネイティブ部品
+ * (スクロールバー・select・checkbox・日付ピッカー等) も自動でライト/ダークに追従する。
  *
- * `data-ricdom-theme` 属性を el に付与する (設計書 §13 で確定した方式)。
- * v1 はページ全体のスクロールバー既定スタイルを `.ric-page, .ric-page *` に適用していたが、
- * v2 に page 部品が無いため、この属性を CSS 側 (`[data-ricdom-theme]`/`[data-ricdom-theme] *`)
- * のスコープ用マーカーとして使う (cssTemplates.ts 参照)。同じ属性を使い、el 自身にも
- * `background`/`color` を塗る規則が ricdom-ui.css 側にある (#11、2.0.0-alpha.3。
- * v1 の create_ui_page が `.ric-page` に塗っていたパリティ — この関数自体は CSS 変数を
- * 当てるだけで、実際に塗るのは CSS 側の `[data-ricdom-theme]` 規則)。
+ * `data-ricdom-theme` 属性を el に付与する。この属性は CSS 側
+ * (`[data-ricdom-theme]`/`[data-ricdom-theme] *`) のスコープ用マーカーで、スクロールバーの
+ * 既定スタイルがこれを使う。同じ属性を使い、el 自身にも `background`/`color` を塗る規則が
+ * ricdom-ui.css 側にある (この関数自体は CSS 変数を当てるだけで、実際に塗るのは CSS 側の
+ * `[data-ricdom-theme]` 規則)。
  *
- * **属性値は解決したテーマ名** (2.0.0-alpha.19 まではキー ("") 固定だった)。`--ric-theme`
- * マーカー変数 (各 COLOR_VARS_* が持つ、CSS からは一切参照されないデータ専用トークン、
- * 下記参照) の値をそのまま使う。`theme` を bundled 名の文字列で渡した場合はもちろん、
- * `createTheme(base, overrides)` の戻り値 (base の COLOR_VARS_* を spread しているので
- * `--ric-theme` を自動的に引き継ぐ) を渡した場合も同じく解決される — consumer が完全な
- * 自前パレット (ThemeVars を直書き、`--ric-theme` を持たない) を渡した場合のみ、従来どおり
- * 空文字列になる。CSS 側 (`[data-ricdom-theme]`) は属性の「有無」で一致するセレクタなので、
- * 値を持たせても THEME_PAINT_CSS/SCROLLBAR_CSS の挙動は変わらない — consumer は
- * `[data-ricdom-theme="dark"]` のように値でも分岐できるようになる (SPEC §8 参照)。
+ * **属性値は解決したテーマ名**。`--ric-theme` マーカー変数 (各 COLOR_VARS_* が持つ、
+ * CSS からは一切参照されないデータ専用トークン) の値をそのまま使う。`theme` を bundled 名の
+ * 文字列で渡した場合はもちろん、`createTheme(base, overrides)` の戻り値 (base の
+ * COLOR_VARS_* を spread しているので `--ric-theme` を自動的に引き継ぐ) を渡した場合も
+ * 同じく解決される — consumer が完全な自前パレット (ThemeVars を直書き、`--ric-theme` を
+ * 持たない) を渡した場合のみ、空文字列になる。CSS 側 (`[data-ricdom-theme]`) は属性の
+ * 「有無」で一致するセレクタなので、値があっても THEME_PAINT_CSS/SCROLLBAR_CSS の挙動は
+ * 変わらない — consumer は `[data-ricdom-theme="dark"]` のように値でも分岐できる
+ * (SPEC §8 参照)。
  */
 export const applyTheme = (el: Element, opts: ApplyThemeOptions = {}): void => {
   if (!el || typeof (el as HTMLElement).style === 'undefined') {
@@ -520,8 +525,9 @@ export const applyTheme = (el: Element, opts: ApplyThemeOptions = {}): void => {
   el.setAttribute('data-ricdom-theme', resolvedThemeName);
 };
 
+// v1 の create_theme 継承。
 /**
- * ベーステーマに部分上書きしたカスタムテーマオブジェクトを返す (v1 の create_theme 継承)。
+ * ベーステーマに部分上書きしたカスタムテーマオブジェクトを返す。
  *   const myTheme = createTheme('teal', { '--ric-color-accent': '#e91e8c' });
  *   applyTheme(el, { theme: myTheme });
  */
@@ -530,15 +536,16 @@ export const createTheme = (base: ThemeName | ThemeVars = 'light', overrides: Th
   ...overrides,
 });
 
+// v1 `ric_ui/context.js` の `create_density(base='comfortable', overrides={})` 継承
+// (パイロット第 9 号 = Potopeta からの報告、2.0.0-alpha.10)。v1 のこの関数は値をそのまま返す
+// 純粋関数で、consumer (RicUI デザイナ) はプリセットの寸法一式を「テーマ適用前に」読み取って
+// UI 自体のレイアウト計算に使っていた。v2 には当初 `createTheme` (色) しか無く、consumer は
+// 「detached div に applyTheme して el.style から読み戻す」という回避策 — しかも
+// `--ric-gap`/`--ric-pad-x` 等の非公開の変数名決め打ちに依存する — を書かざるを得なかった。
 /**
- * ベース密度に部分上書きした ThemeVars を返す (v1 `ric_ui/context.js` の
- * `create_density(base='comfortable', overrides={})` 継承、パイロット第 9 号 = Potopeta
- * からの報告、2.0.0-alpha.10)。v1 のこの関数は値をそのまま返す純粋関数で、consumer
- * (RicUI デザイナ) はプリセットの寸法一式を「テーマ適用前に」読み取って UI 自体の
- * レイアウト計算に使っていた。v2 には `createTheme` (色) しか無く、consumer は
- * 「detached div に applyTheme して el.style から読み戻す」という回避策 — しかも
- * `--ric-gap`/`--ric-pad-x` 等の非公開の変数名決め打ちに依存する — を書かざるを得な
- * かった。`createTheme` と同じ形 (base → 解決 → overrides 上書き) にすることで、
+ * ベース密度に部分上書きした ThemeVars を返す。値をそのまま返す純粋関数なので、
+ * プリセットの寸法一式を「テーマ適用前に」読み取ってレイアウト計算に使うこともできる。
+ * `createTheme` と同じ形 (base → 解決 → overrides 上書き) で、
  * `applyTheme(el, { density: createDensity('compact') })` にそのまま渡せる。
  *   const myDensity = createDensity('compact', { '--ric-gap': '2px' });
  *   applyTheme(el, { density: myDensity });
@@ -548,10 +555,10 @@ export const createDensity = (base: DensityName | ThemeVars = 'comfortable', ove
   ...overrides,
 });
 
+// v1 `ric_ui/context.js` の `create_font_size(base='md', overrides={})` 継承、
+// createDensity と同じ経緯 (2.0.0-alpha.10)。
 /**
- * ベースフォントサイズに部分上書きした ThemeVars を返す (v1 `ric_ui/context.js` の
- * `create_font_size(base='md', overrides={})` 継承、createDensity と同じ理由・同じ形、
- * 2.0.0-alpha.10)。
+ * ベースフォントサイズに部分上書きした ThemeVars を返す (createDensity と同じ形)。
  *   const myFontSize = createFontSize('lg', { '--ric-font-size': '18px' });
  *   applyTheme(el, { fontSize: myFontSize });
  */
@@ -568,8 +575,9 @@ const FONT_PREFIXES = ['--ric-font-'];
 const isDensityVar = (key: string): boolean => DENSITY_PREFIXES.some((p) => key.startsWith(p));
 const isFontVar = (key: string): boolean => FONT_PREFIXES.some((p) => key.startsWith(p));
 
+// v1 の export_theme 継承。
 /**
- * 要素から現在のテーマ変数をオブジェクトで取り出す (v1 の export_theme 継承)。
+ * 要素から現在のテーマ変数をオブジェクトで取り出す。
  * density・fontSize 系の変数は除外し、テーマ固有の変数 (色・装飾) のみ返す。
  *   const saved = exportTheme(document.querySelector('#app'));
  *   localStorage.setItem('theme', JSON.stringify(saved));
@@ -590,19 +598,21 @@ export const exportTheme = (el: Element): ThemeVars => {
   return result;
 };
 
-/** exportSettings の戻り値 (v1 export_settings の 3 グループ、camelCase 化)。 */
+// v1 export_settings の 3 グループを camelCase 化したもの。
+/** exportSettings の戻り値 (theme / density / fontSize の 3 グループ)。 */
 export interface ExportedSettings {
   theme: ThemeVars;
   density: ThemeVars;
   fontSize: ThemeVars;
 }
 
+// v1 `ric_ui/context.js` の `export_settings` 継承、v1→v2 パリティ一括監査 #2、
+// 2.0.0-alpha.14。density/fontSize を保存したい consumer は本来 v1 でも `export_settings` を
+// 使っていた (`export_theme` の JSDoc にも明記されている使い分け)。
 /**
- * 要素から theme / density / fontSize をグループ別にまとめて取り出す
- * (v1 `ric_ui/context.js` の `export_settings` 継承、v1→v2 パリティ一括監査 #2、
- * 2.0.0-alpha.14)。`exportTheme` は density/fontSize 系の変数を除外して返すが、
- * それらを保存したい consumer は本来 v1 でも `export_settings` を使っていた
- * (`export_theme` の JSDoc にも明記されている使い分け)。分類ロジックは exportTheme と
+ * 要素から theme / density / fontSize をグループ別にまとめて取り出す。
+ * `exportTheme` は density/fontSize 系の変数を除外して返すので、それらも保存したい
+ * 場合はこちらを使う。分類ロジックは exportTheme と
  * 同じ判定 (isThemeKey/isDensityVar/isFontVar) を使うため、
  * `exportSettings(el).theme` は必ず `exportTheme(el)` と一致する。
  *   const saved = exportSettings(document.querySelector('#app'));

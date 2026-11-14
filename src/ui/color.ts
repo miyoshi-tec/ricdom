@@ -19,8 +19,10 @@ export interface UiColorProps {
   value?: string;
   disabled?: boolean;
   class?: ClassValue;
-  /** rest スプレッド経由で常に透過されていたが、型に無かった (LCP の指摘、2.0.0-alpha.9)。
-   *  外側の .ric-color ラッパーに付く (隔離契約、上のコメント参照)。 */
+  // rest スプレッド経由で常に透過されていたが、型に無かった (LCP の指摘、2.0.0-alpha.9)。
+  // 隔離契約はファイル先頭のコメント参照。
+  /** inline style。任意の属性と同じく要素にそのまま渡る (型の補完用に宣言している)。
+   *  外側の .ric-color ラッパーに付く (value/oninput だけが内部の input に付く)。 */
   style?: StyleValue;
   oninput?: (ev: Event) => void;
   [key: string]: unknown;

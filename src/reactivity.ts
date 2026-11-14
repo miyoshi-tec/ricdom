@@ -318,10 +318,11 @@ const wrapDeepWarn = <T extends object>(value: T, path: string, ctx: PendingWarn
 
 const isTrackableObject = (v: unknown): v is object => v != null && (typeof v === 'object' || typeof v === 'function') && !Array.isArray(v);
 
+// `ignore` キーの扱いは v1 継承。
 /**
  * state オブジェクトを浅い Proxy でラップする。
  * トップレベル代入と、1 段目オブジェクトへの代入で notify (scheduleRender) を呼ぶ。
- * `ignore` キー配下は追跡しない (内部キャッシュ用、v1 継承)。
+ * `ignore` キー配下は追跡しない (内部キャッシュ用)。
  */
 export const createReactiveState = <S extends object>(rawState: S, scheduleRender: () => void): S => {
   const childProxies = new WeakMap<object, unknown>();
