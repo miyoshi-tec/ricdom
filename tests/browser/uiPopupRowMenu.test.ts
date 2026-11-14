@@ -19,8 +19,8 @@ import { flush } from '../_helpers/dom.js';
 
 injectStyles(document);
 
-const settle = (): Promise<void> => new Promise((r) => setTimeout(r, 150)); // rAF 実測フェーズ + 開くアニメーション開始
-const closed = (): Promise<void> => new Promise((r) => setTimeout(r, 400)); // 閉じるアニメーション終了
+const settle = (): Promise<void> => flush(150); // rAF 実測フェーズ + 開くアニメーション開始
+const closed = (): Promise<void> => flush(400); // 閉じるアニメーション終了
 
 // 行が 3 本並ぶ一覧。最後の行は画面の最下部 (下に開くスペースが無い)。メニューは 1 つ。
 const mountRows = () => {

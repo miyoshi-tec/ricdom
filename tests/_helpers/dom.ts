@@ -4,8 +4,47 @@ export const setupApp = (): HTMLDivElement => {
   return document.getElementById('app') as HTMLDivElement;
 };
 
-/** rAF (+ 必要なら setTimeout バックストップ) が一巡して DOM commit が終わるのを待つ */
-export const flush = (ms = 30): Promise<void> => new Promise((r) => setTimeout(r, ms));
+// 実ブラウザで動いているか (jsdom では従来どおりの固定時間待ちにする)
+const IN_REAL_BROWSER = typeof navigator !== 'undefined' && !/jsdom/i.test(navigator.userAgent) && typeof requestAnimationFrame === 'function';
+
+// フレームが実際に n 回届くまで待つ。フレームが止まっている環境 (非表示のタブなど) でも
+// 固まらないよう、capMs で打ち切る。
+const framesDelivered = (n: number, capMs: number): Promise<void> =>
+  new Promise((resolve) => {
+    let left = n;
+    let done = false;
+    const finish = (): void => {
+      if (done) return;
+      done = true;
+      resolve();
+    };
+    const tick = (): void => {
+      left -= 1;
+      if (left <= 0) finish();
+      else requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+    setTimeout(finish, capMs);
+  });
+
+/**
+ * 描画が一巡するのを待つ: `ms` 待ち、実ブラウザではさらに **フレームが実際に 3 回届くまで** 待つ。
+ *
+ * ricdom の再描画は「次のフレーム (rAF)、遅くとも 200ms 後 (バックストップ)」に走り、アニメーションの
+ * 終了イベントもフレームの更新の中で届く。固定時間だけの待ちは、フレームの遅い環境 (CI の遅い
+ * ランナー) では描画やイベントより先に assert してしまう — 2026-10〜11 の CI で、準備に 550 秒
+ * 以上かかった実行のたびに、毎回別のテストが 1 件ずつ落ちた (待ちが 30〜300ms の箇所)。
+ * 時間ではなくフレームの進みを待てば、環境の速さに合わせて伸びる。3 回なのは
+ * 「イベントが届くフレーム → それを受けた再描画のフレーム → 余裕 1 回」。
+ * フレームが止まっている環境でも、バックストップ (200ms) より長い 2 秒で打ち切る。
+ *
+ * 位置や大きさの最終状態を見るなら settled()、特定の状態を待つなら until() のほうが確実
+ * (こちらは「だいたい落ち着いた」まで)。jsdom では従来どおり `ms` だけ待つ。
+ */
+export const flush = async (ms = 30): Promise<void> => {
+  await new Promise((r) => setTimeout(r, ms));
+  if (IN_REAL_BROWSER) await framesDelivered(3, 2000);
+};
 
 /**
  * 深い代入の発火忘れ警告 (src/reactivity.ts の scheduleFlush、queueMicrotask 1 回分) が

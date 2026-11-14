@@ -34,7 +34,7 @@ describe('実ブラウザ: createFocusWhen', () => {
     // part.renderPortal() が閉じ込めている `state` からもこの書き込みは見える。
     handle.open = true;
     await flush();
-    await new Promise((r) => setTimeout(r, 60)); // nextRender().then() のマイクロタスクを待つ余裕
+    await flush(60); // nextRender().then() のマイクロタスクを待つ余裕
 
     const portalInput = app.querySelector('[data-ricdom-role="portal"] input');
     expect(portalInput).not.toBeNull();

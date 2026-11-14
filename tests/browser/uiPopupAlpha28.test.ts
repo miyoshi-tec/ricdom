@@ -20,8 +20,8 @@ import { flush, settled } from '../_helpers/dom.js';
 
 injectStyles(document);
 
-const settle = (): Promise<void> => new Promise((r) => setTimeout(r, 150));
-const closed = (): Promise<void> => new Promise((r) => setTimeout(r, 400));
+const settle = (): Promise<void> => flush(150);
+const closed = (): Promise<void> => flush(400);
 const body = (): HTMLElement | null => document.querySelector('[data-ricdom-role="popup"], [data-ricdom-role="dropdown"]');
 
 // 高さ制限つきで開いた本体の最終状態: 外形 (枠線・padding 込み) が画面の上下端から 8px 以上

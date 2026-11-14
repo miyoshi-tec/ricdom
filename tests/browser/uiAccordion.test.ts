@@ -117,14 +117,14 @@ describe('実ブラウザ: createAccordion の閉じたパネルは inert (フ�
     await userEvent.click(header);
     await flush();
     expect(body.inert).toBe(false);
-    await new Promise((r) => setTimeout(r, 400));
+    await flush(400);
     expect(body.getBoundingClientRect().height).toBeGreaterThan(0);
 
     await userEvent.click(header);
     await flush();
     expect(body.inert).toBe(true);
     expect(getComputedStyle(body).display).toBe('grid');
-    await new Promise((r) => setTimeout(r, 400));
+    await flush(400);
     expect(body.getBoundingClientRect().height).toBe(0);
   });
 });

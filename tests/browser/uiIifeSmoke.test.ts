@@ -6,6 +6,7 @@
 import { describe, expect, it } from 'vitest';
 import { commands } from '@vitest/browser/context';
 import { userEvent } from '@vitest/browser/context';
+import { flush } from '../_helpers/dom.js';
 
 interface RicdomGlobal {
   createApp: (target: string | Element, state: object, render: (s: never) => unknown) => Record<string, unknown>;
@@ -56,12 +57,12 @@ describe('実ブラウザ smoke: ricdom + ricdom/ui の IIFE 2 本 + CSS <link>'
       use: (part: unknown) => (props: unknown) => unknown;
     };
     dlg = app.use(ricdomUI!.createDialog());
-    await new Promise((r) => setTimeout(r, 100));
+    await flush(100);
 
     const trigger = document.querySelector('#app button') as HTMLElement;
     expect(trigger).not.toBeNull();
     await userEvent.click(trigger);
-    await new Promise((r) => setTimeout(r, 300));
+    await flush(300);
 
     const dialogEl = document.querySelector('[role="dialog"]');
     expect(dialogEl).not.toBeNull();
@@ -85,10 +86,10 @@ describe('実ブラウザ smoke: ricdom + ricdom/ui の IIFE 2 本 + CSS <link>'
       return { tag: 'div' };
     }) as Record<string, unknown> & { use: (part: unknown) => ReturnType<RicdomUiGlobal['createToast']> };
     toast = app.use(ricdomUI!.createToast());
-    await new Promise((r) => setTimeout(r, 100));
+    await flush(100);
 
     toast.show('ok', { type: 'success' });
-    await new Promise((r) => setTimeout(r, 100));
+    await flush(100);
     expect(document.querySelector('[role="status"]')).not.toBeNull();
   });
 

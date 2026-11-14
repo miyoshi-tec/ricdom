@@ -114,7 +114,7 @@ describe('実ブラウザ: dialog/popup の z-index が createSplitter の divid
     await flush();
 
     dlg!.open();
-    await new Promise((r) => setTimeout(r, 300)); // entrance animationend を待つ (他 dialog テストと同じ待ち方)
+    await flush(300); // entrance animationend を待つ (他 dialog テストと同じ待ち方)
 
     const divider = app.querySelector('.ric-splitter__divider') as HTMLElement;
     const dialogEl = document.querySelector('[role="dialog"]') as HTMLElement;
@@ -174,7 +174,7 @@ describe('実ブラウザ: dialog/popup の z-index が createSplitter の divid
     const trigger = app.querySelector('button.ric-button') as HTMLButtonElement;
     expect(trigger).not.toBeNull();
     trigger.click();
-    await new Promise((r) => setTimeout(r, 300)); // entrance animationend を待つ (他 dialog テストと同じ待ち方)
+    await flush(300); // entrance animationend を待つ (他 dialog テストと同じ待ち方)
 
     const splitterEl = app.querySelector('.ric-splitter') as HTMLElement;
     const divider = app.querySelector('.ric-splitter__divider') as HTMLElement;
@@ -245,7 +245,7 @@ describe('実ブラウザ: dialog/popup の z-index が createSplitter の divid
     // divider の実測 rect の左端付近の座標に openAt する → 本体の left は divider の
     // 左端とほぼ一致し、5px 幅の divider と本体の左端側で確実に重なる帯ができる。
     menu.openAt({ x: dividerRect.left, y: dividerRect.top + 20 });
-    await new Promise((r) => setTimeout(r, 100)); // rAF 実測フェーズ + 再描画を待つ (他 popup テストと同じ)
+    await flush(100); // rAF 実測フェーズ + 再描画を待つ (他 popup テストと同じ)
 
     const body = app.querySelector('[role="menu"]') as HTMLElement;
     expect(body).not.toBeNull();

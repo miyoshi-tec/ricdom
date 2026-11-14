@@ -8,7 +8,7 @@ import { userEvent } from '@vitest/browser/context';
 import { createApp } from '../../src/app.js';
 import { createDialog } from '../../src/ui/dialog.js';
 import { injectStyles } from '../../src/ui/injectStyles.js';
-import { setupApp } from '../_helpers/dom.js';
+import { flush, setupApp } from '../_helpers/dom.js';
 
 injectStyles(document);
 
@@ -27,11 +27,11 @@ describe('実ブラウザ: createApp の setup オプション', () => {
     expect(trigger.textContent).toBe('開く');
 
     await userEvent.click(trigger);
-    await new Promise((r) => setTimeout(r, 300));
+    await flush(300);
     expect(app.querySelector('[role="dialog"]')).not.toBeNull();
 
     await userEvent.keyboard('{Escape}');
-    await new Promise((r) => setTimeout(r, 300));
+    await flush(300);
     expect(app.querySelector('[role="dialog"]')).toBeNull();
     expect(document.activeElement).toBe(trigger);
   });

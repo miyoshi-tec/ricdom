@@ -32,7 +32,7 @@ describe('実ブラウザ: createPopup', () => {
     await flush();
 
     await userEvent.click(app.querySelector('button')!);
-    await new Promise((r) => setTimeout(r, 100)); // rAF 実測フェーズを待つ
+    await flush(100); // rAF 実測フェーズを待つ
 
     const items = app.querySelectorAll('[role="menuitem"]') as NodeListOf<HTMLElement>;
     items[0]!.focus();
@@ -67,7 +67,7 @@ describe('実ブラウザ: createPopup', () => {
     await flush();
 
     await userEvent.click(app.querySelector('button')!);
-    await new Promise((r) => setTimeout(r, 100));
+    await flush(100);
 
     const items = app.querySelectorAll('[role="menuitem"]') as NodeListOf<HTMLElement>;
     items[1]!.focus();
@@ -86,7 +86,7 @@ describe('実ブラウザ: createPopup', () => {
 
     const trigger = app.querySelector('button')!;
     await userEvent.click(trigger);
-    await new Promise((r) => setTimeout(r, 100));
+    await flush(100);
     expect(app.querySelector('[role="menu"]')).not.toBeNull();
 
     await userEvent.keyboard('{Escape}');
@@ -118,7 +118,7 @@ describe('実ブラウザ: createPopup', () => {
     trigger.style.left = `${window.innerWidth - 40}px`;
 
     await userEvent.click(trigger);
-    await new Promise((r) => setTimeout(r, 100)); // rAF 実測フェーズを待つ
+    await flush(100); // rAF 実測フェーズを待つ
 
     const body = app.querySelector('[role="menu"]') as HTMLElement;
     expect(body).not.toBeNull();
@@ -147,7 +147,7 @@ describe('実ブラウザ: createPopup', () => {
       const trigger = app.querySelector('button')!;
       Object.assign(trigger.style, { position: 'fixed', top: '50px' }, triggerStyle);
       trigger.click();
-      await new Promise((r) => setTimeout(r, 100)); // rAF 実測フェーズ + 再描画を待つ
+      await flush(100); // rAF 実測フェーズ + 再描画を待つ
       const body = app.querySelector('[role="menu"]') as HTMLElement;
       return { width: body.offsetWidth, right: body.getBoundingClientRect().right };
     };
@@ -171,7 +171,7 @@ describe('実ブラウザ: createPopup', () => {
       menu = handle.use(createPopup());
       await flush();
       menu.openAt({ x, y: 50 });
-      await new Promise((r) => setTimeout(r, 100)); // rAF 実測フェーズ + 再描画を待つ
+      await flush(100); // rAF 実測フェーズ + 再描画を待つ
       const body = app.querySelector('[role="menu"]') as HTMLElement;
       return { width: body.offsetWidth, right: body.getBoundingClientRect().right };
     };
@@ -207,7 +207,7 @@ describe('実ブラウザ: createPopup', () => {
     await flush();
 
     await userEvent.click(app.querySelector('button')!);
-    await new Promise((r) => setTimeout(r, 100));
+    await flush(100);
 
     const icon = app.querySelector('#icon-el')!.getBoundingClientRect();
     const text = app.querySelector('#text-el')!.getBoundingClientRect();
@@ -222,7 +222,7 @@ describe('実ブラウザ: createPopup', () => {
     const menu = handle.use(createPopup());
     menu.openAt({ x: 100, y: 100 });
     await flush();
-    await new Promise((r) => setTimeout(r, 100)); // rAF 実測フェーズ
+    await flush(100); // rAF 実測フェーズ
 
     const body = app.querySelector('[role="menu"]') as HTMLElement;
     expect(body).not.toBeNull();
@@ -246,12 +246,12 @@ describe('実ブラウザ: createPopup のメニューが項目選択で閉じ�
 
     const trigger = app.querySelector('button')!;
     await userEvent.click(trigger);
-    await new Promise((r) => setTimeout(r, 100));
+    await flush(100);
     expect(app.querySelector('[role="menu"]')).not.toBeNull();
 
     const item = app.querySelector('[role="menuitem"]') as HTMLElement;
     await userEvent.click(item);
-    await new Promise((r) => setTimeout(r, 300)); // exit アニメーション終了 (700ms backstop 前) を待つ
+    await flush(300); // exit アニメーション終了 (700ms backstop 前) を待つ
 
     expect(app.querySelector('[role="menu"]')).toBeNull();
     expect(document.activeElement).toBe(trigger);
@@ -268,12 +268,12 @@ describe('実ブラウザ: createPopup のメニューが項目選択で閉じ�
 
     const trigger = app.querySelector('button')!;
     await userEvent.click(trigger);
-    await new Promise((r) => setTimeout(r, 100));
+    await flush(100);
 
     const item = app.querySelector('[role="menuitem"]') as HTMLElement;
     item.focus();
     await userEvent.keyboard('{Enter}'); // <button> はネイティブに Enter → click を発火する
-    await new Promise((r) => setTimeout(r, 300));
+    await flush(300);
 
     expect(app.querySelector('[role="menu"]')).toBeNull();
   });
@@ -289,12 +289,12 @@ describe('実ブラウザ: createPopup のメニューが項目選択で閉じ�
 
     const trigger = app.querySelector('button')!;
     await userEvent.click(trigger);
-    await new Promise((r) => setTimeout(r, 100));
+    await flush(100);
 
     const item = app.querySelector('[role="menuitem"]') as HTMLElement;
     item.focus();
     await userEvent.keyboard(' ');
-    await new Promise((r) => setTimeout(r, 300));
+    await flush(300);
 
     expect(app.querySelector('[role="menu"]')).toBeNull();
   });
@@ -309,11 +309,11 @@ describe('実ブラウザ: createPopup のメニューが項目選択で閉じ�
     await flush();
 
     await userEvent.click(app.querySelector('button')!);
-    await new Promise((r) => setTimeout(r, 100));
+    await flush(100);
 
     const item = app.querySelector('[role="menuitem"]') as HTMLElement;
     await userEvent.click(item);
-    await new Promise((r) => setTimeout(r, 100));
+    await flush(100);
 
     expect(app.querySelector('[role="menu"]')).not.toBeNull(); // 閉じていない
   });
@@ -334,12 +334,12 @@ describe('実ブラウザ: createPopup のメニューが項目選択で閉じ�
     await flush();
 
     await userEvent.click(app.querySelector('button')!);
-    await new Promise((r) => setTimeout(r, 100));
+    await flush(100);
 
     const item = app.querySelector('[role="menuitem"]') as HTMLElement;
     expect(item.hasAttribute('disabled')).toBe(true);
     item.click(); // ネイティブ disabled な <button> は実ブラウザでは click 自体を発火しない
-    await new Promise((r) => setTimeout(r, 100));
+    await flush(100);
 
     expect(clicked).toBe(false); // 発火していないことの確認 (ブラウザの標準挙動)
     expect(app.querySelector('[role="menu"]')).not.toBeNull(); // 閉じていない
@@ -363,7 +363,7 @@ describe('実ブラウザ: createPopup のメニューが項目選択で閉じ�
     await flush();
 
     await userEvent.click(app.querySelector('button')!);
-    await new Promise((r) => setTimeout(r, 100));
+    await flush(100);
 
     const item = app.querySelector('[role="menuitem"]') as HTMLElement;
     // userEvent.click (Playwright 経由) は aria-disabled="true" を「操作不能」とみなして
@@ -372,7 +372,7 @@ describe('実ブラウザ: createPopup のメニューが項目選択で閉じ�
     // ここで見たいのは「aria-disabled でも onclick は発火するが popup は閉じない」という
     // 部品の契約そのものなので、native の click() で直接発火させる。
     item.click();
-    await new Promise((r) => setTimeout(r, 100));
+    await flush(100);
 
     expect(clicked).toBe(true); // aria-disabled は見た目だけなので onclick 自体は発火する
     expect(app.querySelector('[role="menu"]')).not.toBeNull(); // それでも閉じない
@@ -393,11 +393,11 @@ describe('実ブラウザ: createPopup のメニューが項目選択で閉じ�
     await flush();
 
     await userEvent.click(app.querySelector('button')!);
-    await new Promise((r) => setTimeout(r, 100));
+    await flush(100);
 
     const item = app.querySelector('[role="menuitem"]') as HTMLElement;
     await userEvent.click(item);
-    await new Promise((r) => setTimeout(r, 300));
+    await flush(300);
 
     // popup 側は「document 全体の click 監視」ではなく項目の onclick 呼び出しそのものを
     // 包んでいるため (wrapMenuItem)、consumer の stopPropagation() の影響を受けない。
@@ -419,12 +419,12 @@ describe('実ブラウザ: createPopup のメニューが項目選択で閉じ�
 
     menu.openAt({ x: 100, y: 100 });
     await flush();
-    await new Promise((r) => setTimeout(r, 100)); // rAF 実測フェーズ
+    await flush(100); // rAF 実測フェーズ
     expect(app.querySelector('[role="menu"]')).not.toBeNull();
 
     const item = app.querySelector('[role="menuitem"]') as HTMLElement;
     await userEvent.click(item);
-    await new Promise((r) => setTimeout(r, 300)); // exit アニメーション終了を待つ
+    await flush(300); // exit アニメーション終了を待つ
 
     expect(app.querySelector('[role="menu"]')).toBeNull();
   });
@@ -457,11 +457,11 @@ describe('実ブラウザ: createPopup の light dismiss (2.0.0-alpha.12)', () =
     document.body.appendChild(outsideBtn);
 
     await userEvent.click(app.querySelector('button')!);
-    await new Promise((r) => setTimeout(r, 100));
+    await flush(100);
     expect(menu!.isOpen()).toBe(true);
 
     await userEvent.click(outsideBtn);
-    await new Promise((r) => setTimeout(r, 350)); // exit アニメーション終了を待つ
+    await flush(350); // exit アニメーション終了を待つ
 
     expect(menu!.isOpen()).toBe(false);
     expect(clicked).toBe(1); // 修正前: 0 (overlay がクリックを吸っていた)
@@ -477,12 +477,12 @@ describe('実ブラウザ: createPopup の light dismiss (2.0.0-alpha.12)', () =
     await flush();
 
     await userEvent.click(app.querySelector('button')!);
-    await new Promise((r) => setTimeout(r, 100));
+    await flush(100);
     expect(menu!.isOpen()).toBe(true);
 
     const body = app.querySelector('[role="menu"]') as HTMLElement;
     await userEvent.click(body);
-    await new Promise((r) => setTimeout(r, 100));
+    await flush(100);
 
     expect(menu!.isOpen()).toBe(true); // 閉じていない
   });
@@ -498,11 +498,11 @@ describe('実ブラウザ: createPopup の light dismiss (2.0.0-alpha.12)', () =
 
     const trigger = app.querySelector('button')!;
     await userEvent.click(trigger);
-    await new Promise((r) => setTimeout(r, 100));
+    await flush(100);
     expect(menu!.isOpen()).toBe(true);
 
     await userEvent.click(trigger); // 再クリック (トグルで close)
-    await new Promise((r) => setTimeout(r, 350)); // exit アニメーション終了を待つ
+    await flush(350); // exit アニメーション終了を待つ
 
     expect(menu!.isOpen()).toBe(false);
     // outside-pointerdown 経路 (doClose のみ、フォーカス復帰なし) がトリガークリックにも
@@ -522,7 +522,7 @@ describe('実ブラウザ: createPopup の light dismiss (2.0.0-alpha.12)', () =
 
     menu.openAt({ x: 100, y: 100 });
     await flush();
-    await new Promise((r) => setTimeout(r, 100)); // rAF 実測フェーズ
+    await flush(100); // rAF 実測フェーズ
     expect(menu!.isOpen()).toBe(true);
 
     const outsideBtn = document.createElement('button');
@@ -534,7 +534,7 @@ describe('実ブラウザ: createPopup の light dismiss (2.0.0-alpha.12)', () =
     document.body.appendChild(outsideBtn);
 
     await userEvent.click(outsideBtn);
-    await new Promise((r) => setTimeout(r, 350));
+    await flush(350);
 
     expect(menu!.isOpen()).toBe(false);
     expect(clicked).toBe(1);

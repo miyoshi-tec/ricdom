@@ -20,18 +20,18 @@ describe('実ブラウザ: createScrollPane', () => {
     const handle = createApp('#app', {}, () => (pane ? pane({ style: { height: '200px' }, children: renderMessages(messages) }) : null));
     pane = handle.use(createScrollPane({ follow: 'bottom' }));
     await flush();
-    await new Promise((r) => setTimeout(r, 50));
+    await flush(50);
 
     const el = app.querySelector('.ric-scroll-pane') as HTMLElement;
     // 初回描画時点では DOM がまだ無く「端にいるか」を判定できないため強制スクロールで
     // 末尾に揃える (v1 継承の既知の制約、初回だけ consumer が明示する運用)。
     pane!.scrollToBottom();
-    await new Promise((r) => setTimeout(r, 50));
+    await flush(50);
     expect(el.scrollHeight - el.scrollTop - el.clientHeight).toBeLessThanOrEqual(1);
 
     messages = [...messages, 'new message'];
     handle.renderNow();
-    await new Promise((r) => setTimeout(r, 50));
+    await flush(50);
 
     // 直前に端にいたので、追加後も自動で末尾に追従する
     expect(el.scrollHeight - el.scrollTop - el.clientHeight).toBeLessThanOrEqual(1);
@@ -44,15 +44,15 @@ describe('実ブラウザ: createScrollPane', () => {
     const handle = createApp('#app', {}, () => (pane ? pane({ style: { height: '200px' }, children: renderMessages(messages) }) : null));
     pane = handle.use(createScrollPane({ follow: 'bottom', threshold: 20 }));
     await flush();
-    await new Promise((r) => setTimeout(r, 50));
+    await flush(50);
 
     const el = app.querySelector('.ric-scroll-pane') as HTMLElement;
     el.scrollTop = 50; // 途中までスクロールして「見ている」状態にする (端から十分離れる)
-    await new Promise((r) => setTimeout(r, 20));
+    await flush(20);
 
     messages = [...messages, 'new message'];
     handle.renderNow();
-    await new Promise((r) => setTimeout(r, 50));
+    await flush(50);
 
     expect(el.scrollTop).toBe(50); // 追従しない
   });

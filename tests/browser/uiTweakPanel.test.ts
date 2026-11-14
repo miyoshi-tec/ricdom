@@ -147,14 +147,14 @@ describe('実ブラウザ: createTweakPanel の閉じた folder は inert (フ�
     await userEvent.click(header);
     await flush();
     expect(body.inert).toBe(false);
-    await new Promise((r) => setTimeout(r, 400)); // transition 完了を待つ
+    await flush(400); // transition 完了を待つ
     expect(body.getBoundingClientRect().height).toBeGreaterThan(0);
 
     await userEvent.click(header);
     await flush();
     expect(body.inert).toBe(true);
     expect(getComputedStyle(body).display).toBe('grid');
-    await new Promise((r) => setTimeout(r, 400));
+    await flush(400);
     expect(body.getBoundingClientRect().height).toBe(0);
   });
 });
@@ -275,7 +275,7 @@ describe('実ブラウザ: createTweakPanel folder の controlled open', () => {
     await flush();
     expect(header().getAttribute('aria-expanded')).toBe('true');
     expect(body().inert).toBe(false);
-    await new Promise((r) => setTimeout(r, 400));
+    await flush(400);
     expect(body().getBoundingClientRect().height).toBeGreaterThan(0);
 
     // ヘッダクリック → onToggle → state 更新 → 閉じる

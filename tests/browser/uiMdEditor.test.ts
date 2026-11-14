@@ -63,7 +63,7 @@ describe('実ブラウザ: createMdEditor', () => {
     );
     md = handle.use(createMdEditor());
     await flush();
-    await new Promise((r) => setTimeout(r, 250)); // rAF + 200ms バックストップの同期を待つ
+    await flush(250); // rAF + 200ms バックストップの同期を待つ
 
     const textarea = app.querySelector('textarea') as HTMLTextAreaElement;
     const mirror = app.querySelector('pre.ric-md-editor__mirror') as HTMLElement;
@@ -115,7 +115,7 @@ describe('実ブラウザ: createMdEditor', () => {
     );
     md = handle.use(createMdEditor());
     await flush();
-    await new Promise((r) => setTimeout(r, 250));
+    await flush(250);
 
     const textarea = app.querySelector('textarea') as HTMLTextAreaElement;
     const mirror = app.querySelector('pre.ric-md-editor__mirror') as HTMLElement;
@@ -124,7 +124,7 @@ describe('実ブラウザ: createMdEditor', () => {
     const zeroWidth = String.fromCharCode(0x200b);
     expect((mirror.textContent ?? '').replace(new RegExp(zeroWidth, 'g'), '')).toBe(textarea.value);
 
-    await new Promise((r) => setTimeout(r, 250));
+    await flush(250);
     expect(mirror.scrollHeight).toBe(textarea.scrollHeight);
   });
 
@@ -135,13 +135,13 @@ describe('実ブラウザ: createMdEditor', () => {
     const handle = createApp('#app', {}, () => (md ? md({ value: MIXED_DOC }) : null));
     md = handle.use(createMdEditor());
     await flush();
-    await new Promise((r) => setTimeout(r, 250));
+    await flush(250);
 
     const textarea = app.querySelector('textarea') as HTMLTextAreaElement;
     const mirror = app.querySelector('pre.ric-md-editor__mirror') as HTMLElement;
 
     app.style.width = '520px';
-    await new Promise((r) => setTimeout(r, 300)); // ResizeObserver コールバック + rAF/バックストップ
+    await flush(300); // ResizeObserver コールバック + rAF/バックストップ
 
     expect(mirror.scrollHeight).toBe(textarea.scrollHeight);
     expect(Math.abs(textarea.getBoundingClientRect().width - mirror.getBoundingClientRect().width)).toBeLessThanOrEqual(0.5);
@@ -155,7 +155,7 @@ describe('実ブラウザ: createMdEditor', () => {
     const handle = createApp('#app', {}, () => (md ? md({ value: bigValue, rows: 4 }) : null));
     md = handle.use(createMdEditor());
     await flush();
-    await new Promise((r) => setTimeout(r, 250));
+    await flush(250);
 
     const textarea = app.querySelector('textarea') as HTMLTextAreaElement;
     const mirror = app.querySelector('pre.ric-md-editor__mirror') as HTMLElement;
@@ -172,19 +172,19 @@ describe('実ブラウザ: createMdEditor', () => {
     const handle = createApp('#app', {}, () => (md ? md({ value: '# heading' }) : null));
     md = handle.use(createMdEditor());
     await flush();
-    await new Promise((r) => setTimeout(r, 250));
+    await flush(250);
 
     applyTheme(app, { theme: 'light' });
     const headingSpan = () => app.querySelector('.ric-md-heading, span.ric-md-heading') as HTMLElement | null;
     // 見出しのテキストは 2 トークン (marker '###' 相当の '#' + heading 本文) に分かれる —
     // ここでは heading クラスを持つ span を探す (marker と別クラス)。
-    await new Promise((r) => setTimeout(r, 50));
+    await flush(50);
     const spanLight = app.querySelector('pre.ric-md-editor__mirror .ric-md-heading') as HTMLElement;
     expect(spanLight).not.toBeNull();
     const colorLight = getComputedStyle(spanLight).color;
 
     applyTheme(app, { theme: 'dark' });
-    await new Promise((r) => setTimeout(r, 50));
+    await flush(50);
     const spanDark = app.querySelector('pre.ric-md-editor__mirror .ric-md-heading') as HTMLElement;
     const colorDark = getComputedStyle(spanDark).color;
 
@@ -212,7 +212,7 @@ describe('実ブラウザ: createMdEditor', () => {
     const handle = createApp('#app', {}, () => (md ? md({ value: '' }) : null));
     md = handle.use(createMdEditor());
     await flush();
-    await new Promise((r) => setTimeout(r, 100));
+    await flush(100);
 
     const errorSpy = vi.spyOn(console, 'error');
     const textarea = app.querySelector('textarea') as HTMLTextAreaElement;
@@ -223,7 +223,7 @@ describe('実ブラウザ: createMdEditor', () => {
     textarea.dispatchEvent(new InputEvent('input', { isComposing: true }));
     textarea.dispatchEvent(new CompositionEvent('compositionend', { data: '漢字' }));
 
-    await new Promise((r) => setTimeout(r, 50));
+    await flush(50);
     const zeroWidth = String.fromCharCode(0x200b);
     expect((mirror.textContent ?? '').replace(new RegExp(zeroWidth, 'g'), '')).toBe('漢字');
     expect(errorSpy).not.toHaveBeenCalled();
@@ -242,7 +242,7 @@ describe('実ブラウザ: createMdEditor', () => {
     const handle = createApp('#app', {}, () => (md ? md({ value: '' }) : null));
     md = handle.use(createMdEditor());
     await flush();
-    await new Promise((r) => setTimeout(r, 250)); // addEventListener が張られる (初回 sync) のを待つ
+    await flush(250); // addEventListener が張られる (初回 sync) のを待つ
 
     const textarea = app.querySelector('textarea') as HTMLTextAreaElement;
     const mirror = app.querySelector('pre.ric-md-editor__mirror') as HTMLElement;
@@ -251,7 +251,7 @@ describe('実ブラウザ: createMdEditor', () => {
     textarea.value = '確定テキスト';
     textarea.dispatchEvent(new CompositionEvent('compositionend', { data: '確定テキスト' }));
 
-    await new Promise((r) => setTimeout(r, 20));
+    await flush(20);
     const zeroWidth2 = String.fromCharCode(0x200b);
     expect((mirror.textContent ?? '').replace(new RegExp(zeroWidth2, 'g'), '')).toBe('確定テキスト');
   });
@@ -270,7 +270,7 @@ describe('実ブラウザ: createMdEditor', () => {
     );
     md = handle.use(createMdEditor());
     await flush();
-    await new Promise((r) => setTimeout(r, 250)); // rAF + 200ms バックストップの同期を待つ
+    await flush(250); // rAF + 200ms バックストップの同期を待つ
 
     const wrapper = app.querySelector('.ric-md-editor') as HTMLElement;
     const textarea = app.querySelector('textarea') as HTMLTextAreaElement;
@@ -302,7 +302,7 @@ describe('実ブラウザ: createMdEditor', () => {
     const handle = createApp('#app', {}, () => (md ? md({ value: 'x', style: { fontFamily: 'monospace' } }) : null));
     md = handle.use(createMdEditor());
     await flush();
-    await new Promise((r) => setTimeout(r, 250));
+    await flush(250);
 
     const textarea = app.querySelector('textarea') as HTMLTextAreaElement;
     const mirror = app.querySelector('pre.ric-md-editor__mirror') as HTMLElement;
