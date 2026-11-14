@@ -41,7 +41,9 @@ export interface UiRadiobuttonProps {
 }
 
 // options を { value, label, ...rest } 形式に正規化する
-const normalizeOption = (opt: string | UiRadiobuttonOption): UiRadiobuttonOption => (typeof opt === 'string' ? { value: opt, label: opt } : opt);
+// label を省略した { value } は value を表示する (uiSelect と同じ。2.0.0-alpha.30 までは
+// labelChildren の String(undefined) で「undefined」と表示されていた)。
+const normalizeOption = (opt: string | UiRadiobuttonOption): UiRadiobuttonOption => (typeof opt === 'string' ? { value: opt, label: opt } : { ...opt, label: opt.label ?? opt.value });
 
 // label を children 配列に変換する。
 //   配列        → そのまま children (例: [uiIcon(...), ' List'])

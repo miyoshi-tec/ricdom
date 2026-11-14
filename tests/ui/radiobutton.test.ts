@@ -59,6 +59,13 @@ describe('uiRadiobutton', () => {
     expect(node.children[0]!.children[1].children).toEqual(['日本語']);
   });
 
+  // uiSelect と同じ穴 (2.0.0-alpha.31): label を省略すると「undefined」と表示されていた
+  it('label を省略した { value } は、value を表示する (「undefined」と出さない)', () => {
+    const node = uiRadiobutton({ name: 'k', value: 'x', options: [{ value: 'x' }, { value: 'y', label: 0 as unknown as string }] }) as unknown as TestRadiogroupNode;
+    expect(node.children[0]!.children[1].children).toEqual(['x']);
+    expect(node.children[1]!.children[1].children).toEqual(['0']);
+  });
+
   it('label に配列 (RicNode 混在) を渡すとそのまま children になる', () => {
     const icon = { tag: 'svg' };
     const node = uiRadiobutton({ name: 'x', options: [{ value: 'a', label: [icon, ' List'] }] }) as unknown as TestRadiogroupNode;

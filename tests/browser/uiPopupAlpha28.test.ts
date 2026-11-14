@@ -16,13 +16,25 @@ import { createPopup } from '../../src/ui/popup.js';
 import { createDropdown } from '../../src/ui/dropdown.js';
 import { injectStyles } from '../../src/ui/injectStyles.js';
 import { applyTheme } from '../../src/ui/theme.js';
-import { flush } from '../_helpers/dom.js';
+import { flush, settled } from '../_helpers/dom.js';
 
 injectStyles(document);
 
 const settle = (): Promise<void> => new Promise((r) => setTimeout(r, 150));
 const closed = (): Promise<void> => new Promise((r) => setTimeout(r, 400));
 const body = (): HTMLElement | null => document.querySelector('[data-ricdom-role="popup"], [data-ricdom-role="dropdown"]');
+
+// 高さ制限つきで開いた本体の最終状態: 外形 (枠線・padding 込み) が画面の上下端から 8px 以上
+// 内側にあり、中身はスクロールで届く。必ず settled() で最終状態を待ってから呼ぶこと
+// (アニメーションの途中は実寸より小さく、はみ出していても通ってしまう。alpha.31 で実際に起きた)。
+const VIEWPORT_MARGIN = 8;
+const expectFitsViewport = (b: HTMLElement): void => {
+  const r = b.getBoundingClientRect();
+  expect(r.top, '上端').toBeGreaterThanOrEqual(VIEWPORT_MARGIN - 0.5);
+  expect(r.bottom, '下端 (外形)').toBeLessThanOrEqual(innerHeight - VIEWPORT_MARGIN + 0.5);
+  expect(b.scrollHeight, '中身は切れずにスクロールで届く').toBeGreaterThan(b.clientHeight);
+  expect(['auto', 'scroll']).toContain(getComputedStyle(b).overflowY);
+};
 
 const themedHost = (html: string): void => {
   document.body.innerHTML = `<div id="host">${html}</div>`;
@@ -103,13 +115,36 @@ describe('実ブラウザ: popup / dropdown の修正 (2.0.0-alpha.28、Rancha �
     menu = handle.use(createPopup());
     await flush();
     await userEvent.click(document.querySelector('#app button')!);
-    await settle();
-    const b = body()!;
-    const r = b.getBoundingClientRect();
-    expect(r.top).toBeGreaterThanOrEqual(0);
-    expect(r.bottom).toBeLessThanOrEqual(innerHeight);
-    expect(b.scrollHeight).toBeGreaterThan(b.clientHeight); // 中身は切れずにスクロールで届く
-    expect(['auto', 'scroll']).toContain(getComputedStyle(b).overflowY);
+    expectFitsViewport(await settled(body));
+    handle.unmount();
+  });
+
+  it('3a. 上のほうが広いときは上に開き、上端から 8px を残して収まる', async () => {
+    themedHost(`<div style="height:${Math.round(innerHeight / 2) + 60}px"></div><div id="app"></div>`);
+    let menu: ReturnType<typeof createPopup>;
+    const handle = createApp('#app', {}, () =>
+      menu ? menu({ trigger: ['⋯'], children: Array.from({ length: 60 }, (_, i) => ({ tag: 'button', children: [`item ${i}`] })) }) : null,
+    );
+    menu = handle.use(createPopup());
+    await flush();
+    const trigger = document.querySelector('#app button')!;
+    await userEvent.click(trigger);
+    const b = await settled(body);
+    expect(b.getBoundingClientRect().bottom, '前提: 上に開いている').toBeLessThanOrEqual(trigger.getBoundingClientRect().top);
+    expectFitsViewport(b);
+    handle.unmount();
+  });
+
+  it('3b. dropdown も同じく、画面の端から 8px を残して収まる', async () => {
+    themedHost(`<div style="height:${Math.round(innerHeight / 2) - 20}px"></div><div id="app"></div>`);
+    let dd: ReturnType<typeof createDropdown>;
+    const handle = createApp('#app', {}, () =>
+      dd ? dd({ label: '一覧', children: Array.from({ length: 60 }, (_, i) => ({ tag: 'div', children: [`item ${i}`] })) }) : null,
+    );
+    dd = handle.use(createDropdown());
+    await flush();
+    await userEvent.click(document.querySelector('#app button')!);
+    expectFitsViewport(await settled(body));
     handle.unmount();
   });
 
