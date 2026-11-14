@@ -1442,6 +1442,10 @@ select is cut with "…" and the arrow stays visible. The outer height is always
   stop).
 - **`<selectedcontent>` is an `island`**: its content is written by the browser, never by
   ricdom.
+- **Testing whether a label is cut**: the select itself no longer overflows, so
+  `select.scrollHeight > select.clientHeight` is always false and proves nothing about the
+  text. Check the text box instead: `sc = select.querySelector('selectedcontent')`,
+  truncated when `sc.scrollWidth > sc.clientWidth`.
 - **Browsers without `base-select`** (Chromium before 135 — e.g. Electron 32 — Firefox,
   Safari) ignore non-option children of `<select>` and draw the native control as before, which
   already clips to one line.

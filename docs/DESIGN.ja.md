@@ -193,6 +193,10 @@ v1 は 5 か月・46 リリース・社内 11 アプリの実戦で API が磨�
 - **互換性**: `select.children[0]` / `firstElementChild` が option でなくなる (`select.options` は不変)。ライブラリ内でこれに依存していたのは `tests/ui/select.test.ts` だけ。consumer の e2e が依存していれば直す必要がある → CHANGELOG と SPEC に明記
 - **テスト**: `tests/browser/uiSelectOverflow.test.ts` 7 件 (全件 red first)。既知の制限は「フォーカス中は古いまま、外れた後の render で追従」を現状の挙動として固定 (直したら書き換える)。browser 206 (+7) / unit 728 (+1)。コア gzip 4,877B 不変、ui IIFE 27,206B (+49B)
 - **作業ツリーの異常 (記録)**: 着手時、main の作業ツリーで CHANGELOG.md と DESIGN.ja.md が「変更あり」になっていた。中身は tag `v2.0.0-alpha.29` の版と完全一致 (= §48 の確認記録より前の内容)。10-18 に別セッションが tag を checkout した後の切り替えで取り残されたもので、新しい作業ではないと確かめてから HEAD に戻した
+- **CI (2026-11-14)**: alpha.30 の push で main / tag / develop の CI が 3 本とも失敗。原因は `ubuntu-latest` が 26.04 になり Playwright 1.55.1 が chromium を入れられなかったこと (コードは無関係、型と unit は CI でも通過)。`runs-on: ubuntu-24.04` に固定して main・develop とも成功 (alpha.30 のコードで browser 206 + smoke が CI 上でも通過)。tag の CI は赤のまま (tag 時点の設定が ubuntu-latest)。上げる条件は ci.yml のコメントに記載
+- **歯車DXFジェネレーターの alpha.30 確認 (2026-11-14)**: tag を `git archive` で取り出してビルドし、dist 3 点を vendor に。Chrome 157 と Chromium 140 で同じ結果。tweak の行を試験の中だけ 1 行の配置 (セレクト幅 102〜141px) に戻すと、長い選択肢は「…」で省略・はみ出し 0・高さは `--ric-control-h` のまま。今の 2 段の配置 (256〜350px) では省略なし。5 個のセレクトで先頭の子は button・`options[0]` は option、一覧は省略されず、選ぶと value と枠の文字とアプリの値が変わる、コンソールのエラー 0。Node 145 / 設計 e2e 51・52・52 / かんたんモード 43 / 強度解析 71 + 7 すべて通過。先頭の子を option として見る箇所は無かった。既知の制限は踏まない (選択肢の文字が実行中に変わらない)。2 段の配置は続ける → 本件はクローズ
+- **再現できるビルド**: 報告にあった dist 3 点の SHA-256 が、統括が main でビルドしたものと 3 つとも一致 (`54721bd5…` / `19193e83…` / `c94f3aef…`)。consumer が tag から自分でビルドしても同じバイト列になる
+- **consumer の気づき → SPEC に追記**: 「選択肢が枠に入るか」を `select.scrollHeight > clientHeight` で見る試験は、alpha.30 以降は文字が入りきらなくても通ってしまう (はみ出しが起きないため)。省略は `<selectedcontent>` の `scrollWidth > clientWidth` で見る。同じ試験を持つ他のアプリも黙って緑になるので、SPEC §10.1 の FACT と告知に 1 項目足した
 
 ## 48. 部品内部の `<button>` も書体を継承する = alpha.24 の取りこぼし (2026-10-16、2.0.0-alpha.29、ギア軽量化デモ報告)
 
