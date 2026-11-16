@@ -109,7 +109,7 @@
     shapes: [
       { key: 1, tag: 'circle', cx: 80, cy: 110, r: 40, fill: '#3b82f6' },
       { key: 2, tag: 'rect', x: 160, y: 60, width: 100, height: 100, rx: 8, fill: '#10b981' },
-      { key: 3, tag: 'text', x: 150, y: 36, 'font-size': 18, 'text-anchor': 'middle', fill: '#111827', children: ['Hello SVG'] },
+      { key: 3, tag: 'text', x: 110, y: 40, 'font-size': 18, fill: '#111827', children: ['Hello SVG'] },
     ],
     selected: 1,
     // Whether a drag snaps to the grid.
@@ -133,11 +133,13 @@
   const NEW_SHAPE = {
     circle: () => ({ tag: 'circle', cx: 150, cy: 100, r: 30, fill: '#f59e0b' }),
     rect: () => ({ tag: 'rect', x: 110, y: 70, width: 80, height: 60, rx: 0, fill: '#8b5cf6' }),
-    text: () => ({ tag: 'text', x: 150, y: 180, 'font-size': 16, 'text-anchor': 'middle', fill: '#111827', children: ['Text'] }),
+    text: () => ({ tag: 'text', x: 130, y: 180, 'font-size': 16, fill: '#111827', children: ['Text'] }),
   };
 
-  // The attributes that hold the position of each kind of shape.
-  // 図形の種類ごとの、位置を表す属性です。
+  // The attributes that hold the position of each kind of shape: the centre of a circle, the
+  // top left corner of a rect, and for a text the left end of the line its letters stand on.
+  // 図形の種類ごとの、位置を表す属性です。circle は中心、rect は左上の角、text は
+  // 「文字が乗る線」の左端です。
   const POSITION = { circle: ['cx', 'cy'], rect: ['x', 'y'], text: ['x', 'y'] };
 
   // ── Undo and redo ────────────────────────────────────────────────────────────────────────────
@@ -196,7 +198,7 @@
     circle: (shape) => ({ x: shape.cx - shape.r, y: shape.cy - shape.r, width: shape.r * 2, height: shape.r * 2 }),
     rect: (shape) => ({ x: shape.x, y: shape.y, width: shape.width, height: shape.height }),
     text: (shape) => {
-      for (const name of ['x', 'y', 'font-size', 'text-anchor']) ruler.setAttribute(name, shape[name]);
+      for (const name of ['x', 'y', 'font-size']) ruler.setAttribute(name, shape[name]);
       // An empty text has no box. Measure a stand-in, so that there is still a frame to take hold of.
       // 空の文字には箱がありません。つかめる枠が残るように、代わりの 1 文字を測ります。
       ruler.textContent = shape.children[0] || '?';
