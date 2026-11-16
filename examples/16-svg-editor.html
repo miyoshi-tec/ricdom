@@ -20,8 +20,10 @@
   .stage { display: flex; flex-direction: column; gap: 8px; }
 
   /* The drawing. It is white in every theme, like a sheet of paper. touch-action: none lets a finger drag a shape instead of scrolling the page.
-     絵を描く面です。紙のように、どのテーマでも白にしています。touch-action: none は、指で図形をドラッグしたときにページがスクロールしないようにする指定です。 */
-  .canvas { display: block; width: 100%; height: auto; background: #fff; border: 1px solid var(--ric-color-border); border-radius: var(--ric-radius); touch-action: none; }
+     user-select: none keeps a drag from selecting the text in the drawing, as it would select text anywhere else on a page.
+     絵を描く面です。紙のように、どのテーマでも白にしています。touch-action: none は、指で図形をドラッグしたときにページがスクロールしないようにする指定です。
+     user-select: none は、ドラッグで絵の中の文字が選択されないようにする指定です。指定しないと、ページのほかの文字と同じように選択されます。 */
+  .canvas { display: block; width: 100%; height: auto; background: #fff; border: 1px solid var(--ric-color-border); border-radius: var(--ric-radius); touch-action: none; -webkit-user-select: none; user-select: none; }
   .shape { cursor: move; }
   /* The frame around the selected shape, and the four handles on its corners. The frame lets presses through to the shapes under it.
      vector-effect keeps the lines the same thickness on the screen, whatever size the drawing is shown at.
@@ -202,37 +204,46 @@
     },
   };
 
-  // RESIZE gives the attributes that fit a shape into a new box. The box is described by the
-  // corner that stays where it is (fx, fy) and the distance from there to the dragged corner
-  // (dx, dy). A negative distance means the dragged corner has crossed over to the other side.
-  // A rect takes the box as it is. A circle and a text keep their proportions.
-  // RESIZE は、図形を新しい箱に合わせるための属性を返します。箱は、動かない角 (fx, fy) と、
-  // そこからつまんでいる角までの距離 (dx, dy) で表します。距離が負なら、つまんでいる角が
-  // 反対側へ越えています。rect は箱のとおりになります。circle と text は縦横の比を保ちます。
+  // The two modes of a drag. Every value that a drag writes goes through snap(): with the grid
+  // on it becomes a multiple of the grid spacing, with the grid off a whole number.
+  // ドラッグの 2 つのモードです。ドラッグが書き込む値は、すべて snap() を通ります。グリッドが
+  // 入のときはグリッドの間隔の倍数に、切のときは整数になります。
+  const step = (s) => (s.grid ? GRID : 1);
+  const snap = (s, value) => Math.round(value / step(s)) * step(s);
+
+  // RESIZE gives the attributes to replace while a corner of the box is dragged. (x, y) is where
+  // the dragged corner is now, and (fx, fy) is the opposite corner.
+  //   rect:   the opposite corner stays, and the dragged corner goes to the grid.
+  //   circle: the centre stays, and only the radius changes.
+  //   text:   the opposite corner stays, and the height decides the font size.
+  // RESIZE は、箱の角をドラッグしている間に差し替える属性を返します。(x, y) はつまんでいる角の
+  // いまの位置、(fx, fy) は反対の角です。
+  //   rect:   反対の角は動かず、つまんでいる角がグリッドに乗ります。
+  //   circle: 中心は動かず、半径だけが変わります。
+  //   text:   反対の角は動かず、高さから font-size が決まります。
   const RESIZE = {
-    rect: (shape, box, fx, fy, dx, dy) => ({
-      x: Math.min(fx, fx + dx),
-      y: Math.min(fy, fy + dy),
-      width: Math.max(1, Math.abs(dx)),
-      height: Math.max(1, Math.abs(dy)),
+    rect: (s, shape, box, fx, fy, x, y) => ({
+      x: Math.min(fx, snap(s, x)),
+      y: Math.min(fy, snap(s, y)),
+      width: Math.max(step(s), Math.abs(snap(s, x) - fx)),
+      height: Math.max(step(s), Math.abs(snap(s, y) - fy)),
     }),
-    circle: (shape, box, fx, fy, dx, dy) => {
-      const r = Math.max(1, Math.round(Math.max(Math.abs(dx), Math.abs(dy)) / 2));
-      return { cx: fx + (dx < 0 ? -r : r), cy: fy + (dy < 0 ? -r : r), r };
-    },
-    text: (shape, box, fx, fy, dx, dy) => {
-      // The height of the box follows the font size, so the new height decides the new font size.
-      // `scale` is how many times larger the text becomes.
-      // 箱の高さは文字の大きさに比例するので、新しい高さから新しい font-size が決まります。
-      // `scale` は、文字が何倍になるかです。
-      const size = Math.max(4, Math.round((shape['font-size'] * Math.abs(dy)) / box.height));
+    circle: (s, shape, box, fx, fy, x, y) => ({
+      r: Math.max(step(s), snap(s, Math.max(Math.abs(x - shape.cx), Math.abs(y - shape.cy)))),
+    }),
+    text: (s, shape, box, fx, fy, x, y) => {
+      // The height of the box follows the font size. `scale` is how many times larger the text
+      // becomes; the box grows by the same amount, away from the opposite corner.
+      // 箱の高さは文字の大きさに比例します。`scale` は文字が何倍になるかで、箱も同じだけ、
+      // 反対の角から離れる向きに大きくなります。
+      const size = Math.max(step(s), snap(s, (shape['font-size'] * Math.abs(y - fy)) / box.height));
       const scale = size / shape['font-size'];
-      const left = dx < 0 ? fx - box.width * scale : fx;
-      const top = dy < 0 ? fy - box.height * scale : fy;
+      const left = x < fx ? fx - box.width * scale : fx;
+      const top = y < fy ? fy - box.height * scale : fy;
       return {
         'font-size': size,
-        x: Math.round(left + (shape.x - box.x) * scale),
-        y: Math.round(top + (shape.y - box.y) * scale),
+        x: snap(s, left + (shape.x - box.x) * scale),
+        y: snap(s, top + (shape.y - box.y) * scale),
       };
     },
   };
@@ -250,12 +261,6 @@
   // drawing is shown at.
   // ポインターの位置を、絵の座標 (viewBox) に直します。絵がどんな大きさで表示されていても同じです。
   const toDrawing = (svg, e) => new DOMPoint(e.clientX, e.clientY).matrixTransform(svg.getScreenCTM().inverse());
-
-  // The two modes of a drag: with the grid on, a coordinate goes to the nearest grid line;
-  // with it off, to the nearest whole number.
-  // ドラッグの 2 つのモードです。グリッドが入のときは、座標をいちばん近いグリッドの線に合わせます。
-  // 切のときは、いちばん近い整数に合わせます。
-  const snap = (s, value) => (s.grid ? Math.round(value / GRID) * GRID : Math.round(value));
 
   const startDrag = (s, shape, e, patch) => {
     // From here on, pointer events go to the <svg> even when the pointer leaves it.
@@ -283,11 +288,10 @@
   };
 
   // Resizing: `corner` is [0 or 1, 0 or 1], which corner of the box is being dragged. That corner
-  // moves like a shape does (start + distance, snapped) while the opposite corner stays, and
-  // RESIZE fits the shape into the box between the two.
+  // moves like a shape does (where it was + the distance travelled), and RESIZE turns its
+  // position into attributes.
   // 変形: `corner` は [0 か 1, 0 か 1] で、箱のどの角をつまんでいるかです。その角は、図形の移動と
-  // 同じように動き (始めの位置 + 距離、吸着あり)、反対の角は動きません。RESIZE が、その 2 つの角の
-  // 間の箱に図形を合わせます。
+  // 同じように動きます (始めの位置 + 動いた距離)。RESIZE が、その位置を属性に直します。
   const CORNERS = [[0, 0], [1, 0], [0, 1], [1, 1]];
   const resizing = (s, shape, corner, e) => {
     const box = BOX[shape.tag](shape);
@@ -296,7 +300,7 @@
     const y = box.y + corner[1] * box.height;
     const fx = box.x + (1 - corner[0]) * box.width;
     const fy = box.y + (1 - corner[1]) * box.height;
-    return (now) => RESIZE[shape.tag](shape, box, fx, fy, snap(s, x + now.x - from.x) - fx, snap(s, y + now.y - from.y) - fy);
+    return (now) => RESIZE[shape.tag](s, shape, box, fx, fy, x + now.x - from.x, y + now.y - from.y);
   };
 
   // ── Drawing ──────────────────────────────────────────────────────────────────────────────────
