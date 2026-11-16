@@ -19,7 +19,7 @@
   /* The editor is a box with a fixed height: the toolbar stays put and the tree scrolls inside.
      エディタは高さを決めた箱です。ツールバーは動かず、木の部分だけが中でスクロールします。 */
   .je-editor { display: flex; flex-direction: column; height: min(70vh, 640px); border: 1px solid var(--ric-color-border); border-radius: var(--ric-radius); overflow: hidden; }
-  .je-toolbar { display: flex; align-items: center; gap: 6px; padding: 8px; border-bottom: 1px solid var(--ric-color-border); }
+  .je-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px; border-bottom: 1px solid var(--ric-color-border); }
   .je-file { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .je-tree { flex: 1; min-height: 0; overflow-y: auto; }
 
@@ -52,7 +52,8 @@
   rows are added and deleted, and a file can be opened, saved, or dropped onto the editor.
   Three things to look for in the source:
   1. The path model: a position in the document is an array of keys and indexes, and every change
-     builds a new document instead of changing the old one.
+     builds a new document instead of changing the old one. The old one is still there, so
+     keeping it is all that Undo needs.
   2. State is replaced, never changed in place. That is how ricdom notices a change.
   3. The keyboard: everything you can click is a <button>, and after each action the focus is put
      on a row that still exists, with `ref` and app.refs.
@@ -63,7 +64,8 @@
   ファイルを開く・保存する・エディタにドロップして読み込む、ができます。
   ソースで見てほしい点は 3 つです。
   1. path モデル: 文書の中の位置を「キーと index の配列」で表します。変更のたびに、元の文書を
-     書き換えるのではなく、新しい文書を作ります。
+     書き換えるのではなく、新しい文書を作ります。元の文書はそのまま残るので、それを取っておく
+     だけで「元に戻す」ができます。
   2. 状態は書き換えずに差し替えます。ricdom はそれで変更に気づきます。
   3. キーボード: クリックできるものはすべて <button> です。操作のあとは `ref` と app.refs を使って、
      残っている行にフォーカスを移します。
@@ -106,10 +108,10 @@
   });
 
   // Icon data (SVG paths). This block is the output of
-  // `npx ricdom-icon chevron-down chevron-right plus x pencil upload download`, pasted as it is.
+  // `npx ricdom-icon chevron-down chevron-right plus x pencil upload download undo-2 redo-2`, pasted as it is.
   // Copy icon data from that command; do not write the paths by hand.
   // アイコンのデータ (SVG のパス) です。下のかたまりは
-  // `npx ricdom-icon chevron-down chevron-right plus x pencil upload download` の出力を、そのまま貼ったものです。
+  // `npx ricdom-icon chevron-down chevron-right plus x pencil upload download undo-2 redo-2` の出力を、そのまま貼ったものです。
   // アイコンのデータはこのコマンドから写し、パスを手で書かないでください。
   const ICONS = {
     "chevron-down": {"p":"m6 9 6 6 6-6"},
@@ -119,6 +121,8 @@
     pencil: {"p":"M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"},
     upload: {"p":"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"},
     download: {"p":"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"},
+    "undo-2": {"p":["M9 14 4 9l5-5","M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11"]},
+    "redo-2": {"p":["m15 14 5-5-5-5","M20 9H9.5A5.5 5.5 0 0 0 4 14.5A5.5 5.5 0 0 0 9.5 20H13"]},
   };
 
   // The document the editor starts with, and goes back to on "Reset".
@@ -233,26 +237,39 @@
   //   json      the document
   //   fileName  the name used by "Save", and shown in the toolbar
   //   expanded  which folders are open: { [idOf(path)]: true }. '[]' is the root, open from the start
-  //   editing   null, or the row being edited: { path, key, text, isNew }
+  //   editing   null, or the row being edited: { path, key, text, added }
   //             key    the text in the key field; null when the row has no key to edit (an array
   //                    element, or the root)
   //             text   the text in the value field, a JSON literal; null for an object or an array
   //                    (only its key can be edited)
-  //             isNew  true for a row that was just added: "Cancel" then removes the row again
+  //             added  for a row that was just added, the document as it was before the row was
+  //                    added (see "Undo and redo" below); null for a row that was already there.
+  //                    "Cancel" on a row that was just added removes the row again
+  //   undo      earlier versions of the document, for "Undo": the newest is last
+  //   redo      the versions that "Undo" stepped back from, for "Redo"
   //   json      文書
   //   fileName  「保存」で使うファイル名。ツールバーにも表示します
   //   expanded  開いているフォルダ: { [idOf(path)]: true }。'[]' はルートで、最初から開いています
-  //   editing   null か、編集中の行: { path, key, text, isNew }
+  //   editing   null か、編集中の行: { path, key, text, added }
   //             key    キーの入力欄の文字列。編集できるキーが無い行 (配列の要素とルート) では null
   //             text   値の入力欄の文字列 (JSON のリテラル)。オブジェクトと配列では null
   //                    (キーだけを編集できます)
-  //             isNew  追加したばかりの行なら true。そのとき「キャンセル」は行ごと取り消します
+  //             added  追加したばかりの行では、その行を追加する前の文書 (下の「元に戻す・やり直す」を参照)。
+  //                    もとからあった行では null。追加したばかりの行の「キャンセル」は、行ごと取り消します
+  //   undo      「元に戻す」のための、前の文書の並び。最後がいちばん新しいものです
+  //   redo      「やり直す」のための、「元に戻す」で通り過ぎた文書の並び
   const state = {
     json: DEMO,
     fileName: 'demo.json',
     expanded: { '[]': true },
     editing: null,
+    undo: [],
+    redo: [],
   };
+
+  // The number of steps that "Undo" remembers.
+  // 「元に戻す」が覚えておく段数です。
+  const HISTORY = 20;
 
   // Components that keep state are registered with app.use(). They are assigned in `setup` at the
   // bottom, which runs once before the first render, so render can call them from its first run.
@@ -288,14 +305,57 @@
     s.expanded = { ...s.expanded, [id]: !s.expanded[id] };
   };
 
+  // ── Undo and redo ────────────────────────────────────────────────────────────────────────────
+  // No change edits the document in place; every change assigns a new one. The document that was
+  // there before is therefore still intact, and keeping it is all that Undo needs.
+  // A snapshot is the document together with the open folders: the folders are remembered by
+  // path, and a path only means something in the document it was made for.
+  // どの変更も、文書をその場で書き換えず、新しい文書を代入します。だから前の文書は無傷で残っていて、
+  // それを取っておくだけで「元に戻す」ができます。
+  // 取っておくのは、文書と、開いているフォルダの組です。フォルダは path で覚えているので、
+  // その path が意味を持つのは、それを作ったときの文書の中だけだからです。
+  const snapshot = (s) => ({ json: s.json, expanded: s.expanded });
+
+  // remember() is called just before a change that is final: `before` is what Undo will go back to.
+  // remember() は、確定した変更の直前に呼びます。`before` が、「元に戻す」で戻る先です。
+  const remember = (s, before = snapshot(s)) => {
+    s.undo = [...s.undo, before].slice(-HISTORY);
+    s.redo = [];
+  };
+
+  // Undo is restore(s, 'undo', 'redo'): take the newest snapshot out of `undo`, and put the
+  // current one into `redo`. Redo is the same with the two names swapped.
+  // Nothing happens while a row is being edited or the Reset dialog is open.
+  // 「元に戻す」は restore(s, 'undo', 'redo') です。`undo` からいちばん新しいものを取り出し、
+  // いまのものを `redo` に入れます。「やり直す」は、2 つの名前を入れ替えるだけです。
+  // 行を編集している間と、リセットのダイアログが開いている間は、何もしません。
+  const restore = (s, from, to) => {
+    if (s[from].length === 0 || s.editing !== null || resetDlg.isOpen()) return;
+    const back = s[from].at(-1);
+    s[to] = [...s[to], snapshot(s)];
+    s[from] = s[from].slice(0, -1);
+    s.json = back.json;
+    s.expanded = back.expanded;
+    // Keep the keyboard focus on something that can be used. It is lost when the row it was on
+    // has just gone, and when the button that was pressed has just been disabled (no step is left
+    // in that direction). In both cases it goes to the other button, which now has a step to take.
+    // The two buttons are named after the lists, 'undo' and 'redo', with `ref`.
+    // キーボードのフォーカスを、使えるものの上に保ちます。フォーカスは、それがあった行が消えたとき、
+    // そして押したボタンが無効になったとき (その向きにもう段が無いとき) に失われます。
+    // どちらの場合も、もう一方のボタンへ移します。そちらには、いま 1 段ぶんの行き先があります。
+    // 2 つのボタンには、`ref` で配列と同じ名前 ('undo' と 'redo') を付けてあります。
+    s.renderNow();
+    if (document.activeElement === document.body || document.activeElement.disabled) s.refs.get(to)?.focus();
+  };
+
   // Start editing a row. `keyed` says whether the row has a key that can be edited: an entry of an
   // object has one, an element of an array and the root do not.
   // 行の編集を始めます。`keyed` は、編集できるキーがその行にあるかどうかです。オブジェクトの項目には
   // あり、配列の要素とルートにはありません。
-  const beginEdit = (s, path, isNew = false) => {
+  const beginEdit = (s, path, added = null) => {
     const value = getAt(s.json, path);
     const keyed = path.length > 0 && !Array.isArray(getAt(s.json, parentOf(path)));
-    s.editing = { path, key: keyed ? last(path) : null, text: isFolder(value) ? null : JSON.stringify(value), isNew };
+    s.editing = { path, key: keyed ? last(path) : null, text: isFolder(value) ? null : JSON.stringify(value), added };
   };
 
   // OK. Both fields are checked before anything is changed, so a mistake in one of them never
@@ -303,7 +363,7 @@
   // OK の処理です。何かを変える前に両方の入力欄を調べるので、片方の間違いで行が半分だけ更新されることは
   // ありません。行は編集中のまま残り、何が間違っているかをトーストで知らせます。
   const commitEdit = (s) => {
-    const { path, key, text } = s.editing;
+    const { path, key, text, added } = s.editing;
     let value;
     if (text !== null) {
       try {
@@ -319,6 +379,14 @@
       return;
     }
     const newPath = renamed ? [...parentOf(path), key] : path;
+    // One step for Undo. For a row that was just added, the step goes back to before the row was
+    // added, so adding a row and filling it in are undone together. When OK is pressed and
+    // nothing was changed, there is nothing to remember.
+    // 「元に戻す」の 1 段ぶんです。追加したばかりの行では、行を追加する前まで戻るようにします。
+    // 行の追加と、その中身の入力が、まとめて 1 回で戻ります。何も変えずに OK を押したときは、
+    // 覚えておくものがありません。
+    if (added) remember(s, added);
+    else if (renamed || (text !== null && text !== JSON.stringify(getAt(s.json, path)))) remember(s);
     let json = s.json;
     if (renamed) {
       json = renameAt(json, path, key);
@@ -347,13 +415,15 @@
     });
   };
 
-  // Cancel. For a row that was just added, cancelling takes the row out again.
-  // キャンセルの処理です。追加したばかりの行なら、行そのものを取り消します。
+  // Cancel. For a row that was just added, cancelling takes the row out again. Nothing was
+  // remembered for Undo when the row was added, so nothing has to be taken back there.
+  // キャンセルの処理です。追加したばかりの行なら、行そのものを取り消します。行を追加したときには
+  // 「元に戻す」のための記録をしていないので、そちらを取り消す必要はありません。
   const cancelEdit = (s) => {
-    const { path, isNew } = s.editing;
+    const { path, added } = s.editing;
     s.editing = null;
-    if (isNew) removeAt(s, path);
-    focusRow(s, isNew ? parentOf(path) : path);
+    if (added) removeAt(s, path);
+    focusRow(s, added ? parentOf(path) : path);
   };
 
   // Delete a row. The focus goes to the row that takes its place, or to the one before it, or,
@@ -362,6 +432,7 @@
   // フォルダが空になったら、そのフォルダの行へ移します。
   const deleteRow = (s, path) => {
     const index = childKeys(getAt(s.json, parentOf(path))).indexOf(last(path));
+    remember(s);
     removeAt(s, path);
     toast.show(t('Deleted', { ja: '削除しました' }), { type: 'success' });
     const keys = childKeys(getAt(s.json, parentOf(path)));
@@ -374,18 +445,31 @@
   // フォルダに子を追加します。`initial` は '' (値)・{}・[] のどれかです。新しい行が見えるように、フォルダを開きます。
   // オブジェクトでは新しい項目に名前が必要なので、そのまま編集に入ります。配列にはキーが無いので、
   // 編集に入るのはただの値のときだけで、{} と [] は追加するだけです。
+  // For Undo, `before` is the document without the new row. When the row is added and nothing
+  // more, it is remembered here. When the row goes into edit mode, `before` goes along with it:
+  // OK remembers it then, and Cancel leaves no trace.
+  // 「元に戻す」のために、新しい行が無い状態の文書を `before` に取っておきます。追加するだけのときは、
+  // ここで覚えます。編集に入るときは、`before` を編集に持たせます。OK がそれを覚え、キャンセルなら
+  // 何も残りません。
   const addRow = (s, parentPath, initial) => {
+    const before = snapshot(s);
     const parent = getAt(s.json, parentPath);
     const path = [...parentPath, Array.isArray(parent) ? parent.length : uniqueKey(parent)];
     s.json = setAt(s.json, path, initial);
     s.expanded = { ...s.expanded, [idOf(parentPath)]: true, ...(isFolder(initial) ? { [idOf(path)]: true } : {}) };
-    if (Array.isArray(parent) && isFolder(initial)) focusRow(s, path);
-    else beginEdit(s, path, true);
+    if (Array.isArray(parent) && isFolder(initial)) {
+      remember(s, before);
+      focusRow(s, path);
+    } else beginEdit(s, path, before);
   };
 
   // Files. "Save" downloads the document as a file. "Open" and a drop both end in loadFile.
+  // Another document starts with an empty history: opening a file and "Reset" both clear the
+  // steps that Undo remembers.
   // ファイルの処理です。「保存」は文書をファイルとしてダウンロードします。「開く」とドロップは、
   // どちらも loadFile に行き着きます。
+  // 別の文書は、空の履歴から始まります。ファイルを開いたときと「リセット」では、「元に戻す」が
+  // 覚えている段を消します。
   const saveFile = (s) => {
     const url = URL.createObjectURL(new Blob([JSON.stringify(s.json, null, 2)], { type: 'application/json' }));
     Object.assign(document.createElement('a'), { href: url, download: s.fileName }).click();
@@ -404,6 +488,8 @@
     s.fileName = file.name;
     s.expanded = { '[]': true };
     s.editing = null;
+    s.undo = [];
+    s.redo = [];
     toast.show(t`Opened ${file.name}`, { type: 'success' });
   };
   const openFile = (s) => {
@@ -418,6 +504,8 @@
     s.fileName = 'demo.json';
     s.expanded = { '[]': true };
     s.editing = null;
+    s.undo = [];
+    s.redo = [];
     resetDlg.close();
     toast.show(t('Back to the demo data', { ja: 'デモデータに戻しました' }), { type: 'success' });
   };
@@ -593,8 +681,8 @@
           U.uiText({
             children: [
               t(
-                'Click a row to edit its key and value. A value is written as JSON: "text", 42, true, null. Enter confirms, Escape cancels. On an object or an array, the buttons on the right rename it, add a value, an object or an array, and delete it. To open a file, use Open or drop a .json file onto the editor.',
-                { ja: '行をクリックすると、キーと値を編集できます。値は JSON の表記で書きます: "text"、42、true、null。Enter で確定、Escape でキャンセルです。オブジェクトと配列の行では、右のボタンで名前の変更、値・オブジェクト・配列の追加、削除ができます。ファイルを開くには、「開く」を押すか、.json ファイルをエディタにドロップします。' },
+                'Click a row to edit its key and value. A value is written as JSON: "text", 42, true, null. Enter confirms, Escape cancels. On an object or an array, the buttons on the right rename it, add a value, an object or an array, and delete it. Undo and Redo (Ctrl+Z and Ctrl+Y) go back and forward through your changes. To open a file, use Open or drop a .json file onto the editor.',
+                { ja: '行をクリックすると、キーと値を編集できます。値は JSON の表記で書きます: "text"、42、true、null。Enter で確定、Escape でキャンセルです。オブジェクトと配列の行では、右のボタンで名前の変更、値・オブジェクト・配列の追加、削除ができます。「元に戻す」と「やり直す」(Ctrl+Z と Ctrl+Y) で、変更を戻したり進めたりできます。ファイルを開くには、「開く」を押すか、.json ファイルをエディタにドロップします。' },
               ),
             ],
           }),
@@ -615,6 +703,24 @@
                 children: [
                   U.uiButton({ children: [U.uiIcon(ICONS.upload, { size: 16 }), t('Open', { ja: '開く' })], onclick: () => openFile(s) }),
                   U.uiText({ variant: 'muted', class: 'je-file', children: [s.fileName] }),
+                  // Undo and Redo. A button is disabled while there is no step to take, and while
+                  // a row is being edited. `ref` names each button, so that restore() can move the
+                  // focus to it.
+                  // 「元に戻す」と「やり直す」です。進める段が無い間と、行を編集している間は、ボタンを
+                  // 無効にします。`ref` でボタンに名前を付けて、restore() がフォーカスを移せるようにします。
+                  ...[
+                    ['undo', 'redo', 'undo-2', t('Undo', { ja: '元に戻す' })],
+                    ['redo', 'undo', 'redo-2', t('Redo', { ja: 'やり直す' })],
+                  ].map(([from, to, icon, label]) =>
+                    U.uiButton({
+                      ref: from,
+                      disabled: s[from].length === 0 || s.editing !== null,
+                      'aria-label': label,
+                      title: label,
+                      children: [U.uiIcon(ICONS[icon], { size: 16 })],
+                      onclick: () => restore(s, from, to),
+                    }),
+                  ),
                   U.uiButton({ children: [U.uiIcon(ICONS.download, { size: 16 }), t('Save', { ja: '保存' })], onclick: () => saveFile(s) }),
                   // With triggerChildren the dialog draws its own button, and gives the focus back to
                   // it when it closes.
@@ -653,6 +759,23 @@
       },
     },
   );
+
+  // Ctrl+Z and Ctrl+Y (on a Mac, Cmd+Z and Shift+Cmd+Z). While the focus is in a field that can
+  // be typed in, the keys are left to the field: it undoes its own typing. `app` is the same
+  // object as the `s` that render receives.
+  // Ctrl+Z と Ctrl+Y です (Mac では Cmd+Z と Shift+Cmd+Z)。文字を打てる欄にフォーカスがある間は、
+  // キーを欄に任せます。欄が自分の入力を元に戻します。`app` は、render が受け取る `s` と
+  // 同じオブジェクトです。
+  document.addEventListener('keydown', (ev) => {
+    if (!(ev.ctrlKey || ev.metaKey) || ev.target.matches(':read-write')) return;
+    const key = ev.key.toLowerCase();
+    const back = key === 'z' && !ev.shiftKey;
+    const forward = key === 'y' || (key === 'z' && ev.shiftKey);
+    if (!back && !forward) return;
+    ev.preventDefault();
+    if (back) restore(app, 'undo', 'redo');
+    else restore(app, 'redo', 'undo');
+  });
 
   // Site helper: t() returns a plain string, so draw again once when the language changes.
   // サイトの補助: t() の戻り値はただの文字列なので、言語が変わったら 1 回描き直します。

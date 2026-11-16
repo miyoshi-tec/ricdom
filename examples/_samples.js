@@ -118,8 +118,8 @@ window.RICDOM_SAMPLES = [
     file: '14-json-editor.html',
     title: { en: 'JSON editor', ja: 'JSON エディタ' },
     blurb: {
-      en: 'A small complete tool: a JSON tree edited in place, with a path model, state that is replaced instead of changed, and full keyboard use.',
-      ja: '小さいけれど一通り動く道具: JSON の木をその場で編集。path モデル、書き換えずに差し替える状態、キーボードだけでの操作。',
+      en: 'A small complete tool: a JSON tree edited in place, with a path model, state that is replaced instead of changed, undo and redo, and full keyboard use.',
+      ja: '小さいけれど一通り動く道具: JSON の木をその場で編集。path モデル、書き換えずに差し替える状態、元に戻す・やり直す、キーボードだけでの操作。',
     },
   },
   {
