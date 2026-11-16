@@ -24,9 +24,15 @@
   .je-tree { flex: 1; min-height: 0; overflow-y: auto; }
 
   /* One row: the main button takes the free width, the small action buttons follow it.
-     1 行ぶん: メインのボタンが空いた幅を使い、その後ろに小さな操作ボタンが並びます。 */
-  .je-row { display: flex; align-items: center; gap: 2px; min-height: 32px; padding-right: 6px; border-bottom: 1px solid var(--ric-color-border); }
-  .je-main { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; padding: 6px; border: 0; border-radius: 4px; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+     The main button asks for at least 10em. When the row is too narrow to give it that beside the
+     action buttons, the action buttons move to a second line (flex-wrap), and the key and the
+     value get the whole width of the first.
+     1 行ぶん: メインのボタンが空いた幅を使い、その後ろに小さな操作ボタンが並びます。
+     メインのボタンは、少なくとも 10em の幅を求めます。行が狭くて、操作ボタンの横にその幅を取れない
+     ときは、操作ボタンが 2 行目に回り (flex-wrap)、キーと値が 1 行目の幅をすべて使います。 */
+  .je-row { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; min-height: 32px; padding-right: 6px; border-bottom: 1px solid var(--ric-color-border); }
+  .je-main { flex: 1 1 10em; min-width: 0; display: flex; align-items: center; gap: 6px; padding: 6px; border: 0; border-radius: 4px; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+  .je-acts { display: flex; gap: 2px; margin-left: auto; }
   .je-main:hover:not(:disabled) { background: color-mix(in srgb, var(--ric-color-accent) 14%, transparent); }
   .je-main:focus-visible { outline: 2px solid var(--ric-color-accent); outline-offset: -2px; }
   .je-main:disabled { cursor: default; opacity: 0.6; }
@@ -561,11 +567,19 @@
               { tag: 'code', class: 'je-value', children: [preview(value)] },
             ],
           },
-          folder && keyed ? act(t`Rename ${name}`, [U.uiIcon(ICONS.pencil, { size: 14 })], () => beginEdit(s, path)) : null,
-          folder ? act(t`Add a value to ${name}`, [U.uiIcon(ICONS.plus, { size: 14 })], () => addRow(s, path, '')) : null,
-          folder ? act(t`Add an object to ${name}`, [U.uiIcon(ICONS.plus, { size: 14 }), { tag: 'code', children: ['{}'] }], () => addRow(s, path, {})) : null,
-          folder ? act(t`Add an array to ${name}`, [U.uiIcon(ICONS.plus, { size: 14 }), { tag: 'code', children: ['[]'] }], () => addRow(s, path, [])) : null,
-          path.length > 0 ? act(t`Delete ${name}`, [U.uiIcon(ICONS.x, { size: 14 })], () => deleteRow(s, path)) : null,
+          // The action buttons are kept in one group, so that they move to the second line together.
+          // 操作ボタンは 1 つのまとまりにします。2 行目に回るときに、まとめて動くようにするためです。
+          {
+            tag: 'span',
+            class: 'je-acts',
+            children: [
+              folder && keyed ? act(t`Rename ${name}`, [U.uiIcon(ICONS.pencil, { size: 14 })], () => beginEdit(s, path)) : null,
+              folder ? act(t`Add a value to ${name}`, [U.uiIcon(ICONS.plus, { size: 14 })], () => addRow(s, path, '')) : null,
+              folder ? act(t`Add an object to ${name}`, [{ tag: 'code', children: ['{}'] }], () => addRow(s, path, {})) : null,
+              folder ? act(t`Add an array to ${name}`, [{ tag: 'code', children: ['[]'] }], () => addRow(s, path, [])) : null,
+              path.length > 0 ? act(t`Delete ${name}`, [U.uiIcon(ICONS.x, { size: 14 })], () => deleteRow(s, path)) : null,
+            ],
+          },
         ],
       };
     };
