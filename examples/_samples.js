@@ -134,8 +134,8 @@ window.RICDOM_SAMPLES = [
     file: '16-svg-editor.html',
     title: { en: 'SVG editor', ja: 'SVG エディタ' },
     blurb: {
-      en: 'The objects in the state are the SVG: drag shapes, edit their attributes, add and delete them.',
-      ja: '状態のオブジェクトがそのまま SVG になる: 図形をドラッグし、属性を編集し、足して消す。',
+      en: 'The objects in the state are the SVG: drag and resize shapes, edit their attributes, undo and redo.',
+      ja: '状態のオブジェクトがそのまま SVG になる: 図形を動かして変形し、属性を編集し、元に戻す・やり直す。',
     },
   },
 ];

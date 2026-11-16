@@ -16,15 +16,28 @@
   .editor { display: grid; grid-template-columns: minmax(0, 320px) minmax(0, 1fr); gap: 16px; align-items: start; margin-top: 12px; }
   /* On a narrow screen the two parts are stacked, the drawing first, so that it stays in view while the list below grows.
      狭い画面では 2 つを縦に並べ、絵を先に置きます。下の一覧が長くなっても、絵が見えたままになります。 */
-  @media (max-width: 720px) { .editor { grid-template-columns: minmax(0, 1fr); } .editor > .canvas { order: -1; } }
+  @media (max-width: 720px) { .editor { grid-template-columns: minmax(0, 1fr); } .editor > .stage { order: -1; } }
+  .stage { display: flex; flex-direction: column; gap: 8px; }
 
   /* The drawing. It is white in every theme, like a sheet of paper. touch-action: none lets a finger drag a shape instead of scrolling the page.
      絵を描く面です。紙のように、どのテーマでも白にしています。touch-action: none は、指で図形をドラッグしたときにページがスクロールしないようにする指定です。 */
   .canvas { display: block; width: 100%; height: auto; background: #fff; border: 1px solid var(--ric-color-border); border-radius: var(--ric-radius); touch-action: none; }
   .shape { cursor: move; }
-  /* The selected shape gets a dashed outline. An outline follows the shape's bounding box, so no size has to be calculated.
-     選択中の図形には破線の枠を付けます。outline は図形を囲む箱に沿って描かれるので、大きさを計算する必要がありません。 */
-  .shape.is-selected { outline: 1.5px dashed #f59e0b; outline-offset: 3px; }
+  /* The frame around the selected shape, and the four handles on its corners. The frame lets presses through to the shapes under it.
+     vector-effect keeps the lines the same thickness on the screen, whatever size the drawing is shown at.
+     選択中の図形を囲む枠と、その四隅のつまみです。枠は、押した操作を下の図形へ通します。
+     vector-effect は、絵がどんな大きさで表示されていても、線を画面上で同じ太さに保ちます。 */
+  .frame { fill: none; stroke: #f59e0b; stroke-width: 1.5px; stroke-dasharray: 5 3; vector-effect: non-scaling-stroke; pointer-events: none; }
+  .handle { fill: #fff; stroke: #f59e0b; stroke-width: 1.5px; vector-effect: non-scaling-stroke; }
+  .handle.nwse { cursor: nwse-resize; }
+  .handle.nesw { cursor: nesw-resize; }
+  /* For a finger, a wide see-through border makes each handle a larger target.
+     指で操作する画面では、透けた太い縁取りで、つまみを押しやすい大きさにします。 */
+  @media (pointer: coarse) { .handle { stroke-width: 14px; stroke-opacity: 0.3; paint-order: stroke; } }
+  .grid-line { fill: none; stroke: #e5e7eb; }
+  /* A spare, invisible <svg>: a text is drawn in it to find out how large it is.
+     予備の、見えない <svg> です。文字の大きさを調べるために、ここに文字を描きます。 */
+  #ruler { position: absolute; width: 0; height: 0; visibility: hidden; }
 
   /* The list of shapes: each row shows the markup of one shape.
      図形の一覧です。1 行が、図形 1 つぶんのマークアップです。 */
@@ -42,15 +55,18 @@
   Each shape is a plain object such as { tag: 'circle', cx: 80, cy: 100, r: 40, fill: '#3b82f6' }.
   ricdom draws those objects as they are, so editing the drawing means replacing an object:
   dragging replaces its position, a field in the panel replaces one attribute.
+  And because a change never edits the old objects, keeping them is all that undo needs.
   No build step: two scripts (ricdom, then ricdom/ui) and one stylesheet.
 
   16 SVG エディタ: 状態の中のオブジェクトが、そのまま SVG になります。
   図形 1 つは { tag: 'circle', cx: 80, cy: 100, r: 40, fill: '#3b82f6' } のような普通のオブジェクトです。
   ricdom はそのオブジェクトをそのまま描くので、絵を編集することは、オブジェクトを差し替えることです。
   ドラッグは位置を差し替え、パネルの欄は属性を 1 つ差し替えます。
+  変更は古いオブジェクトを書き換えないので、それを取っておくだけで「元に戻す」ができます。
   ビルド不要: <script> 2 本 (ricdom → ricdom/ui) と CSS 1 本で動きます。
 -->
 <div id="app"></div>
+<svg id="ruler" aria-hidden="true"><text></text></svg>
 
 <!-- Optional: highlight.js colours the code in this site's Source view. ricdom does not need it.
      任意: highlight.js はこのサイトの「ソース」表示を色分けします。ricdom 自体には不要です。 -->
@@ -71,11 +87,13 @@
   // サイトの補助: t(文字列, { ja: '…' }) は選択中の言語の文字列を返します。
   const { t, onLangChange } = ricdomI18n;
 
-  // Icon data (SVG paths) comes from `npx ricdom-icon plus trash-2`. Copy it; do not write it by hand.
-  // アイコンのデータ (SVG のパス) は `npx ricdom-icon plus trash-2` で取得します。手書きはしません。
+  // Icon data (SVG paths) comes from `npx ricdom-icon plus trash-2 undo-2 redo-2`. Copy it; do not write it by hand.
+  // アイコンのデータ (SVG のパス) は `npx ricdom-icon plus trash-2 undo-2 redo-2` で取得します。手書きはしません。
   const ICONS = {
     plus: { p: 'M12 5v14M5 12h14' },
     'trash-2': { p: 'M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6' },
+    'undo-2': { p: ['M9 14 4 9l5-5', 'M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11'] },
+    'redo-2': { p: ['m15 14 5-5-5-5', 'M20 9H9.5A5.5 5.5 0 0 0 4 14.5A5.5 5.5 0 0 0 9.5 20H13'] },
   };
 
   // ── The data ─────────────────────────────────────────────────────────────────────────────────
@@ -92,8 +110,21 @@
       { key: 3, tag: 'text', x: 150, y: 36, 'font-size': 18, 'text-anchor': 'middle', fill: '#111827', children: ['Hello SVG'] },
     ],
     selected: 1,
+    // Whether a drag snaps to the grid.
+    // ドラッグをグリッドに吸着させるかどうかです。
+    grid: false,
+    // Earlier and later versions of `shapes`, for undo and redo.
+    // 「元に戻す」と「やり直す」のための、前と後の `shapes` です。
+    undo: [],
+    redo: [],
   };
   let nextKey = 4;
+
+  // The spacing of the grid, the number of steps that undo remembers, and the size of a handle.
+  // グリッドの間隔、「元に戻す」が覚えておく段数、つまみの大きさです。
+  const GRID = 10;
+  const HISTORY = 20;
+  const HANDLE = 8;
 
   // What a new shape looks like.
   // 新しく足す図形の初期値です。
@@ -107,21 +138,112 @@
   // 図形の種類ごとの、位置を表す属性です。
   const POSITION = { circle: ['cx', 'cy'], rect: ['x', 'y'], text: ['x', 'y'] };
 
-  // Every change goes through here: build a new array in which one shape is a new object, and
-  // assign it. Assigning to s.shapes is what makes ricdom draw again.
-  // すべての変更はここを通ります。図形 1 つだけを新しいオブジェクトにした新しい配列を作り、代入します。
-  // s.shapes への代入が、ricdom に描き直させます。
-  const change = (s, key, patch) => {
+  // ── Undo and redo ────────────────────────────────────────────────────────────────────────────
+  // No change edits an array in place; every change assigns a new one. The array that was there
+  // before is therefore still intact, and keeping it is all that undo needs.
+  // remember() is called just before a change. `step` says what is being done: changes that come
+  // one after another with the same `step` (every move of one drag, every keystroke in one field)
+  // are undone together.
+  // どの変更も、配列をその場で書き換えず、新しい配列を代入します。だから前の配列は無傷で残っていて、
+  // それを取っておくだけで「元に戻す」ができます。
+  // remember() は変更の直前に呼びます。`step` は「何をしているか」です。同じ `step` の変更が続く間
+  // (1 回のドラッグの動き全部、1 つの欄への入力全部) は、まとめて 1 回で戻ります。
+  let lastStep = null;
+  const remember = (s, step) => {
+    if (step && step === lastStep) return;
+    lastStep = step;
+    s.undo = [...s.undo, s.shapes].slice(-HISTORY);
+    s.redo = [];
+  };
+  // Undo is restore(s, 'undo', 'redo'): take the newest array out of `undo`, and put the current
+  // one into `redo`. Redo is the same with the two names swapped.
+  // 「元に戻す」は restore(s, 'undo', 'redo') です。`undo` からいちばん新しい配列を取り出し、
+  // いまの配列を `redo` に入れます。「やり直す」は、2 つの名前を入れ替えるだけです。
+  const restore = (s, from, to) => {
+    if (s[from].length === 0) return;
+    s[to] = [...s[to], s.shapes];
+    s.shapes = s[from].at(-1);
+    s[from] = s[from].slice(0, -1);
+    lastStep = null;
+  };
+
+  // Every change to a shape goes through here: build a new array in which one shape is a new
+  // object, and assign it. Assigning to s.shapes is what makes ricdom draw again.
+  // 図形の変更は、すべてここを通ります。図形 1 つだけを新しいオブジェクトにした新しい配列を作り、
+  // 代入します。s.shapes への代入が、ricdom に描き直させます。
+  const change = (s, key, patch, step) => {
+    const before = s.shapes.find((shape) => shape.key === key);
+    // When no value differs (a press that did not move, for example), there is nothing to draw
+    // and nothing to undo.
+    // 値が 1 つも変わらないとき (押しただけで動かしていないときなど) は、描き直すものも、
+    // 元に戻すものもありません。
+    if (Object.keys(patch).every((name) => patch[name] === before[name])) return;
+    remember(s, step);
     s.shapes = s.shapes.map((shape) => (shape.key === key ? { ...shape, ...patch } : shape));
+  };
+
+  // ── The box around a shape ───────────────────────────────────────────────────────────────────
+  // BOX gives the rectangle that encloses a shape; the frame is drawn there. A circle and a rect
+  // say it in their attributes. A text does not, so it is measured: the same text is put into
+  // the invisible <svg id="ruler"> and the browser is asked for its box.
+  // BOX は、図形を囲む長方形を返します。枠はそこに描きます。circle と rect は、属性から分かります。
+  // text は分からないので、測ります。同じ文字を見えない <svg id="ruler"> に入れて、
+  // ブラウザに箱の大きさを尋ねます。
+  const ruler = document.querySelector('#ruler text');
+  const BOX = {
+    circle: (shape) => ({ x: shape.cx - shape.r, y: shape.cy - shape.r, width: shape.r * 2, height: shape.r * 2 }),
+    rect: (shape) => ({ x: shape.x, y: shape.y, width: shape.width, height: shape.height }),
+    text: (shape) => {
+      for (const name of ['x', 'y', 'font-size', 'text-anchor']) ruler.setAttribute(name, shape[name]);
+      // An empty text has no box. Measure a stand-in, so that there is still a frame to take hold of.
+      // 空の文字には箱がありません。つかめる枠が残るように、代わりの 1 文字を測ります。
+      ruler.textContent = shape.children[0] || '?';
+      return ruler.getBBox();
+    },
+  };
+
+  // RESIZE gives the attributes that fit a shape into a new box. The box is described by the
+  // corner that stays where it is (fx, fy) and the distance from there to the dragged corner
+  // (dx, dy). A negative distance means the dragged corner has crossed over to the other side.
+  // A rect takes the box as it is. A circle and a text keep their proportions.
+  // RESIZE は、図形を新しい箱に合わせるための属性を返します。箱は、動かない角 (fx, fy) と、
+  // そこからつまんでいる角までの距離 (dx, dy) で表します。距離が負なら、つまんでいる角が
+  // 反対側へ越えています。rect は箱のとおりになります。circle と text は縦横の比を保ちます。
+  const RESIZE = {
+    rect: (shape, box, fx, fy, dx, dy) => ({
+      x: Math.min(fx, fx + dx),
+      y: Math.min(fy, fy + dy),
+      width: Math.max(1, Math.abs(dx)),
+      height: Math.max(1, Math.abs(dy)),
+    }),
+    circle: (shape, box, fx, fy, dx, dy) => {
+      const r = Math.max(1, Math.round(Math.max(Math.abs(dx), Math.abs(dy)) / 2));
+      return { cx: fx + (dx < 0 ? -r : r), cy: fy + (dy < 0 ? -r : r), r };
+    },
+    text: (shape, box, fx, fy, dx, dy) => {
+      // The height of the box follows the font size, so the new height decides the new font size.
+      // `scale` is how many times larger the text becomes.
+      // 箱の高さは文字の大きさに比例するので、新しい高さから新しい font-size が決まります。
+      // `scale` は、文字が何倍になるかです。
+      const size = Math.max(4, Math.round((shape['font-size'] * Math.abs(dy)) / box.height));
+      const scale = size / shape['font-size'];
+      const left = dx < 0 ? fx - box.width * scale : fx;
+      const top = dy < 0 ? fy - box.height * scale : fy;
+      return {
+        'font-size': size,
+        x: Math.round(left + (shape.x - box.x) * scale),
+        y: Math.round(top + (shape.y - box.y) * scale),
+      };
+    },
   };
 
   // ── Dragging ─────────────────────────────────────────────────────────────────────────────────
   // The drag in progress is kept outside the state: nothing on the screen shows it, so it does
-  // not need to cause a redraw. `from` is the pointer position and `origin` the shape's position,
-  // both at the moment the drag began; each move adds the distance from `from` to `origin`.
+  // not need to cause a redraw. `patch` is a function from the pointer position to the attributes
+  // to replace. Moving a shape and resizing it differ only in that function.
   // ドラッグの途中経過は、状態の外に持ちます。画面には出ないので、描き直す必要が無いからです。
-  // `from` はドラッグを始めたときのポインターの位置、`origin` はそのときの図形の位置です。
-  // 動くたびに、`from` からの距離を `origin` に足します。
+  // `patch` は、ポインターの位置から「差し替える属性」を作る関数です。図形の移動と変形の違いは、
+  // この関数だけです。
   let drag = null;
 
   // Where the pointer is, in the coordinates of the drawing (the viewBox), whatever size the
@@ -129,31 +251,101 @@
   // ポインターの位置を、絵の座標 (viewBox) に直します。絵がどんな大きさで表示されていても同じです。
   const toDrawing = (svg, e) => new DOMPoint(e.clientX, e.clientY).matrixTransform(svg.getScreenCTM().inverse());
 
-  const startDrag = (s, shape, e) => {
-    const svg = e.currentTarget.ownerSVGElement;
-    const [xName, yName] = POSITION[shape.tag];
-    s.selected = shape.key;
-    drag = { key: shape.key, xName, yName, from: toDrawing(svg, e), origin: { x: shape[xName], y: shape[yName] } };
+  // The two modes of a drag: with the grid on, a coordinate goes to the nearest grid line;
+  // with it off, to the nearest whole number.
+  // ドラッグの 2 つのモードです。グリッドが入のときは、座標をいちばん近いグリッドの線に合わせます。
+  // 切のときは、いちばん近い整数に合わせます。
+  const snap = (s, value) => (s.grid ? Math.round(value / GRID) * GRID : Math.round(value));
+
+  const startDrag = (s, shape, e, patch) => {
     // From here on, pointer events go to the <svg> even when the pointer leaves it.
     // これ以降、ポインターが <svg> の外へ出ても、イベントは <svg> に届きます。
-    svg.setPointerCapture(e.pointerId);
+    e.currentTarget.ownerSVGElement.setPointerCapture(e.pointerId);
+    s.selected = shape.key;
+    drag = { key: shape.key, patch };
   };
+  // The drag itself is the `step`, so one drag is undone in one go, however many moves it had.
+  // ドラッグそのものを `step` にします。何回動いても、1 回のドラッグは 1 回で戻ります。
   const moveDrag = (s, e) => {
-    if (!drag) return;
-    const now = toDrawing(e.currentTarget, e);
-    change(s, drag.key, {
-      [drag.xName]: Math.round(drag.origin.x + now.x - drag.from.x),
-      [drag.yName]: Math.round(drag.origin.y + now.y - drag.from.y),
-    });
+    if (drag) change(s, drag.key, drag.patch(toDrawing(e.currentTarget, e)), drag);
   };
   const endDrag = () => { drag = null; };
 
+  // Moving: the position when the drag began, plus the distance the pointer has travelled since.
+  // 移動: ドラッグを始めたときの位置に、ポインターが動いた距離を足します。
+  const moving = (s, shape, e) => {
+    const [xName, yName] = POSITION[shape.tag];
+    const from = toDrawing(e.currentTarget.ownerSVGElement, e);
+    return (now) => ({
+      [xName]: snap(s, shape[xName] + now.x - from.x),
+      [yName]: snap(s, shape[yName] + now.y - from.y),
+    });
+  };
+
+  // Resizing: `corner` is [0 or 1, 0 or 1], which corner of the box is being dragged. That corner
+  // moves like a shape does (start + distance, snapped) while the opposite corner stays, and
+  // RESIZE fits the shape into the box between the two.
+  // 変形: `corner` は [0 か 1, 0 か 1] で、箱のどの角をつまんでいるかです。その角は、図形の移動と
+  // 同じように動き (始めの位置 + 距離、吸着あり)、反対の角は動きません。RESIZE が、その 2 つの角の
+  // 間の箱に図形を合わせます。
+  const CORNERS = [[0, 0], [1, 0], [0, 1], [1, 1]];
+  const resizing = (s, shape, corner, e) => {
+    const box = BOX[shape.tag](shape);
+    const from = toDrawing(e.currentTarget.ownerSVGElement, e);
+    const x = box.x + corner[0] * box.width;
+    const y = box.y + corner[1] * box.height;
+    const fx = box.x + (1 - corner[0]) * box.width;
+    const fy = box.y + (1 - corner[1]) * box.height;
+    return (now) => RESIZE[shape.tag](shape, box, fx, fy, snap(s, x + now.x - from.x) - fx, snap(s, y + now.y - from.y) - fy);
+  };
+
   // ── Drawing ──────────────────────────────────────────────────────────────────────────────────
+  // The frame of the selected shape: a dashed rectangle on its box, and a handle on each corner.
+  // 選択中の図形の枠です。箱に沿った破線の長方形と、四隅のつまみです。
+  const frame = (s, shape) => {
+    const box = BOX[shape.tag](shape);
+    return {
+      tag: 'g',
+      key: 'frame',
+      children: [
+        { tag: 'rect', class: 'frame', x: box.x, y: box.y, width: box.width, height: box.height },
+        ...CORNERS.map((corner) => ({
+          tag: 'rect',
+          class: corner[0] === corner[1] ? 'handle nwse' : 'handle nesw',
+          x: box.x + corner[0] * box.width - HANDLE / 2,
+          y: box.y + corner[1] * box.height - HANDLE / 2,
+          width: HANDLE,
+          height: HANDLE,
+          onpointerdown: (e) => startDrag(s, shape, e, resizing(s, shape, corner, e)),
+        })),
+      ],
+    };
+  };
+
+  // The lines of the grid: a pattern of one grid cell, and a rectangle filled with it.
+  // The rectangle lets presses through, so a press on it still counts as a press on the empty part.
+  // グリッドの線です。グリッド 1 ますぶんのパターンと、それで塗った長方形です。
+  // この長方形は押した操作を通すので、ここを押しても「何も無いところを押した」ことになります。
+  const gridLines = [
+    {
+      tag: 'pattern',
+      key: 'pattern',
+      id: 'grid',
+      width: GRID,
+      height: GRID,
+      patternUnits: 'userSpaceOnUse',
+      children: [{ tag: 'path', class: 'grid-line', d: `M${GRID} 0H0V${GRID}` }],
+    },
+    { tag: 'rect', key: 'grid', width: '100%', height: '100%', fill: 'url(#grid)', 'pointer-events': 'none' },
+  ];
+
   // The picture: the shapes from the state, each with a class and a handler added. Nothing else
-  // is converted, which is the point of this page.
+  // is converted, which is the point of this page. Later children are drawn over earlier ones,
+  // so the frame goes last: it is in front of every shape.
   // 絵の部分です。状態の図形に、class とハンドラを足しただけです。ほかには何も変換しません。
-  // それがこのページで見せたいことです。
-  const drawing = (s) => ({
+  // それがこのページで見せたいことです。後ろの子ほど手前に描かれるので、枠は最後に置きます。
+  // どの図形よりも手前になります。
+  const drawing = (s, selected) => ({
     tag: 'svg',
     class: 'canvas',
     viewBox: '0 0 300 200',
@@ -165,11 +357,15 @@
     onpointermove: (e) => moveDrag(s, e),
     onpointerup: endDrag,
     onpointercancel: endDrag,
-    children: s.shapes.map((shape) => ({
-      ...shape,
-      class: shape.key === s.selected ? 'shape is-selected' : 'shape',
-      onpointerdown: (e) => startDrag(s, shape, e),
-    })),
+    children: [
+      ...(s.grid ? gridLines : []),
+      ...s.shapes.map((shape) => ({
+        ...shape,
+        class: 'shape',
+        onpointerdown: (e) => startDrag(s, shape, e, moving(s, shape, e)),
+      })),
+      selected ? frame(s, selected) : null,
+    ],
   });
 
   // One shape as markup, for the list.
@@ -184,10 +380,12 @@
 
   // The fields for the selected shape: one per attribute, made from the object itself.
   // A number gets a number field, `fill` a colour picker, and a text shape one more field for
-  // its text. Each field replaces one attribute through change().
+  // its text. Each field replaces one attribute through change(). The shape and the attribute
+  // together are the `step`, so what is typed into one field is undone in one go.
   // 選択中の図形の欄です。オブジェクトそのものから、属性 1 つにつき 1 つ作ります。
   // 数値は数値の欄、`fill` は色の選択、text の図形には文字の欄を 1 つ足します。
-  // どの欄も、change() で属性を 1 つ差し替えます。
+  // どの欄も、change() で属性を 1 つ差し替えます。図形と属性の組を `step` にするので、
+  // 1 つの欄に打った分は 1 回で戻ります。
   const fields = (s, shape) => [
     ...Object.entries(shape)
       .filter(([name, value]) => name === 'fill' || typeof value === 'number')
@@ -198,14 +396,14 @@
         children: [
           U.uiText({ variant: 'muted', children: [name] }),
           name === 'fill'
-            ? U.uiColor({ value, oninput: (e) => change(s, shape.key, { fill: e.target.value }) })
+            ? U.uiColor({ value, oninput: (e) => change(s, shape.key, { fill: e.target.value }, `${shape.key} fill`) })
             : U.uiInput({
                 type: 'number',
                 value: String(value),
                 oninput: (e) => {
                   // An empty or half-typed field is not a number yet: wait for the next keystroke.
                   // 空の欄や打ちかけの欄は、まだ数値ではありません。次の入力を待ちます。
-                  if (e.target.value !== '' && Number.isFinite(Number(e.target.value))) change(s, shape.key, { [name]: Number(e.target.value) });
+                  if (e.target.value !== '' && Number.isFinite(Number(e.target.value))) change(s, shape.key, { [name]: Number(e.target.value) }, `${shape.key} ${name}`);
                 },
               }),
         ],
@@ -216,7 +414,7 @@
           class: 'field',
           children: [
             U.uiText({ variant: 'muted', children: [t('text', { ja: '文字' })] }),
-            U.uiInput({ value: shape.children[0], oninput: (e) => change(s, shape.key, { children: [e.target.value] }) }),
+            U.uiInput({ value: shape.children[0], oninput: (e) => change(s, shape.key, { children: [e.target.value] }, `${shape.key} text`) }),
           ],
         }
       : null,
@@ -230,7 +428,7 @@
       children: [
         { tag: 'h1', children: [t('ricdom — SVG editor', { ja: 'ricdom — SVG エディタ' })] },
         U.uiText({
-          children: [t('Drag a shape to move it. Click a shape, or its row in the list, to edit its attributes.', { ja: '図形をドラッグすると動きます。図形か、一覧の行をクリックすると、属性を編集できます。' })],
+          children: [t('Drag a shape to move it, or a corner of its frame to resize it. Click a shape, or its row in the list, to edit its attributes.', { ja: '図形をドラッグすると動き、枠の角をドラッグすると大きさが変わります。図形か、一覧の行をクリックすると、属性を編集できます。' })],
         }),
         {
           tag: 'div',
@@ -260,6 +458,7 @@
                       // The new shape goes to the end of the array, so it is drawn on top.
                       // 新しい図形は配列の末尾に入るので、いちばん手前に描かれます。
                       onclick: () => {
+                        remember(s);
                         s.shapes = [...s.shapes, { key: nextKey, ...NEW_SHAPE[tag]() }];
                         s.selected = nextKey;
                         nextKey += 1;
@@ -276,6 +475,7 @@
                           variant: 'ghost',
                           children: [U.uiIcon(ICONS['trash-2'], { size: 14 }), t('Delete this shape', { ja: 'この図形を削除' })],
                           onclick: () => {
+                            remember(s);
                             s.shapes = s.shapes.filter((shape) => shape.key !== selected.key);
                             s.selected = null;
                           },
@@ -285,11 +485,54 @@
                   : U.uiText({ variant: 'muted', children: [t('Nothing is selected.', { ja: '何も選択されていません。' })] }),
               ],
             }),
-            drawing(s),
+            {
+              tag: 'div',
+              class: 'stage',
+              children: [
+                U.uiRow({
+                  class: 'wrap',
+                  children: [
+                    U.uiButton({
+                      disabled: s.undo.length === 0,
+                      children: [U.uiIcon(ICONS['undo-2'], { size: 14 }), t('Undo', { ja: '元に戻す' })],
+                      onclick: () => restore(s, 'undo', 'redo'),
+                    }),
+                    U.uiButton({
+                      disabled: s.redo.length === 0,
+                      children: [U.uiIcon(ICONS['redo-2'], { size: 14 }), t('Redo', { ja: 'やり直す' })],
+                      onclick: () => restore(s, 'redo', 'undo'),
+                    }),
+                    U.uiCheckbox({
+                      checked: s.grid,
+                      children: [t(`Snap to a ${GRID}px grid`, { ja: `${GRID}px のグリッドに吸着` })],
+                      onchange: (e) => { s.grid = e.target.checked; },
+                    }),
+                  ],
+                }),
+                drawing(s, selected),
+              ],
+            },
           ],
         },
       ],
     };
+  });
+
+  // Ctrl+Z and Ctrl+Y (on a Mac, Cmd+Z and Shift+Cmd+Z). While the focus is in a field that can
+  // be typed in, the keys are left to the field: it undoes its own typing. `app` is the same
+  // object as the `s` that the function above receives, so assigning to it draws again.
+  // Ctrl+Z と Ctrl+Y です (Mac では Cmd+Z と Shift+Cmd+Z)。文字を打てる欄にフォーカスがある間は、
+  // キーを欄に任せます。欄が自分の入力を元に戻します。`app` は、上の関数が受け取る `s` と
+  // 同じオブジェクトなので、代入すると描き直されます。
+  document.addEventListener('keydown', (e) => {
+    if (!(e.ctrlKey || e.metaKey) || e.target.matches(':read-write')) return;
+    const key = e.key.toLowerCase();
+    const back = key === 'z' && !e.shiftKey;
+    const forward = key === 'y' || (key === 'z' && e.shiftKey);
+    if (!back && !forward) return;
+    e.preventDefault();
+    if (back) restore(app, 'undo', 'redo');
+    else restore(app, 'redo', 'undo');
   });
 
   // Site helper: t() returns a plain string, so draw again once when the language changes.
