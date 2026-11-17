@@ -1528,7 +1528,9 @@ select is cut with "…" and the arrow stays visible. The outer height is always
   accessibility tree are unchanged (the browser exposes one combobox; the button is not a tab
   stop).
 - **`<selectedcontent>` is an `island`**: its content is written by the browser, never by
-  ricdom.
+  ricdom. It holds a copy of the selected option's content, so `select.textContent` (and
+  `innerText`) now contains the selected label twice — once in the box, once in the option.
+  Read the choice with `select.value` or `select.selectedOptions[0].textContent`.
 - **Testing whether a label is cut**: the select itself no longer overflows, so
   `select.scrollHeight > select.clientHeight` is always false and proves nothing about the
   text. Check the text box instead: `sc = select.querySelector('selectedcontent')`,
@@ -2053,6 +2055,9 @@ bodies (`.ric-tweak-folder__body`), both `role="region"`. While closed, the body
 does not know the name. Before `2.0.0-alpha.36` they called `hljs.highlight()` and caught its
 exception, but highlight.js writes a `console.error` before it throws — once per render, and
 also for every partial name while a reply is streamed (`` ```js `` passes through `` ```j ``).
+`createMdEditor` (`ricdom/md-editor`) colours fences with the same check since
+`2.0.0-alpha.37`; in `2.0.0-alpha.36` and before, its mirror still wrote that error on the
+first render and on every keystroke while the text held a fence in an unknown language.
 
 ### 10.5 Rest-spread contract
 

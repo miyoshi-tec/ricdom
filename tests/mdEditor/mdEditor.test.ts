@@ -168,6 +168,70 @@ describe('createMdEditor: consumer ハンドラが呼ばれる', () => {
   // tests/browser/uiMdEditor.test.ts (compositionstart→input→compositionend) で行う。
 });
 
+// 2.0.0-alpha.37: RaccoonMemo の alpha.36 取り込み報告。alpha.36 で uiMdPre / uiCodePre は
+// 「highlight.js が知らない言語名なら highlight() を呼ばない」ように直したが (tests/ui/hljs.test.ts)、
+// md-editor の色付け (ミラー) は自分で highlight() を呼んでいて、同じ確認をしていなかった。
+// 本物の highlight.js は、知らない言語名で呼ばれると、例外を投げる前に console.error を出す
+// (例外は受けてプレーン表示に落としていたが、出力は止められない)。打鍵のたびにミラーを作り直すので、
+// ```unknownlang のフェンスがある本文では、入力のたびにエラーが出る。
+describe('createMdEditor: highlight.js が知らない言語名では highlight() を呼ばない (2.0.0-alpha.37)', () => {
+  // 本物と同じ振る舞いをする最小の代役: 知らない言語なら console.error を出してから投げる
+  const fakeHljs = (known: string[], withGetLanguage: boolean) => {
+    const highlight = vi.fn((raw: string, opts: { language: string }) => {
+      if (!known.includes(opts.language)) {
+        console.error(`Could not find the language '${opts.language}', did you forget to load/include a language module?`);
+        throw new Error('Unknown language: "' + opts.language + '"');
+      }
+      return { value: `<b class="hl">${raw}</b>` };
+    });
+    (window as unknown as { hljs: unknown }).hljs = {
+      highlight,
+      highlightAuto: (raw: string) => ({ value: raw }),
+      ...(withGetLanguage ? { getLanguage: (name: string) => (known.includes(name) ? {} : undefined) } : {}),
+    };
+    return highlight;
+  };
+  const mount = async (value: string) => {
+    const app = setupApp();
+    let md: ReturnType<typeof createMdEditor>;
+    const handle = createApp('#app', {}, () => (md ? md({ value }) : null));
+    md = handle.use(createMdEditor());
+    handle.renderNow();
+    await flush();
+    return { app, textarea: app.querySelector('textarea') as HTMLTextAreaElement, mirror: app.querySelector('pre.ric-md-editor__mirror') as HTMLElement };
+  };
+
+  afterEach(() => {
+    delete (window as unknown as { hljs?: unknown }).hljs;
+  });
+
+  it('知らない言語のフェンスは、描画しても入力しても highlight() を呼ばず、エラーも出さず、文字はそのまま残る', async () => {
+    const highlight = fakeHljs(['js'], true);
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { textarea, mirror } = await mount('```unknownlang\nx = 1\n```');
+    textarea.value = '```unknownlang\nx = 12\n```';
+    textarea.dispatchEvent(new Event('input'));
+    expect(highlight).not.toHaveBeenCalled();
+    expect(errorSpy).not.toHaveBeenCalled();
+    expect(mirror.textContent).toContain('x = 12');
+    errorSpy.mockRestore();
+  });
+
+  it('知っている言語は従来どおり色が付く', async () => {
+    const highlight = fakeHljs(['js'], true);
+    const { mirror } = await mount('```js\nconst a = 1\n```');
+    expect(highlight).toHaveBeenCalled();
+    expect(mirror.querySelector('b.hl')).not.toBeNull();
+  });
+
+  it('getLanguage を持たない実装 (window.hljs を自前で差し替えた場合) では、従来どおり highlight() を試す', async () => {
+    const highlight = fakeHljs(['js'], false);
+    const { mirror } = await mount('```js\nconst a = 1\n```');
+    expect(highlight).toHaveBeenCalled();
+    expect(mirror.querySelector('b.hl')).not.toBeNull();
+  });
+});
+
 describe('createMdEditor: maxHighlightLength 超えのフォールバック', () => {
   it('value.length が閾値を超えると装飾なしの textarea になる', async () => {
     const app = setupApp();
