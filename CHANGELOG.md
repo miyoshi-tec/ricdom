@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.0.0-alpha.37] — not yet published
+
+A fix reported by an application after it took in `2.0.0-alpha.36` (`2026-11-17`). Only the
+md-editor bundle changes; the core and `ricdom/ui` are the same as in `2.0.0-alpha.36`.
+
+### Fixed
+
+- **`createMdEditor` wrote a `console.error` for a code fence in a language highlight.js does
+  not know** (`` ```unknownlang ``): once on the first render and again on every keystroke,
+  because its mirror called `hljs.highlight()` and only caught the exception, while highlight.js
+  logs before it throws. `2.0.0-alpha.36` added a `hljs.getLanguage()` check to `uiMdPre` and
+  `uiCodePre`, but the editor's mirror has its own call and did not get it. It now uses the same
+  check: an unknown language is shown uncoloured, a known one is coloured as before, and a
+  `window.hljs` without `getLanguage` is tried as before.
+  Verified with the real highlight.js 11.11.1 in Chromium: 1 error on render plus 1 per
+  keystroke before, 0 after.
+
+### Documented
+
+- `select.textContent` now contains the selected label twice (the copy in
+  `<selectedcontent>` and the option itself, since `2.0.0-alpha.30`); read the choice with
+  `select.value` or `select.selectedOptions[0]`.
+
+### Sizes
+
+md-editor IIFE (gzip -9) 4,858 → 4,900 B. Core 4,958 B and ui IIFE 28,469 B unchanged.
+
 ## [2.0.0-alpha.36] — not yet published
 
 Fixes found while writing the sample pages (including the two application-sized ones, a JSON

@@ -34,6 +34,7 @@ import { type AttachGuard, type Component, createAttachGuard } from '../ui/inter
 // 共有する定義 (src/ui/internal/hljs.ts)。ここでは warnHljsMissing は使わない (hljs が無い
 // 場合にプレーン色になるのが既定の想定挙動であり、md-editor では警告を出さない設計指示)。
 import type { HljsLike } from '../ui/internal/hljs.js';
+import { hljsKnows } from '../ui/internal/hljs.js';
 import { UI_ROLE, mergeClass } from '../ui/internal/pureHelpers.js';
 import { uiTextarea, type UiTextareaProps } from '../ui/textarea.js';
 import { tokenizeMarkdown } from './tokenizer.js';
@@ -184,7 +185,10 @@ export const createMdEditor = (options: CreateMdEditorOptions = {}): MdEditorIns
       const span = doc.createElement('span');
       span.className = tok.cls;
       const hljs: HljsLike | undefined = typeof window !== 'undefined' ? window.hljs : undefined;
-      if (tok.fenceBody && tok.lang && hljs) {
+      // 知らない言語名では highlight() を呼ばない (2.0.0-alpha.37、RaccoonMemo の報告)。
+      // 本物の highlight.js は投げる前に console.error を出すので、catch だけでは出力が止まらず、
+      // 打鍵ごとのミラーの作り直しのたびにエラーが出ていた。uiMdPre / uiCodePre と同じ確認 (hljsKnows)。
+      if (tok.fenceBody && tok.lang && hljs && hljsKnows(tok.lang)) {
         try {
           span.innerHTML = hljs.highlight(tok.text, { language: tok.lang }).value;
         } catch {
