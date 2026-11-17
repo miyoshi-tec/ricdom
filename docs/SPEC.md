@@ -1545,6 +1545,11 @@ select is cut with "…" and the arrow stays visible. The outer height is always
   pins that button with `all: unset !important; display: contents !important`, so the shown text
   inherits from the `<select>` whatever the page says about buttons. To style the shown text on
   its own, target the text box: `.ric-select selectedcontent { … }`.
+  The one page rule that still gets through is one that is itself `!important`, at least as
+  specific as `.ric-select > button` (0,1,1), and loaded after `ricdom-ui.css` — for example
+  `[data-ricdom-role="dialog-footer"] button { font-size: 1.05em !important; }`. A select placed
+  where such a rule matches shows its text at that size. Narrow the page rule so it leaves the
+  select's button out: `… button:not(.ric-select > button) { … }`.
 - **A label change of the selected option shows in the same render, focused or not**
   (`2.0.0-alpha.35`; a known limit in `2.0.0-alpha.30`–`34`, where a focused select kept the old
   label until a render after focus had left). Typical case: a language picker that translates
