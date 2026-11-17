@@ -1550,6 +1550,15 @@ select is cut with "…" and the arrow stays visible. The outer height is always
   `[data-ricdom-role="dialog-footer"] button { font-size: 1.05em !important; }`. A select placed
   where such a rule matches shows its text at that size. Narrow the page rule so it leaves the
   select's button out: `… button:not(.ric-select > button) { … }`.
+- **A click in the opened list happens inside the `<select>`, even where the list is drawn
+  outside it.** Where the browser supports `appearance: base-select`, the opened list is made of
+  the select's own `<option>` elements, drawn in the top layer, so a click on one has that
+  option as its target. Code that decides "outside" with `element.contains(event.target)` sees
+  it as inside: ricdom's dropdown, popup and dialog do this, and a select inside them can be used
+  without closing them, also when the list extends past their box (checked with real clicks).
+  Code that decides "outside" by the pointer position against a box would see it as outside.
+  Without `base-select` the list is drawn by the operating system and no pointer event reaches
+  the page at all.
 - **A label change of the selected option shows in the same render, focused or not**
   (`2.0.0-alpha.35`; a known limit in `2.0.0-alpha.30`–`34`, where a focused select kept the old
   label until a render after focus had left). Typical case: a language picker that translates
