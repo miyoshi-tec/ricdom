@@ -59,9 +59,19 @@ const isEventHandlerKey = (key: string): boolean => /^on[a-z]/.test(key);
 // タイプ中」の入力ではなく、drift しても打鍵中の文字を消す実害が無いため。
 const EDITABLE_TAGS = new Set(['INPUT', 'TEXTAREA', 'SELECT']);
 
+// 描き直しの間だけ、「描き直しの前にフォーカスがあった要素」を覚えておく (2.0.0-alpha.38、設計書 §57)。
+// keyed の並べ替えで行が移ると、ブラウザはその中の入力欄のフォーカスを外す。その直後に属性を
+// patch するので、document.activeElement だけを見ていると、打ちかけの文字が state の値で
+// 上書きされる (state が打鍵に追いついていない入力欄)。フォーカスは描き直しの後で app.ts が戻すので、
+// ガードは「戻る予定の要素」も編集中として扱う。app.ts の doRender が、patch の前に渡し、後で null に戻す。
+let heldFocus: Element | null = null;
+export const holdFocus = (el: Element | null): void => {
+  heldFocus = el;
+};
+
 const shouldSkipValueReapply = (el: Element): boolean => {
   if (typeof document === 'undefined') return false;
-  return el === document.activeElement && EDITABLE_TAGS.has(el.tagName);
+  return (el === document.activeElement || el === heldFocus) && EDITABLE_TAGS.has(el.tagName);
 };
 
 // =====================================================================
