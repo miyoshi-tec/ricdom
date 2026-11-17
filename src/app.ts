@@ -12,7 +12,7 @@
 //     Proxy の 1 段目/2 段目追跡ルールの対象外)。
 
 import type { App, CreateAppOptions, Host, RenderFn, RicElementNode, RicNode, UsePart } from './types.js';
-import { buildDomNode, patchChildren } from './dom.js';
+import { buildDomNode, holdFocus, patchChildren } from './dom.js';
 import { createRenderScheduler } from './scheduler.js';
 import { clearPendingDeepWarnings, createReactiveState } from './reactivity.js';
 
@@ -267,6 +267,13 @@ const createResolvedApp = <S extends object>(
       targetEl.innerHTML = ''; // 初回のみ target 内の既存内容を丸ごと引き取る (v1 踏襲)
       isFirstRender = false;
     }
+    // 描き直しの前後でキーボードのフォーカスを保つ (2.0.0-alpha.38、設計書 §57、Rancha の報告)。
+    // keyed の子の並べ替えは要素を insertBefore で移す (dom.ts)。ブラウザは、フォーカスのある要素
+    // (またはその祖先) が移されるとフォーカスを外すので、行を並べ替えるだけでフォーカスが <body> に
+    // 落ちていた (行の「…」メニューで「ピン留め」を選んだ後など)。描き直しの前の要素を覚えておき、
+    // 下の patch の後で戻す。
+    const focusedBefore = document.activeElement as HTMLElement | null;
+    holdFocus(focusedBefore); // 編集中ガードに「戻る予定の要素」を伝える (dom.ts)
     patchChildren(prevTargetChildren, nextTargetChildren, targetEl);
     prevTargetChildren = nextTargetChildren;
 
@@ -286,6 +293,17 @@ const createResolvedApp = <S extends object>(
       const nextPortalChildren = collectPortalChildren();
       patchChildren(prevPortalChildren, nextPortalChildren, portalEl);
       prevPortalChildren = nextPortalChildren;
+    }
+
+    // フォーカスを戻すのは、次の 3 つがすべて成り立つときだけ:
+    //   - いまフォーカスが <body> に落ちている (描き直しの中で、アプリや部品が意図して別の要素へ
+    //     フォーカスを移した場合は、そちらを尊重する)
+    //   - 描き直しの前は、<body> 以外の要素にあった
+    //   - その要素がまだ文書の中にある (描き直しで消えた要素には戻さない)
+    // preventScroll: 戻すだけなので、ページを動かさない。入力欄の文字の選択位置は要素が覚えている。
+    holdFocus(null);
+    if (focusedBefore && focusedBefore !== document.activeElement && document.activeElement === document.body && focusedBefore.isConnected) {
+      focusedBefore.focus({ preventScroll: true });
     }
 
     // registerRefs は portal パッチの「後」に呼ぶ (2.0.0-alpha.2 修正)。旧実装は

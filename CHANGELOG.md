@@ -5,6 +5,42 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.0.0-alpha.38] — not yet published
+
+A core fix found through an application's report after it took in `2.0.0-alpha.36`
+(`2026-11-17`). Only the core bundle changes; `ricdom/ui` and the md-editor are the same as in
+`2.0.0-alpha.37`. No API was added, renamed or removed.
+
+### Fixed
+
+- **A render that reordered keyed siblings could send keyboard focus to `<body>`.** Keyed
+  reconciliation moves DOM nodes with `insertBefore`, and a browser drops focus from an element
+  that is moved (itself or an ancestor). Moving one row to the end moves every other row, so
+  focus was lost even when the focused row had not logically moved. Reported for a row menu:
+  choosing an item that re-sorts the list left focus on `<body>` after the menu closed.
+  Each render now remembers `document.activeElement` before patching and focuses it again
+  afterwards (`preventScroll`), but only if focus has fallen to `<body>` and the element is
+  still in the document — focus that the app or a component moved on purpose during the
+  render is kept, and an element the render removed is not focused again.
+- **Text being typed in a moved row was overwritten by state.** The editing guard looked only
+  at `document.activeElement`, which is no longer the input at the moment its row is moved. The
+  guard now also treats the element that had focus when the render began as focused.
+
+Measured in Chromium (5 keyed rows, focus on the third row's button): moving that row to the
+top, moving the first row to the end, and reversing the list all kept focus (all three lost it
+before). An input in a moved row keeps its text and caret position, and typing continues.
+
+### Changed (behaviour you may notice)
+
+- When a focused element's row is reordered, the element now gets `focus` / `focusin` again
+  after the `blur` / `focusout` (and `change`, for an input with uncommitted text) that the
+  browser fires for the move. Before, only the blur side happened and focus stayed lost.
+
+### Sizes
+
+Core IIFE (gzip -9) 4,958 → 5,028 B (ceiling 5,200). ui IIFE 28,469 B and md-editor IIFE
+4,900 B unchanged.
+
 ## [2.0.0-alpha.37] — not yet published
 
 A fix reported by an application after it took in `2.0.0-alpha.36` (`2026-11-17`). Only the

@@ -190,6 +190,32 @@ dev build (`NODE_ENV !== 'production'`), a duplicate `key` triggers one `console
 render (per parent element) identifying the problem; production builds stay silent (#13,
 fixed in 2.0.0-alpha.4 — this bug was inherited from v1's identically-named algorithm).
 
+#### FACT: a render keeps keyboard focus when it moves elements (`2.0.0-alpha.38`)
+
+Reordering keyed siblings moves their DOM nodes with `insertBefore`, and a browser drops
+focus from an element when it (or an ancestor) is moved. Which nodes get moved is an
+implementation detail: moving one row to the end, for example, moves every other row. So before
+`2.0.0-alpha.38` any reorder could send focus to `<body>` — after choosing "pin" in a row menu,
+or while typing in a list that re-sorts — even when the focused row had not logically moved.
+
+Each render now remembers `document.activeElement` before it patches and, after it has patched,
+focuses that element again (`focus({ preventScroll: true })`) when all of these hold:
+
+- focus is on `<body>` now (if the app or a component moved focus to another element during
+  the render, that choice is kept);
+- it was on some other element before;
+- that element is still in the document (an element the render removed is not focused again,
+  and focus stays on `<body>` as before).
+
+The text selection inside an `input`/`textarea` survives, because the element keeps it. The
+editing guard (§2.4) treats the remembered element as focused during the patch, so text the
+user is typing in a moved row is not overwritten by state. What is **not** kept is what the
+browser resets on a move regardless of focus: an `<iframe>` reloads and a CSS animation
+restarts. The events of the move also still happen: in Chromium the element gets `blur` /
+`focusout` when it is moved (preceded by `change`, if it is an input with text typed since it
+got focus) and then `focus` / `focusin` when focus is put back. Handlers that act on `blur` or
+`change` (for example "commit on blur") run when their row is reordered.
+
 ### 2.3 Position-based reconciliation
 
 If no sibling has a `key`, children are reconciled by index. To avoid two different
@@ -218,7 +244,8 @@ user-visible bug in v1 that only had a local fix inside one widget; in v2 it is 
 rule that applies everywhere). The exemption is scoped to `value` only — `checked`,
 `selected`, and scroll position are still force-reapplied, since drift there does not
 destroy in-progress keystrokes. Once the element loses focus, the next render re-syncs
-`value` normally.
+`value` normally. An element that had focus when the render began, and lost it only because
+the render moved it, still counts as focused for this rule (`2.0.0-alpha.38`, §2.2).
 
 **Consequence for programmatic insertion while focused (RaccoonMemo, one of pilots 5-7,
 2.0.0-alpha.8)**: because the guard makes the live DOM authoritative for `value` while an
