@@ -701,7 +701,8 @@ JAVIS.js は `_Hz` (既定 144) で state を**ポーリング**していまし�
 - **島 (island)**: `{ tag: 'div', island: true }` と書くと、その中は ricdom が触りません。`<canvas>` や外部ライブラリの置き場です
 - **UI 部品 `ricdom/ui`**: ボタン・入力・dialog・popup・toast・tooltip・dropdown・splitter・tabs・accordion・tweak パネル・
   Markdown 表示など 29 部品。JAVIS の振り返りで「ありがたい」と書いたアコーディオン・タブ・プルダウン・スプリッターは全部あります。
-  CSS は 1 枚、テーマは 7 種 (曇りガラスの glass を含む)
+  CSS は 1 枚 (`ricdom-ui.css`。**自分の CSS より前に読み込みます**。後に読むと、同じ強さの自分の指定が黙って負けます)、
+  テーマは 7 種 (曇りガラスの glass を含む)
 - **アクセシビリティ**: dialog の focus trap、menu の矢印キー、tabs の roving tabindex などは部品が面倒を見ます
 
 続きは [GUIDE.md](GUIDE.md) (部品・テーマ・Electron・v1 からの移行を扱う実践ガイド、英語) の §3 以降と、[examples/](../examples/index.html) のサンプルへ。

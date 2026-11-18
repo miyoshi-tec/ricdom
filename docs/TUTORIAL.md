@@ -781,8 +781,9 @@ this.
 - **UI components `ricdom/ui`**: 29 components, such as buttons, inputs, dialog, popup, toast,
   tooltip, dropdown, splitter, tabs, accordion, the tweak panel, and Markdown display. The
   accordion, tabs, pull-down, and splitter that I wrote I would be "grateful for" in the JAVIS
-  retrospective are all there. The CSS is one file, and there are 7 themes (including glass, a
-  frosted-glass look)
+  retrospective are all there. The CSS is one file (`ricdom-ui.css`; **load it before your own
+  stylesheet** — loaded after it, your own rules of the same strength silently lose), and there
+  are 7 themes (including glass, a frosted-glass look)
 - **Accessibility**: the components look after the dialog's focus trap, the menu's arrow keys, the tabs' roving tabindex, and so on
 
 For what comes next, go on to §3 onward of [GUIDE.md](GUIDE.md) (the practical guide that covers

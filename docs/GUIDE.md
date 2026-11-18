@@ -728,7 +728,8 @@ With the IIFE build (no bundler), load it as a third `<script>` tag alongside th
 ```
 
 `ricdomMdEditor.createMdEditor` is then available as its own global — see
-`examples/09-markdown.html` for a full working page.
+`examples/09-markdown.html` for a full working page. As everywhere, the `ricdom-ui.css`
+`<link>` goes **before your own stylesheet**.
 
 ---
 
